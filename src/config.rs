@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use directories::ProjectDirs;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
@@ -6,6 +9,36 @@ use std::path::PathBuf;
 
 use crate::cli::Cli;
 use crate::error::{Error, Result};
+
+/// Commit message format configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitFormat {
+    /// Include body in commit message (default: true)
+    #[serde(default = "default_true")]
+    pub include_body: bool,
+
+    /// Include scope in commit type, e.g., feat(scope): (default: true)
+    #[serde(default = "default_true")]
+    pub include_scope: bool,
+
+    /// Enforce lowercase first character of subject (default: true)
+    #[serde(default = "default_true")]
+    pub lowercase_subject: bool,
+}
+
+impl Default for CommitFormat {
+    fn default() -> Self {
+        Self {
+            include_body: true,
+            include_scope: true,
+            lowercase_subject: true,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -45,6 +78,10 @@ pub struct Config {
 
     #[serde(default = "default_max_file_lines")]
     pub max_file_lines: usize,
+
+    /// Commit message format options
+    #[serde(default)]
+    pub format: CommitFormat,
 }
 
 fn default_model() -> String {
@@ -69,6 +106,7 @@ impl Default for Config {
             api_key: None,
             max_diff_lines: default_max_diff_lines(),
             max_file_lines: default_max_file_lines(),
+            format: CommitFormat::default(),
         }
     }
 }
@@ -181,6 +219,17 @@ max_diff_lines = 500
 
 # Maximum lines per file in diff
 max_file_lines = 100
+
+# Commit message format options
+[format]
+# Include body/description in commit message
+include_body = true
+
+# Include scope in commit type, e.g., feat(scope): subject
+include_scope = true
+
+# Enforce lowercase first character of subject (conventional commits best practice)
+lowercase_subject = true
 "#;
 
         fs::write(&path, content)?;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;

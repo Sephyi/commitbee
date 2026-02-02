@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+
+SPDX-License-Identifier: GPL-3.0-only
+-->
+
 # Plan: CommitBee v1 - AI-Powered Commit Message Generator
 
 **Created**: 2026-02-02

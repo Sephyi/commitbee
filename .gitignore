@@ -1,1 +1,30 @@
-/target
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
+# --- OS / Editor -------------------------------------------------------------
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+
+# --- Rust / Cargo ------------------------------------------------------------
+
+# Cargo build artifacts
+debug/
+target/
+
+# Rust backup files (rustfmt)
+**/*.rs.bk
+
+# MSVC debug information
+*.pdb
+
+# Mutation testing data
+**/mutants.out*/

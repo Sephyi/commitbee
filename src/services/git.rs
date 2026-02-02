@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use std::path::{Path, PathBuf};
 
 use crate::domain::{ChangeStatus, DiffStats, FileCategory, FileChange, StagedChanges};

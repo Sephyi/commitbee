@@ -1,7 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+use crate::config::CommitFormat;
 use crate::error::{Error, Result};
 
 /// Structured commit message from LLM (preferred format)
@@ -36,14 +40,14 @@ pub struct CommitSanitizer;
 
 impl CommitSanitizer {
     /// Parse and validate commit message from LLM output
-    pub fn sanitize(raw: &str) -> Result<String> {
+    pub fn sanitize(raw: &str, format: &CommitFormat) -> Result<String> {
         // Step 1: Try to parse as JSON (structured output)
         if let Ok(structured) = Self::try_parse_json(raw) {
-            return Self::format_structured(&structured);
+            return Self::format_structured(&structured, format);
         }
 
         // Step 2: Clean up plain text output
-        let cleaned = Self::clean_text(raw);
+        let cleaned = Self::clean_text(raw, format);
 
         // Step 3: Validate conventional commit format
         Self::validate_conventional(&cleaned)?;
@@ -82,7 +86,7 @@ impl CommitSanitizer {
         Err(())
     }
 
-    fn format_structured(s: &StructuredCommit) -> Result<String> {
+    fn format_structured(s: &StructuredCommit, format: &CommitFormat) -> Result<String> {
         // Validate type
         let commit_type = s.commit_type.to_lowercase();
         if !VALID_TYPES.contains(&commit_type.as_str()) {
@@ -93,22 +97,47 @@ impl CommitSanitizer {
             )));
         }
 
-        // Validate scope
-        if let Some(ref scope) = s.scope {
-            if !SCOPE_REGEX.is_match(scope) {
-                return Err(Error::InvalidCommitMessage(format!(
-                    "Invalid scope: '{}'. Use lowercase alphanumeric with -_/.",
-                    scope
-                )));
-            }
-        }
+        // Validate and sanitize scope (only if we're using scopes)
+        let scope = if format.include_scope {
+            if let Some(ref raw_scope) = s.scope {
+                // Sanitize scope: lowercase, replace spaces with hyphens
+                let sanitized = raw_scope
+                    .to_lowercase()
+                    .replace(' ', "-")
+                    .replace("--", "-");
 
-        // Format subject: lowercase, no period, max 72 chars
-        let subject = s.subject.trim().trim_end_matches('.').to_string();
+                if sanitized.is_empty() {
+                    None
+                } else if !SCOPE_REGEX.is_match(&sanitized) {
+                    // If still invalid after sanitization, skip scope rather than error
+                    None
+                } else {
+                    Some(sanitized)
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Format subject: optionally lowercase first char, no period
+        let subject = {
+            let trimmed = s.subject.trim().trim_end_matches('.');
+            if format.lowercase_subject {
+                let mut chars = trimmed.chars();
+                match chars.next() {
+                    Some(first) => first.to_lowercase().chain(chars).collect(),
+                    None => String::new(),
+                }
+            } else {
+                trimmed.to_string()
+            }
+        };
 
         // Build first line
-        let first_line = match &s.scope {
-            Some(scope) => format!("{}({}): {}", commit_type, scope, subject),
+        let first_line = match scope {
+            Some(ref sc) => format!("{}({}): {}", commit_type, sc, subject),
             None => format!("{}: {}", commit_type, subject),
         };
 
@@ -119,18 +148,22 @@ impl CommitSanitizer {
             first_line
         };
 
-        // Add body if present
-        let message = match &s.body {
-            Some(body) if !body.trim().is_empty() => {
-                format!("{}\n\n{}", first_line, body.trim())
+        // Add body if present and enabled
+        let message = if format.include_body {
+            match &s.body {
+                Some(body) if !body.trim().is_empty() => {
+                    format!("{}\n\n{}", first_line, body.trim())
+                }
+                _ => first_line,
             }
-            _ => first_line,
+        } else {
+            first_line
         };
 
         Ok(message)
     }
 
-    fn clean_text(raw: &str) -> String {
+    fn clean_text(raw: &str, format: &CommitFormat) -> String {
         let mut cleaned = raw.to_string();
 
         // Remove code fences
@@ -151,6 +184,18 @@ impl CommitSanitizer {
             if let Some(pos) = lower.find(pattern) {
                 let after = &cleaned[pos + pattern.len()..];
                 cleaned = after.trim_start_matches(':').trim().to_string();
+            }
+        }
+
+        // Apply lowercase to subject if enabled (for plain text, lowercase after the colon)
+        if format.lowercase_subject {
+            if let Some(colon_pos) = cleaned.find(": ") {
+                let (prefix, rest) = cleaned.split_at(colon_pos + 2);
+                let mut chars = rest.chars();
+                if let Some(first) = chars.next() {
+                    let lowered: String = first.to_lowercase().chain(chars).collect();
+                    cleaned = format!("{}{}", prefix, lowered);
+                }
             }
         }
 

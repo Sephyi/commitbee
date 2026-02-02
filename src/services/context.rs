@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use crate::domain::{
     ChangeStatus, CodeSymbol, CommitType, FileCategory, PromptContext, StagedChanges, SymbolKind,
 };

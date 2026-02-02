@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 

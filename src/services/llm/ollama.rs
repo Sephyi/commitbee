@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -19,8 +22,20 @@ pub struct OllamaProvider {
 struct GenerateRequest {
     model: String,
     prompt: String,
+    system: String,
     stream: bool,
 }
+
+const SYSTEM_PROMPT: &str = r#"You are a commit message generator. Analyze git diffs and output JSON commit messages.
+
+RULES:
+1. Read the diff carefully - describe the ACTUAL changes you see
+2. The subject must be SPECIFIC - mention what was added/changed/fixed
+3. Output ONLY valid JSON
+4. Start subject with lowercase verb: add, fix, update, remove, refactor
+
+BAD: "describe what changed" or "update code"
+GOOD: "add rate limiting to api endpoints" or "fix null check in user service""#;
 
 #[derive(Deserialize)]
 struct GenerateResponse {
@@ -55,6 +70,7 @@ impl LlmProvider for OllamaProvider {
             .json(&GenerateRequest {
                 model: self.model.clone(),
                 prompt: prompt.to_string(),
+                system: SYSTEM_PROMPT.to_string(),
                 stream: true,
             })
             .send()
