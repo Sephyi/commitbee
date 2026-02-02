@@ -173,7 +173,7 @@ impl App {
         }
 
         // Step 6: Sanitize and validate the commit message
-        let message = CommitSanitizer::sanitize(&raw_message)?;
+        let message = CommitSanitizer::sanitize(&raw_message, &self.config.format)?;
 
         // Step 7: Confirm and commit
         if self.cli.dry_run {
@@ -226,6 +226,12 @@ impl App {
                 println!("Model: {}", self.config.model);
                 println!("Ollama host: {}", self.config.ollama_host);
                 println!("Max diff lines: {}", self.config.max_diff_lines);
+                println!("Max file lines: {}", self.config.max_file_lines);
+                println!();
+                println!("[format]");
+                println!("  include_body: {}", self.config.format.include_body);
+                println!("  include_scope: {}", self.config.format.include_scope);
+                println!("  lowercase_subject: {}", self.config.format.lowercase_subject);
                 Ok(())
             }
         }
