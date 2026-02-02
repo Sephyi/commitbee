@@ -1,3 +1,8 @@
+//! CommitBee - AI-powered commit message generator
+//!
+//! This crate provides the core functionality for analyzing git changes
+//! using tree-sitter and generating conventional commit messages via LLMs.
+
 pub mod app;
 pub mod cli;
 pub mod config;
