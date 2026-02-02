@@ -79,9 +79,18 @@ pub struct Config {
     #[serde(default = "default_max_file_lines")]
     pub max_file_lines: usize,
 
+    /// Maximum context characters for LLM prompt (~4 chars per token)
+    /// Default 24000 is safe for 8K context models
+    #[serde(default = "default_max_context_chars")]
+    pub max_context_chars: usize,
+
     /// Commit message format options
     #[serde(default)]
     pub format: CommitFormat,
+}
+
+fn default_max_context_chars() -> usize {
+    24_000
 }
 
 fn default_model() -> String {
@@ -106,6 +115,7 @@ impl Default for Config {
             api_key: None,
             max_diff_lines: default_max_diff_lines(),
             max_file_lines: default_max_file_lines(),
+            max_context_chars: default_max_context_chars(),
             format: CommitFormat::default(),
         }
     }
@@ -219,6 +229,10 @@ max_diff_lines = 500
 
 # Maximum lines per file in diff
 max_file_lines = 100
+
+# Maximum context characters for LLM prompt (~4 chars per token)
+# Increase for larger models (e.g., 48000 for 16K context)
+# max_context_chars = 24000
 
 # Commit message format options
 [format]

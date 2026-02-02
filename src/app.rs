@@ -113,7 +113,7 @@ impl App {
         }
 
         // Step 4: Build context
-        let context = ContextBuilder::build(&changes, &symbols, self.config.max_diff_lines);
+        let context = ContextBuilder::build(&changes, &symbols, &self.config);
 
         let prompt = context.to_prompt();
 
