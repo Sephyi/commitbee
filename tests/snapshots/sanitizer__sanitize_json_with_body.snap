@@ -1,0 +1,9 @@
+---
+source: tests/sanitizer.rs
+assertion_line: 47
+expression: result
+---
+feat(llm): add streaming support
+
+Uses tokio-stream to stream tokens from Ollama.
+Improves perceived latency for long responses.
