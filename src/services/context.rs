@@ -224,7 +224,6 @@ impl ContextBuilder {
                 ChangeStatus::Added => "[+]",
                 ChangeStatus::Modified => "[M]",
                 ChangeStatus::Deleted => "[-]",
-                ChangeStatus::Renamed => "[R]",
             };
 
             output.push_str(&format!(

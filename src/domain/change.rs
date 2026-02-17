@@ -9,7 +9,6 @@ pub enum ChangeStatus {
     Added,
     Modified,
     Deleted,
-    Renamed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,7 +102,6 @@ impl FileCategory {
 #[derive(Debug, Clone)]
 pub struct FileChange {
     pub path: PathBuf,
-    pub old_path: Option<PathBuf>,
     pub status: ChangeStatus,
     pub diff: String,
     pub additions: usize,
@@ -126,6 +124,7 @@ pub struct StagedChanges {
 }
 
 impl StagedChanges {
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
     }

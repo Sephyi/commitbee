@@ -12,9 +12,6 @@ pub enum Error {
     #[error("Not a git repository. Run from a git project directory.")]
     NotAGitRepo,
 
-    #[error("Repository has no commits. Make an initial commit first.")]
-    EmptyRepository,
-
     #[error("Merge conflicts detected. Resolve conflicts before committing.")]
     MergeConflicts,
 

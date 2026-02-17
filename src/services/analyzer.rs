@@ -8,7 +8,7 @@ use regex::Regex;
 use std::path::Path;
 use tree_sitter::{Language, Parser};
 
-use crate::domain::{ChangeStatus, CodeSymbol, FileChange, SymbolKind};
+use crate::domain::{CodeSymbol, FileChange, SymbolKind};
 use crate::error::Result;
 
 /// Represents a diff hunk with line ranges
@@ -103,7 +103,6 @@ impl AnalyzerService {
                 .unwrap_or("");
 
             let hunks = DiffHunk::parse_from_diff(&change.diff);
-            let capture_all = hunks.is_empty() && change.status == ChangeStatus::Renamed;
 
             // Get the appropriate language for parsing
             let language: Option<Language> = match ext {
@@ -120,7 +119,6 @@ impl AnalyzerService {
                     lang,
                     change,
                     &hunks,
-                    capture_all,
                     staged_content,
                     head_content,
                 );
@@ -135,7 +133,6 @@ impl AnalyzerService {
         language: Language,
         change: &FileChange,
         hunks: &[DiffHunk],
-        capture_all: bool,
         staged_content: &dyn Fn(&Path) -> Option<String>,
         head_content: &dyn Fn(&Path) -> Option<String>,
     ) -> Vec<CodeSymbol> {
@@ -148,21 +145,16 @@ impl AnalyzerService {
 
         // Parse staged (new) file content
         if let Some(content) = staged_content(&change.path) {
-            let changed = if capture_all {
-                Self::extract_all_symbols_static(&mut parser, &change.path, &content, true)
-            } else {
-                Self::extract_changed_symbols_static(&mut parser, &change.path, &content, hunks, true)
-            };
+            let changed =
+                Self::extract_changed_symbols_static(&mut parser, &change.path, &content, hunks, true);
             symbols.extend(changed);
         }
 
-        // Parse HEAD (old) file content (skip for renames)
-        if !capture_all {
-            if let Some(content) = head_content(&change.path) {
-                let changed =
-                    Self::extract_changed_symbols_static(&mut parser, &change.path, &content, hunks, false);
-                symbols.extend(changed);
-            }
+        // Parse HEAD (old) file content
+        if let Some(content) = head_content(&change.path) {
+            let changed =
+                Self::extract_changed_symbols_static(&mut parser, &change.path, &content, hunks, false);
+            symbols.extend(changed);
         }
 
         symbols
@@ -240,15 +232,9 @@ impl AnalyzerService {
                         .map(|n| n.kind() == "visibility_modifier")
                         .unwrap_or(false);
 
-                    let signature = node
-                        .utf8_text(source.as_bytes())
-                        .ok()
-                        .map(|s| s.lines().next().unwrap_or("").to_string());
-
                     symbols.push(CodeSymbol {
                         kind,
                         name,
-                        signature,
                         file: file.to_path_buf(),
                         line: line_start,
                         is_public,
@@ -269,84 +255,4 @@ impl AnalyzerService {
         }
     }
 
-    /// Extract all top-level symbols (for renames without content changes)
-    fn extract_all_symbols_static(
-        parser: &mut Parser,
-        file: &Path,
-        source: &str,
-        is_added: bool,
-    ) -> Vec<CodeSymbol> {
-        let Some(tree) = parser.parse(source, None) else {
-            return Vec::new();
-        };
-
-        let mut symbols = Vec::new();
-        let mut cursor = tree.walk();
-
-        Self::visit_top_level_only(&mut cursor, file, source, is_added, &mut symbols);
-
-        symbols
-    }
-
-    fn visit_top_level_only(
-        cursor: &mut tree_sitter::TreeCursor,
-        file: &Path,
-        source: &str,
-        is_added: bool,
-        symbols: &mut Vec<CodeSymbol>,
-    ) {
-        if !cursor.goto_first_child() {
-            return;
-        }
-
-        loop {
-            let node = cursor.node();
-            let kind_str = node.kind();
-
-            let symbol_kind = match kind_str {
-                "function_item" | "function_definition" | "function_declaration" => {
-                    Some(SymbolKind::Function)
-                }
-                "struct_item" | "struct_declaration" => Some(SymbolKind::Struct),
-                "enum_item" | "enum_declaration" => Some(SymbolKind::Enum),
-                "trait_item" => Some(SymbolKind::Trait),
-                "impl_item" => Some(SymbolKind::Impl),
-                "class_declaration" | "class_definition" => Some(SymbolKind::Class),
-                "interface_declaration" => Some(SymbolKind::Interface),
-                _ => None,
-            };
-
-            if let Some(kind) = symbol_kind {
-                let name = node
-                    .child_by_field_name("name")
-                    .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-                    .unwrap_or("anonymous")
-                    .to_string();
-
-                let is_public = node
-                    .child(0)
-                    .map(|n| n.kind() == "visibility_modifier")
-                    .unwrap_or(false);
-
-                let signature = node
-                    .utf8_text(source.as_bytes())
-                    .ok()
-                    .map(|s| s.lines().next().unwrap_or("").to_string());
-
-                symbols.push(CodeSymbol {
-                    kind,
-                    name,
-                    signature,
-                    file: file.to_path_buf(),
-                    line: node.start_position().row + 1,
-                    is_public,
-                    is_added,
-                });
-            }
-
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
 }

@@ -83,7 +83,6 @@ impl GitService {
 
             files.push(FileChange {
                 path: file_path,
-                old_path: None,
                 status,
                 diff,
                 additions,

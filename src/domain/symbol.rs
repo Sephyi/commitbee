@@ -22,7 +22,6 @@ pub enum SymbolKind {
 pub struct CodeSymbol {
     pub kind: SymbolKind,
     pub name: String,
-    pub signature: Option<String>,
     pub file: PathBuf,
     pub line: usize,
     pub is_public: bool,
