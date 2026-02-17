@@ -18,6 +18,12 @@ pub enum CommitType {
 }
 
 impl CommitType {
+    /// All valid commit type strings — single source of truth.
+    pub const ALL: &[&str] = &[
+        "feat", "fix", "refactor", "chore", "docs", "test", "style", "perf", "build", "ci",
+        "revert",
+    ];
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Feat => "feat",
@@ -32,5 +38,28 @@ impl CommitType {
             Self::Ci => "ci",
             Self::Revert => "revert",
         }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "feat" => Some(Self::Feat),
+            "fix" => Some(Self::Fix),
+            "refactor" => Some(Self::Refactor),
+            "docs" => Some(Self::Docs),
+            "test" => Some(Self::Test),
+            "chore" => Some(Self::Chore),
+            "style" => Some(Self::Style),
+            "perf" => Some(Self::Perf),
+            "build" => Some(Self::Build),
+            "ci" => Some(Self::Ci),
+            "revert" => Some(Self::Revert),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for CommitType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }

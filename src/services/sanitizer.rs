@@ -8,6 +8,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::config::CommitFormat;
+use crate::domain::CommitType;
 use crate::error::{Error, Result};
 
 /// Structured commit message from LLM (preferred format)
@@ -19,11 +20,6 @@ pub struct StructuredCommit {
     pub subject: String,
     pub body: Option<String>,
 }
-
-/// Allowed commit types
-const VALID_TYPES: &[&str] = &[
-    "feat", "fix", "refactor", "chore", "docs", "test", "style", "perf", "build", "ci", "revert",
-];
 
 static SCOPE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-z0-9][a-z0-9\-_/.]*$").unwrap());
@@ -108,11 +104,11 @@ impl CommitSanitizer {
     fn format_structured(s: &StructuredCommit, format: &CommitFormat) -> Result<String> {
         // Validate type
         let commit_type = s.commit_type.to_lowercase();
-        if !VALID_TYPES.contains(&commit_type.as_str()) {
+        if !CommitType::ALL.contains(&commit_type.as_str()) {
             return Err(Error::InvalidCommitMessage(format!(
                 "Invalid commit type: '{}'. Must be one of: {}",
                 commit_type,
-                VALID_TYPES.join(", ")
+                CommitType::ALL.join(", ")
             )));
         }
 
@@ -236,7 +232,7 @@ impl CommitSanitizer {
         let first_line = message.lines().next().unwrap_or("");
 
         // Check for type prefix
-        let has_valid_type = VALID_TYPES.iter().any(|t| {
+        let has_valid_type = CommitType::ALL.iter().any(|t| {
             first_line.starts_with(&format!("{}:", t))
                 || first_line.starts_with(&format!("{}(", t))
         });
