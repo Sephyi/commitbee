@@ -17,13 +17,15 @@ pub struct PromptContext {
 
 impl PromptContext {
     pub fn to_prompt(&self) -> String {
+        let symbols_section = self.format_symbols_section();
+
         format!(
             r#"Analyze this git diff and generate a commit message.
 
 SUMMARY: {summary}
 FILES: {files}
 SUGGESTED TYPE: {commit_type}{scope}
-
+{symbols}
 DIFF:
 {diff}
 
@@ -40,6 +42,7 @@ Output format:
                 .as_ref()
                 .map(|s| format!("\nSCOPE: {}", s))
                 .unwrap_or_default(),
+            symbols = symbols_section,
             scope_json = self
                 .suggested_scope
                 .as_ref()
@@ -47,5 +50,30 @@ Output format:
                 .unwrap_or_else(|| "null".to_string()),
             diff = self.truncated_diff,
         )
+    }
+
+    fn format_symbols_section(&self) -> String {
+        let has_added = !self.symbols_added.is_empty();
+        let has_removed = !self.symbols_removed.is_empty();
+
+        if !has_added && !has_removed {
+            return String::new();
+        }
+
+        let mut section = String::from("\nSYMBOLS CHANGED:");
+        if has_added {
+            section.push_str(&format!(
+                "\n  Added:\n    {}",
+                self.symbols_added.replace('\n', "\n    ")
+            ));
+        }
+        if has_removed {
+            section.push_str(&format!(
+                "\n  Removed:\n    {}",
+                self.symbols_removed.replace('\n', "\n    ")
+            ));
+        }
+        section.push('\n');
+        section
     }
 }
