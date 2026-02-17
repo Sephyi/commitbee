@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -11,22 +10,34 @@ pub mod ollama;
 use crate::config::{Config, Provider};
 use crate::error::Result;
 
-#[async_trait]
-pub trait LlmProvider: Send + Sync {
+/// Enum dispatch for LLM providers — avoids async-trait / dyn overhead.
+pub enum LlmBackend {
+    Ollama(ollama::OllamaProvider),
+}
+
+impl LlmBackend {
     /// Generate with streaming tokens and cancellation support
-    async fn generate(
+    pub async fn generate(
         &self,
         prompt: &str,
         token_tx: mpsc::Sender<String>,
         cancel: CancellationToken,
-    ) -> Result<String>;
+    ) -> Result<String> {
+        match self {
+            Self::Ollama(p) => p.generate(prompt, token_tx, cancel).await,
+        }
+    }
 
-    fn name(&self) -> &str;
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Ollama(p) => p.name(),
+        }
+    }
 }
 
-pub fn create_provider(config: &Config) -> Result<Box<dyn LlmProvider>> {
+pub fn create_provider(config: &Config) -> Result<LlmBackend> {
     match config.provider {
-        Provider::Ollama => Ok(Box::new(ollama::OllamaProvider::new(config))),
+        Provider::Ollama => Ok(LlmBackend::Ollama(ollama::OllamaProvider::new(config))),
         Provider::OpenAI => {
             // TODO: Implement OpenAI provider
             Err(crate::error::Error::Provider {

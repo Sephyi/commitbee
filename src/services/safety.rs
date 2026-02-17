@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
+
 use regex::Regex;
 
 use crate::domain::StagedChanges;
@@ -13,7 +14,7 @@ pub struct SecretMatch {
     pub line: Option<usize>,
 }
 
-static SECRET_PATTERNS: Lazy<Vec<(&str, Regex)>> = Lazy::new(|| {
+static SECRET_PATTERNS: LazyLock<Vec<(&str, Regex)>> = LazyLock::new(|| {
     vec![
         (
             "API Key",

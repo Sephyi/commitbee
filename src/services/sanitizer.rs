@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
+
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -24,11 +25,11 @@ const VALID_TYPES: &[&str] = &[
     "feat", "fix", "refactor", "chore", "docs", "test", "style", "perf", "build", "ci", "revert",
 ];
 
-static SCOPE_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[a-z0-9][a-z0-9\-_/.]*$").unwrap());
+static SCOPE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-z0-9][a-z0-9\-_/.]*$").unwrap());
 
-static CODE_FENCE_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"```[\s\S]*?```").unwrap());
+static CODE_FENCE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"```[\s\S]*?```").unwrap());
 
 static PREAMBLE_PATTERNS: &[&str] = &[
     "here's the commit message",

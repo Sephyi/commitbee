@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
+
 use regex::Regex;
 use std::path::Path;
 use tree_sitter::{Language, Parser};
@@ -20,7 +21,7 @@ pub struct DiffHunk {
 }
 
 // Robust regex for parsing unified diff hunk headers
-static HUNK_REGEX: Lazy<Regex> = Lazy::new(|| {
+static HUNK_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@").unwrap()
 });
 

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use directories::ProjectDirs;
-use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -72,7 +71,7 @@ pub struct Config {
     pub ollama_host: String,
 
     #[serde(skip)]
-    pub api_key: Option<SecretString>,
+    pub api_key: Option<String>,
 
     #[serde(default = "default_max_diff_lines")]
     pub max_diff_lines: usize,
@@ -177,8 +176,7 @@ impl Config {
                 Provider::Anthropic => std::env::var("ANTHROPIC_API_KEY"),
                 Provider::Ollama => Err(std::env::VarError::NotPresent),
             })
-            .ok()
-            .map(SecretString::from);
+            .ok();
     }
 
     fn apply_cli(&mut self, cli: &Cli) {

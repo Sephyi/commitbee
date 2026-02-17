@@ -2,14 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use async_trait::async_trait;
-use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
-use super::LlmProvider;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
@@ -53,11 +51,8 @@ impl OllamaProvider {
             model: config.model.clone(),
         }
     }
-}
 
-#[async_trait]
-impl LlmProvider for OllamaProvider {
-    async fn generate(
+    pub async fn generate(
         &self,
         prompt: &str,
         token_tx: mpsc::Sender<String>,
@@ -148,7 +143,7 @@ impl LlmProvider for OllamaProvider {
         Ok(full_response.trim().to_string())
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         "ollama"
     }
 }
