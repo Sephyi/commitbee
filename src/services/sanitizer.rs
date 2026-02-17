@@ -41,6 +41,23 @@ static PREAMBLE_PATTERNS: &[&str] = &[
 pub struct CommitSanitizer;
 
 impl CommitSanitizer {
+    /// Truncate a string to at most `max_chars` characters, appending "..." if truncated.
+    /// Safe for multi-byte UTF-8 (never slices mid-character).
+    fn truncate_with_ellipsis(s: &str, max_chars: usize) -> String {
+        let suffix = "...";
+        let target = max_chars.saturating_sub(suffix.len());
+        let boundary = s
+            .char_indices()
+            .nth(target)
+            .map(|(i, _)| i)
+            .unwrap_or(s.len());
+        if boundary < s.len() {
+            format!("{}{}", &s[..boundary], suffix)
+        } else {
+            s.to_string()
+        }
+    }
+
     /// Parse and validate commit message from LLM output
     pub fn sanitize(raw: &str, format: &CommitFormat) -> Result<String> {
         // Step 1: Try to parse as JSON (structured output)
@@ -144,8 +161,8 @@ impl CommitSanitizer {
         };
 
         // Truncate if too long
-        let first_line = if first_line.len() > 72 {
-            format!("{}...", &first_line[..69])
+        let first_line = if first_line.chars().count() > 72 {
+            Self::truncate_with_ellipsis(&first_line, 72)
         } else {
             first_line
         };
@@ -173,10 +190,10 @@ impl CommitSanitizer {
 
         // Remove quotes at start/end
         cleaned = cleaned.trim().to_string();
-        if cleaned.starts_with('"') && cleaned.ends_with('"') {
+        if cleaned.starts_with('"') && cleaned.ends_with('"') && cleaned.len() >= 2 {
             cleaned = cleaned[1..cleaned.len() - 1].to_string();
         }
-        if cleaned.starts_with('\'') && cleaned.ends_with('\'') {
+        if cleaned.starts_with('\'') && cleaned.ends_with('\'') && cleaned.len() >= 2 {
             cleaned = cleaned[1..cleaned.len() - 1].to_string();
         }
 
@@ -204,12 +221,12 @@ impl CommitSanitizer {
         // Ensure first line <= 72 chars
         if let Some(first_newline) = cleaned.find('\n') {
             let first_line = &cleaned[..first_newline];
-            if first_line.len() > 72 {
-                let truncated = format!("{}...", &first_line[..69]);
+            if first_line.chars().count() > 72 {
+                let truncated = Self::truncate_with_ellipsis(first_line, 72);
                 cleaned = format!("{}{}", truncated, &cleaned[first_newline..]);
             }
-        } else if cleaned.len() > 72 {
-            cleaned = format!("{}...", &cleaned[..69]);
+        } else if cleaned.chars().count() > 72 {
+            cleaned = Self::truncate_with_ellipsis(&cleaned, 72);
         }
 
         cleaned
