@@ -253,6 +253,10 @@ cargo run -- --dry-run        # Preview commit message
 cargo run -- --show-prompt    # Debug the LLM prompt
 ```
 
+## 💛 Sponsor
+
+If you find CommitBee useful, consider [sponsoring my work](https://github.com/sponsors/Sephyi).
+
 ## 📄 License
 
 This project is licensed under [GPL-3.0-only](LICENSES/GPL-3.0-only.txt).
