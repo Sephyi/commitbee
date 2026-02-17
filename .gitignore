@@ -13,7 +13,6 @@
 .vscode/
 !.vscode/extensions.json
 
-
 # --- Rust / Cargo ------------------------------------------------------------
 
 # Cargo build artifacts
@@ -28,3 +27,7 @@ target/
 
 # Mutation testing data
 **/mutants.out*/
+
+# --- AI / Claude -------------------------------------------------------------
+
+.claude
