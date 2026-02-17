@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum CommitType {
     Feat,
     Fix,
@@ -40,7 +41,8 @@ impl CommitType {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    #[allow(dead_code)]
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "feat" => Some(Self::Feat),
             "fix" => Some(Self::Fix),

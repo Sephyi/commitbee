@@ -9,17 +9,17 @@ fn all_matches_enum_variants() {
     assert_eq!(CommitType::ALL.len(), 11);
     for s in CommitType::ALL {
         assert!(
-            CommitType::from_str(s).is_some(),
-            "ALL entry {:?} has no matching from_str result",
+            CommitType::parse(s).is_some(),
+            "ALL entry {:?} has no matching parse result",
             s
         );
     }
 }
 
 #[test]
-fn from_str_roundtrips() {
+fn parse_roundtrips() {
     for s in CommitType::ALL {
-        let ct = CommitType::from_str(s).unwrap();
+        let ct = CommitType::parse(s).unwrap();
         assert_eq!(
             ct.as_str(),
             *s,
@@ -31,10 +31,10 @@ fn from_str_roundtrips() {
 }
 
 #[test]
-fn from_str_rejects_invalid() {
+fn parse_rejects_invalid() {
     for invalid in &["yolo", "", "FEAT"] {
         assert!(
-            CommitType::from_str(invalid).is_none(),
+            CommitType::parse(invalid).is_none(),
             "expected None for {:?}, but got Some",
             invalid
         );
@@ -46,7 +46,7 @@ fn display_matches_as_str() {
     assert_eq!(format!("{}", CommitType::Feat), "feat");
 
     for s in CommitType::ALL {
-        let ct = CommitType::from_str(s).unwrap();
+        let ct = CommitType::parse(s).unwrap();
         assert_eq!(
             ct.to_string(),
             ct.as_str(),

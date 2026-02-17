@@ -17,7 +17,7 @@ impl GitService {
         let repo = gix::discover(".").map_err(|_| Error::NotAGitRepo)?;
 
         let work_dir = repo
-            .work_dir()
+            .workdir()
             .ok_or_else(|| Error::Git("Bare repository not supported".into()))?
             .to_path_buf();
 
