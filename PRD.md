@@ -41,11 +41,11 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 
 ### 2.1 Market Position
 
-| Category | Key Players | CommitBee Advantage |
-|----------|------------|---------------------|
-| AI commit generators | opencommit (7.2K★), aicommits (8K★), aicommit2 | **Only tool with tree-sitter semantic analysis** |
-| Rust commit tools | rusty-commit, cocogitto, convco | Semantic analysis + AI generation (cocogitto/convco have no AI) |
-| IDE-integrated | GitHub Copilot, JetBrains AI | CLI-first, provider-agnostic, privacy-respecting |
+| Category             | Key Players                                    | CommitBee Advantage                                             |
+| -------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
+| AI commit generators | opencommit (7.2K★), aicommits (8K★), aicommit2 | **Only tool with tree-sitter semantic analysis**                |
+| Rust commit tools.   | rusty-commit, cocogitto, convco                | Semantic analysis + AI generation (cocogitto/convco have no AI) |
+| IDE-integrated       | GitHub Copilot, JetBrains AI                   | CLI-first, provider-agnostic, privacy-respecting                |
 
 ### 2.2 Unique Differentiators (No Competitor Has These)
 
@@ -59,14 +59,14 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 
 ### 2.3 Critical Gaps vs. Competitors
 
-| Feature | Market Expectation | Current State |
-|---------|-------------------|---------------|
-| Cloud LLM providers (OpenAI, Anthropic) | Universal | Missing |
-| Git hook integration | Universal | Missing |
-| Shell completions | Expected for CLI tools | Missing |
-| Multiple message generation (pick from N) | Common (aicommits, aicommit2) | Missing |
-| Custom prompt/instruction files | Growing (Copilot, aicommit2) | Missing |
-| Unit/integration tests | Non-negotiable for quality | Zero tests |
+| Feature                                                        | Market Expectation            | Current State |
+| -------------------------------------------------------------- | ----------------------------- | ------------- |
+| Cloud LLM providers (OpenAI, Anthropic)                        | Universal                     | Missing       |
+| Git hook integration                                           | Universal                     | Missing       |
+| Shell completions                                              | Expected for CLI tools        | Missing       |
+| Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | Missing       |
+| Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | Missing       |
+| Unit/integration tests                                         | Non-negotiable for quality.   | Zero tests    |
 
 ---
 
@@ -78,14 +78,14 @@ The existing domain/services separation is solid. The pipeline (CLI -> Git -> An
 
 #### Critical Issues
 
-| Issue | Impact | Resolution |
-|-------|--------|------------|
-| Symbols extracted but never included in LLM prompt | Tree-sitter analysis is wasted computation | Include in prompt with fallback ladder |
-| `App::generate_commit()` is a 160-line untestable monolith | Cannot unit test any step of the pipeline | Decompose into testable methods |
-| No dependency injection | Services hard-wired, can't mock for tests | Trait abstractions for GitService, LlmProvider |
-| Synchronous `std::process::Command` in async runtime | Blocks tokio event loop on large repos | Use `tokio::process::Command` or `spawn_blocking` |
-| N+1 git process spawns (1 + N per file) | 50 files = 51 process spawns | Single `git diff --cached` parsed per-file |
-| UTF-8 panic in sanitizer (byte-index slicing) | Runtime crash on emoji/CJK in commit messages | Use `str::chars()` for safe truncation |
+| Issue                                                         | Impact                                          | Resolution                                                  |
+| ------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------- |
+| Symbols extracted but never included in LLM prompt            | Tree-sitter analysis is wasted computation      | Include in prompt with fallback ladder                      |
+| `App::generate_commit()` is a 160-line untestable monolith    | Cannot unit test any step of the pipeline       | Decompose into testable methods                             |
+| No dependency injection                                       | Services hard-wired, can't mock for tests       | Trait abstractions for GitService, LlmProvider              |
+| Synchronous `std::process::Command` in async runtime          | Blocks tokio event loop on large repos          | Use `tokio::process::Command` or `spawn_blocking`           |
+| N+1 git process spawns (1 + N per file)                       | 50 files = 51 process spawns                    | Single `git diff --cached` parsed per-file                  |
+| UTF-8 panic in sanitizer (byte-index slicing)                 | Runtime crash on emoji/CJK in commit messages   | Use `str::chars()` for safe truncation                      |
 
 #### Symbol Extraction Fallback Ladder
 
@@ -100,31 +100,31 @@ Each tier produces progressively less useful context but ensures the pipeline ne
 
 #### Dependency Cleanup
 
-| Dependency | Action | Reason |
-|------------|--------|--------|
-| `anyhow` | **Remove** | Never imported anywhere |
-| `indicatif` | **Keep** (start using) | Declared but never used; needed for progress UX |
-| `once_cell` | **Replace** with `std::sync::LazyLock` | Stable since Rust 1.80, edition 2024 |
-| `async-trait` | **Replace** with native async traits | Stable in edition 2024 |
-| `futures` | **Replace** with `tokio-stream` `StreamExt` | Already a dependency |
-| `secrecy` | **Remove** until cloud providers implemented | Wraps unused API key field |
-| `tokio` `features=["full"]` | **Reduce** to `["rt-multi-thread", "macros", "signal", "sync"]` | Pulls unnecessary features |
+| Dependency    | Action                                                          | Reason                                                 |
+| ------------- | --------------------------------------------------------------- | ------------------------------------------------------ |
+| `anyhow`      | **Remove**                                                      | Never imported anywhere                                |
+| `indicatif`   | **Keep** (start using)                                          | Declared but never used; needed for progress UX        |
+| `once_cell`   | **Replace** with `std::sync::LazyLock`                          | Stable since Rust 1.80, edition 2024                   |
+| `async-trait` | **Replace** with native async traits                            | Stable in edition 2024                                 |
+| `futures`     | **Replace** with `tokio-stream` `StreamExt`                     | Already a dependency                                   |
+| `secrecy`     | **Remove** until cloud providers implemented                    | Wraps unused API key field                             |
+| `tokio`       | **Reduce** to `["rt-multi-thread", "macros", "signal", "sync"]` | Pulls unnecessary features                             |
 
 #### New Dependencies
 
-| Dependency | Purpose | Priority |
-|------------|---------|----------|
-| `miette` | Rich diagnostic errors with help text, codes, suggestions | P0 |
-| `figment` | Hierarchical config (defaults < file < env < CLI) | P1 |
-| `tracing` + `tracing-subscriber` | Structured logging/diagnostics | P1 |
-| `clap_complete` | Shell completions generation | P1 |
-| `keyring` | Secure API key storage (macOS Keychain, etc.) | P1 |
-| `insta` | Snapshot testing | P0 (dev) |
-| `proptest` | Property-based testing | P1 (dev) |
+| Dependency                          | Purpose                                                   | Priority |
+| ----------------------------------- | --------------------------------------------------------- | -------- |
+| `miette`                            | Rich diagnostic errors with help text, codes, suggestions | P0       |
+| `figment`                           | Hierarchical config (defaults < file < env < CLI)         | P1       |
+| `tracing` + `tracing-subscriber`    | Structured logging/diagnostics                            | P1       |
+| `clap_complete`                     | Shell completions generation                              | P1       |
+| `keyring`                           | Secure API key storage (macOS Keychain, etc.)             | P1       |
+| `insta`                             | Snapshot testing                                          | P0 (dev) |
+| `proptest`                          | Property-based testing                                    | P1 (dev) |
 
 ### 3.2 Target Architecture
 
-```
+```bash
 commitbee
 ├── src/
 │   ├── main.rs              # Entry point (uses lib, not mod declarations)
@@ -320,11 +320,11 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **Acceptance**: Priority: CLI args > env vars > project config (`.commitbee.toml`) > user config > defaults. Error messages show which source provided which value.
 - **Platform-specific user config paths**:
 
-  | Platform | Config Path |
-  |----------|------------|
-  | macOS | `~/Library/Application Support/commitbee/config.toml` |
-  | Linux | `~/.config/commitbee/config.toml` (XDG) |
-  | Windows | `%APPDATA%\commitbee\config.toml` |
+| Platform | Config Path                                           |
+| -------- | ----------------------------------------------------- |
+| macOS    | `~/Library/Application Support/commitbee/config.toml` |
+| Linux    | `~/.config/commitbee/config.toml` (XDG)               |
+| Windows  | `%APPDATA%\commitbee\config.toml`                     |
 
   Use `dirs` crate for platform detection. Existing `~/.config/commitbee/config.toml` remains supported as a fallback on all platforms for backward compatibility.
 
@@ -596,14 +596,14 @@ Every error must include:
 
 Examples:
 
-```
+```bash
 x Cannot connect to Ollama at http://localhost:11434
 
   help: Is Ollama running? Start it with:
         ollama serve
 ```
 
-```
+```bash
 x No staged changes found
 
   help: Stage your changes first:
@@ -627,7 +627,7 @@ x No staged changes found
 
 ### UX-004: CLI Design
 
-```
+```bash
 commitbee [OPTIONS]                    # Generate and commit (default)
 commitbee --dry-run                    # Generate, print, don't commit
 commitbee --yes                        # Generate and auto-commit
@@ -671,14 +671,14 @@ Exact output behavior for key flags:
 
 ### TR-001: Unit Tests
 
-| Module | Technique | Coverage Target |
-|--------|-----------|-----------------|
-| `CommitSanitizer` | Snapshot (insta) + proptest | All code paths + never-panic guarantee |
-| `DiffHunk::parse_from_diff` | Snapshot | Standard diffs, renames, binary, empty |
-| `safety::scan_for_secrets` | Unit + proptest | Each pattern + false positive tests |
-| `ContextBuilder` | Snapshot | Budget calculation, type inference, scope inference |
-| `FileCategory::from_path` | Unit | All categories, edge cases |
-| `CommitType` | Unit | Verify `ALL` matches enum variants |
+| Module                      | Technique                   | Coverage Target                                     |
+| --------------------------- | --------------------------- | --------------------------------------------------- |
+| `CommitSanitizer`           | Snapshot (insta) + proptest | All code paths + never-panic guarantee              |
+| `DiffHunk::parse_from_diff` | Snapshot                    | Standard diffs, renames, binary, empty              |
+| `safety::scan_for_secrets`  | Unit + proptest             | Each pattern + false positive tests                 |
+| `ContextBuilder`            | Snapshot                    | Budget calculation, type inference, scope inference |
+| `FileCategory::from_path`   | Unit                        | All categories, edge cases                          |
+| `CommitType`                | Unit                        | Verify `ALL` matches enum variants                  |
 
 #### Golden Semantic Fixtures
 
@@ -694,18 +694,18 @@ These fixtures serve as regression tests for the tree-sitter analysis pipeline a
 
 ### TR-002: Integration Tests
 
-| Scenario | Setup | Mock |
-|----------|-------|------|
-| Normal commit flow | tempfile git repo | wiremock Ollama |
-| Empty staging area | tempfile git repo | None |
-| Binary files mixed with text | tempfile git repo | wiremock Ollama |
-| Large diff (truncation) | tempfile git repo | wiremock Ollama |
-| Unicode file paths | tempfile git repo | wiremock Ollama |
-| LLM returns invalid JSON | tempfile git repo | wiremock Ollama |
-| LLM returns error mid-stream | tempfile git repo | wiremock Ollama |
-| Ollama not running | None | No mock (real connection refused) |
-| Secret detected | tempfile git repo | None |
-| Non-TTY mode | tempfile git repo + piped stdin | wiremock Ollama |
+| Scenario                          | Setup                              | Mock                                  |
+| --------------------------------- | ---------------------------------- | ------------------------------------- |
+| Normal commit flow                | tempfile git repo                  | wiremock Ollama                       |
+| Empty staging area                | tempfile git repo                  | None                                  |
+| Binary files mixed with text      | tempfile git repo                  | wiremock Ollama                       |
+| Large diff (truncation)           | tempfile git repo                  | wiremock Ollama                       |
+| Unicode file paths                | tempfile git repo                  | wiremock Ollama                       |
+| LLM returns invalid JSON          | tempfile git repo                  | wiremock Ollama                       |
+| LLM returns error mid-stream      | tempfile git repo                  | wiremock Ollama                       |
+| Ollama not running                | None                               | No mock (real connection refused)     |
+| Secret detected                   | tempfile git repo                  | None                                  |
+| Non-TTY mode                      | tempfile git repo + piped stdin    | wiremock Ollama                       |
 
 ### TR-003: CLI Tests
 
@@ -912,16 +912,16 @@ opt-level = "z"  # or "s" — benchmark both
 
 ## 12. Success Metrics
 
-| Metric | Target | How to Measure |
-|--------|--------|----------------|
-| Runtime panics | 0 | proptest + fuzzing, no `unwrap()` on user-facing paths |
-| Test coverage | > 80% on services/ | `cargo tarpaulin` |
-| CI green rate | > 99% | GitHub Actions dashboard |
-| Cold startup time | < 200ms | `hyperfine` in CI |
-| Binary size (default features) | < 15MB | CI artifact size tracking |
-| Commit message quality | > 80% "good enough" on first try | Manual evaluation on sample repos + `commitbee eval` harness |
-| Secret leak rate | 0 (no secrets sent to cloud LLMs) | Integration tests with known secret patterns |
-| MSRV | Rust 1.85 (edition 2024) | CI matrix build (stable + 1.85) |
+| Metric                                | Target                              | How to Measure                                               |
+| ------------------------------------- | ----------------------------------- | ------------------------------------------------------------ |
+| Runtime panics                        | 0                                   | proptest + fuzzing, no `unwrap()` on user-facing paths       |
+| Test coverage                         | > 80% on services/                  | `cargo tarpaulin`                                            |
+| CI green rate                         | > 99%                               | GitHub Actions dashboard                                     |
+| Cold startup time                     | < 200ms                             | `hyperfine` in CI                                            |
+| Binary size (default features)        | < 15MB                              | CI artifact size tracking                                    |
+| Commit message quality                | > 80% "good enough" on first try    | Manual evaluation on sample repos + `commitbee eval` harness |
+| Secret leak rate                      | 0 (no secrets sent to cloud LLMs)   | Integration tests with known secret patterns                 |
+| MSRV                                  | Rust 1.85 (edition 2024)            | CI matrix build (stable + 1.85)                              |
 
 ---
 
@@ -938,22 +938,22 @@ opt-level = "z"  # or "s" — benchmark both
 
 ## Appendix A: Competitive Feature Matrix
 
-| Feature | commitbee | opencommit | aicommits | aicommit2 | rusty-commit | cocogitto |
-|---------|-----------|------------|-----------|-----------|--------------|-----------|
-| **Tree-sitter AST** | **Yes** | No | No | No | No | No |
-| **Secret scanning** | **Yes** | No | No | No | No | No |
-| **Token budget** | **Yes** | No | No | No | No | N/A |
-| **Streaming** | **Yes** | No | No | No | No | N/A |
-| **Local LLM** | Yes | Yes | Yes | Yes | Yes | N/A |
-| **OpenAI** | Planned | Yes | Yes | Yes | Yes | N/A |
-| **Anthropic** | Planned | Yes | No | Yes | Yes | N/A |
-| **Git hooks** | Planned | Yes | Yes | No | Yes | Yes |
-| **Multi-generate** | Planned | Yes | Yes | No | No | No |
-| **Shell completions** | Planned | No | No | No | No | Yes |
-| **MCP server** | Planned | No | No | No | Yes | No |
-| **Changelog** | Future | No | No | No | No | Yes |
-| **Version bumping** | Future | No | No | No | No | Yes |
-| **Monorepo** | Future | No | No | No | No | Yes |
+| Feature               | commitbee | opencommit | aicommits | aicommit2 | rusty-commit | cocogitto |
+| --------------------- | --------- | ---------- | --------- | --------- | ------------ | --------- |
+| **Tree-sitter AST**   | **Yes**   | No         | No        | No        | No           | No        |
+| **Secret scanning**   | **Yes**   | No         | No        | No        | No           | No        |
+| **Token budget**      | **Yes**   | No         | No        | No        | No           | N/A       |
+| **Streaming**         | **Yes**   | No         | No        | No        | No           | N/A       |
+| **Local LLM**         | Yes       | Yes        | Yes       | Yes       | Yes          | N/A       |
+| **OpenAI**            | Planned   | Yes        | Yes       | Yes       | Yes          | N/A       |
+| **Anthropic**         | Planned   | Yes        | No        | Yes       | Yes          | N/A       |
+| **Git hooks**         | Planned   | Yes        | Yes       | No        | Yes          | Yes       |
+| **Multi-generate**    | Planned   | Yes        | Yes       | No        | No           | No        |
+| **Shell completions** | Planned   | No         | No        | No        | No           | Yes       |
+| **MCP server**        | Planned   | No         | No        | No        | Yes          | No        |
+| **Changelog**         | Future    | No         | No        | No        | No           | Yes       |
+| **Version bumping**   | Future    | No         | No        | No        | No           | Yes       |
+| **Monorepo**          | Future    | No         | No        | No        | No           | Yes       |
 
 ---
 
