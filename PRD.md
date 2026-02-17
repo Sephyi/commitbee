@@ -13,8 +13,6 @@ SPDX-License-Identifier: GPL-3.0-only
 
 **Revision 2.1**: Enhancement review integration (2026-02-17) — incorporated evaluation harness, symbol extraction fallback ladder, cancellation contract, streaming trait abstraction, golden test fixtures, output format contracts, hook edge cases, JSON retry logic, and 12 additional refinements from verification review.
 
----
-
 ## 1. Vision
 
 > **"The commit message generator that actually understands your code."**
@@ -34,8 +32,6 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 
 - **v0.2.0** is a stability release: config format preserved, no breaking CLI changes.
 - **v0.3.0+** may introduce breaking changes (new config system via figment, CLI subcommand restructuring). Migration documentation will accompany any breaking release.
-
----
 
 ## 2. Competitive Landscape
 
@@ -67,8 +63,6 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | Missing       |
 | Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | Missing       |
 | Unit/integration tests                                         | Non-negotiable for quality.   | Zero tests    |
-
----
 
 ## 3. Architecture Requirements
 
@@ -202,8 +196,6 @@ pub struct App {
 ```
 
 `generate_stream()` is required for all providers in P1 scope (FR-011, FR-012, FR-013). Providers that do not support streaming should implement `generate_stream()` by wrapping `generate()` as a single-element stream.
-
----
 
 ## 4. Feature Requirements
 
@@ -490,8 +482,6 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **What**: Analyze existing commit history to match the project's commit style.
 - **Rationale**: GitHub Copilot does this. Would allow commitbee to adapt to any project's conventions.
 
----
-
 ## 5. Security Requirements
 
 ### SR-001: Secret Scanning (Enhanced)
@@ -528,8 +518,6 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - `cargo audit` in CI pipeline
 - `cargo deny` for license compliance
 - Minimize dependency tree (remove unused crates)
-
----
 
 ## 6. Performance Requirements
 
@@ -581,8 +569,6 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - LLM streaming cancellation drops the response and returns to prompt (or exits in non-interactive mode).
 - Git commit is only called after the user confirms the complete message. No intermediate state is written to the repository.
 - Temp files (if any) are cleaned up via RAII (`Drop` impl or `tempfile` crate auto-cleanup).
-
----
 
 ## 7. UX Requirements
 
@@ -664,8 +650,6 @@ Exact output behavior for key flags:
 - **`--generate N`**: In TTY mode, displays N numbered options and a `dialoguer` selection prompt on stderr; prints the selected message to stdout. In non-TTY mode, prints all N messages to stdout separated by a blank line. `--yes` selects the first option.
 - **`--show-prompt`**: Prints the full LLM prompt to stderr (system prompt + user prompt). API keys and secret patterns are **redacted** (replaced with `[REDACTED]`). Does not call the LLM. Exit code 0.
 - **Default (interactive)**: Displays the generated message and a confirm/edit/cancel prompt on stderr. On confirm, commits and prints the commit hash to stdout.
-
----
 
 ## 8. Testing Requirements
 
@@ -759,8 +743,6 @@ A developer-facing command (`commitbee eval`) that runs the full pipeline agains
 
 `cargo fuzz` targets for the diff parser, sanitizer, and secret scanner. Priority: P2 — implement after the unit test suite (TR-001) and property tests (TR-004) are stable. Fuzz targets should be added to `fuzz/` directory following standard `cargo-fuzz` conventions.
 
----
-
 ## 9. Distribution Requirements
 
 ### DR-001: cargo install
@@ -796,8 +778,6 @@ strip = true
 codegen-units = 1
 opt-level = "z"  # or "s" — benchmark both
 ```
-
----
 
 ## 10. Prompt Engineering Requirements
 
@@ -841,8 +821,6 @@ opt-level = "z"  # or "s" — benchmark both
 - If the LLM returns invalid JSON, retry **once** with a repair prompt: "Your previous response was not valid JSON. Please respond with only valid JSON matching the schema."
 - If the retry also fails, fall back to heuristic extraction: infer commit type from the diff header and file categories, extract the first coherent sentence as the commit message description.
 - Never retry more than once (avoid infinite loops with models that consistently produce invalid output).
-
----
 
 ## 11. Phased Roadmap
 
@@ -908,8 +886,6 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-057: Additional language support (feature-gated)
 - FR-058: Learning from commit history
 
----
-
 ## 12. Success Metrics
 
 | Metric                                | Target                              | How to Measure                                               |
@@ -923,8 +899,6 @@ opt-level = "z"  # or "s" — benchmark both
 | Secret leak rate                      | 0 (no secrets sent to cloud LLMs)   | Integration tests with known secret patterns                 |
 | MSRV                                  | Rust 1.85 (edition 2024)            | CI matrix build (stable + 1.85)                              |
 
----
-
 ## 13. Non-Goals (Explicit Scope Exclusions)
 
 - **GUI/TUI application** — CommitBee is CLI-first. Editor integration happens via MCP server mode, not a built-in UI.
@@ -933,8 +907,6 @@ opt-level = "z"  # or "s" — benchmark both
 - **WASM plugin system** — Over-engineering for current scale. Configuration-driven extensibility first.
 - **Non-git VCS** — Jujutsu/Mercurial support is not a priority. Git covers > 95% of the market.
 - **Shell snippet detection** — Commit messages are never executed by git; shell injection via commit message content is not a real attack vector. Standard sanitization (FR-001, FR-007) is sufficient.
-
----
 
 ## Appendix A: Competitive Feature Matrix
 
@@ -954,8 +926,6 @@ opt-level = "z"  # or "s" — benchmark both
 | **Changelog**         | Future    | No         | No        | No        | No           | Yes       |
 | **Version bumping**   | Future    | No         | No        | No        | No           | Yes       |
 | **Monorepo**          | Future    | No         | No        | No        | No           | Yes       |
-
----
 
 ## Appendix B: Research Sources
 

@@ -70,7 +70,7 @@ Rust, TypeScript, JavaScript, Python, Go
 
 ## File Structure
 
-```
+```bash
 src/
 ├── main.rs              # Entry point
 ├── lib.rs               # Library exports
@@ -107,30 +107,43 @@ src/
 
 - Rust edition 2024, MSRV 1.85
 - License: GPL-3.0-only (REUSE compliant)
-- Dev deps: `tempfile`, `assert_cmd`, `predicates`, `wiremock`
+- Dev deps: `tempfile`, `assert_cmd`, `predicates`, `wiremock`, `insta`, `proptest`
 
 ### REUSE / SPDX Headers
 
 - All files use `reuse annotate` format: blank comment separator between SPDX lines
 - `reuse lint` — verify compliance
 - `reuse annotate --copyright "Sephyi <me@sephy.io>" --license GPL-3.0-only --year 2026 <file>` — add header
-- REUSE.toml `[[annotations]]` — only for files that can't have inline headers (e.g., Cargo.lock)
+- REUSE.toml `[[annotations]]` — for files that can't have inline headers (Cargo.lock, tests/snapshots/**)
 
-### Running Tests (when implemented)
+### Running Tests
 
 ```bash
-cargo test                    # All tests
-cargo test sanitizer          # Specific module
+cargo test                    # All tests (55 tests)
+cargo test --test sanitizer   # Specific integration test file
+cargo test --test safety      # Safety module tests
+cargo test --test context     # ContextBuilder tests
+cargo test --test commit_type # CommitType tests
 cargo test -- --nocapture     # Show println output
 ```
+
+**Important:** `cargo test sanitizer` matches test *names* across all binaries. Use `cargo test --test <name>` to select a specific integration test file.
 
 ### Building
 
 ```bash
 cargo build --release         # Optimized binary
 cargo check                   # Fast syntax check
-cargo clippy                  # Lint checks
+cargo clippy --all-targets -- -D warnings  # Lint (CI requires zero warnings)
 cargo fmt                     # Format code
+```
+
+### CI Verification Gate
+
+Before pushing, run the full CI check locally:
+
+```bash
+cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test --all-targets
 ```
 
 ### Testing Manually
@@ -151,3 +164,17 @@ git add some-file.rs
 # Auto-commit
 ./target/release/commitbee --yes
 ```
+
+### Gotchas
+
+- `gix` API: use `repo.workdir()` not `repo.work_dir()` (deprecated)
+- `CommitType::parse()` not `from_str()` — avoids clippy `should_implement_trait` warning
+- Enum variants used only via `CommitType::ALL` const need `#[allow(dead_code)]`
+- `CommitSanitizer::clean_text` has a known bug with overlapping preamble patterns (indexes modified string with original offsets) — documented, not yet fixed
+- Parallel subagents running `cargo fmt` may create unstaged changes — commit formatting separately
+- Secret pattern `sk-[a-zA-Z0-9]{48}` requires exactly 48 chars after `sk-` in test data
+
+### Markdown Conventions
+
+- No `---` horizontal rules before `#` or `##` headers (they provide their own visual separation)
+- Tables must use properly aligned columns with `| --- |` separator rows
