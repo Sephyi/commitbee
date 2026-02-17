@@ -109,6 +109,13 @@ src/
 - License: GPL-3.0-only (REUSE compliant)
 - Dev deps: `tempfile`, `assert_cmd`, `predicates`, `wiremock`
 
+### REUSE / SPDX Headers
+
+- All files use `reuse annotate` format: blank comment separator between SPDX lines
+- `reuse lint` — verify compliance
+- `reuse annotate --copyright "Sephyi <me@sephy.io>" --license GPL-3.0-only --year 2026 <file>` — add header
+- REUSE.toml `[[annotations]]` — only for files that can't have inline headers (e.g., Cargo.lock)
+
 ### Running Tests (when implemented)
 
 ```bash
