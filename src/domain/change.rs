@@ -24,10 +24,7 @@ pub enum FileCategory {
 impl FileCategory {
     pub fn from_path(path: &std::path::Path) -> Self {
         let path_str = path.to_string_lossy();
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
         // Test detection
@@ -81,8 +78,8 @@ impl FileCategory {
 
         // By extension - source code
         match ext {
-            "rs" | "ts" | "js" | "py" | "go" | "tsx" | "jsx" | "java" | "kt" | "c" | "cpp" | "h"
-            | "hpp" => Self::Source,
+            "rs" | "ts" | "js" | "py" | "go" | "tsx" | "jsx" | "java" | "kt" | "c" | "cpp"
+            | "h" | "hpp" => Self::Source,
             _ => Self::Other,
         }
     }

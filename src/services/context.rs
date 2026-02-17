@@ -26,7 +26,11 @@ const SKIP_CONTENT_FILES: &[&str] = &[
 pub struct ContextBuilder;
 
 impl ContextBuilder {
-    pub fn build(changes: &StagedChanges, symbols: &[CodeSymbol], config: &Config) -> PromptContext {
+    pub fn build(
+        changes: &StagedChanges,
+        symbols: &[CodeSymbol],
+        config: &Config,
+    ) -> PromptContext {
         let commit_type = Self::infer_commit_type(changes, symbols);
         let scope = Self::infer_scope(changes);
 
@@ -308,7 +312,11 @@ impl ContextBuilder {
     }
 
     /// Adaptive diff truncation: smarter budget allocation per file
-    fn truncate_diff_adaptive(changes: &StagedChanges, config: &Config, char_budget: usize) -> String {
+    fn truncate_diff_adaptive(
+        changes: &StagedChanges,
+        config: &Config,
+        char_budget: usize,
+    ) -> String {
         let mut output = String::new();
         let mut files_included = 0;
         let total_files = changes.files.len();

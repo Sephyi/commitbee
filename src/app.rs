@@ -13,8 +13,8 @@ use crate::cli::Cli;
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::services::{
-    analyzer::AnalyzerService, context::ContextBuilder, git::GitService, llm,
-    safety, sanitizer::CommitSanitizer,
+    analyzer::AnalyzerService, context::ContextBuilder, git::GitService, llm, safety,
+    sanitizer::CommitSanitizer,
 };
 
 pub struct App {
@@ -232,7 +232,10 @@ impl App {
                 println!("[format]");
                 println!("  include_body: {}", self.config.format.include_body);
                 println!("  include_scope: {}", self.config.format.include_scope);
-                println!("  lowercase_subject: {}", self.config.format.lowercase_subject);
+                println!(
+                    "  lowercase_subject: {}",
+                    self.config.format.lowercase_subject
+                );
                 Ok(())
             }
         }

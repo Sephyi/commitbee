@@ -21,9 +21,8 @@ pub struct DiffHunk {
 }
 
 // Robust regex for parsing unified diff hunk headers
-static HUNK_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@").unwrap()
-});
+static HUNK_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@").unwrap());
 
 impl DiffHunk {
     /// Parse hunks from unified diff format
@@ -145,15 +144,25 @@ impl AnalyzerService {
 
         // Parse staged (new) file content
         if let Some(content) = staged_content(&change.path) {
-            let changed =
-                Self::extract_changed_symbols_static(&mut parser, &change.path, &content, hunks, true);
+            let changed = Self::extract_changed_symbols_static(
+                &mut parser,
+                &change.path,
+                &content,
+                hunks,
+                true,
+            );
             symbols.extend(changed);
         }
 
         // Parse HEAD (old) file content
         if let Some(content) = head_content(&change.path) {
-            let changed =
-                Self::extract_changed_symbols_static(&mut parser, &change.path, &content, hunks, false);
+            let changed = Self::extract_changed_symbols_static(
+                &mut parser,
+                &change.path,
+                &content,
+                hunks,
+                false,
+            );
             symbols.extend(changed);
         }
 
@@ -254,5 +263,4 @@ impl AnalyzerService {
             }
         }
     }
-
 }

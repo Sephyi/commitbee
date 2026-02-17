@@ -24,8 +24,7 @@ pub struct StructuredCommit {
 static SCOPE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-z0-9][a-z0-9\-_/.]*$").unwrap());
 
-static CODE_FENCE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"```[\s\S]*?```").unwrap());
+static CODE_FENCE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"```[\s\S]*?```").unwrap());
 
 static PREAMBLE_PATTERNS: &[&str] = &[
     "here's the commit message",
@@ -233,8 +232,7 @@ impl CommitSanitizer {
 
         // Check for type prefix
         let has_valid_type = CommitType::ALL.iter().any(|t| {
-            first_line.starts_with(&format!("{}:", t))
-                || first_line.starts_with(&format!("{}(", t))
+            first_line.starts_with(&format!("{}:", t)) || first_line.starts_with(&format!("{}(", t))
         });
 
         if !has_valid_type {
