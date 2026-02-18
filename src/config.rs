@@ -102,6 +102,10 @@ pub struct Config {
     #[serde(default)]
     pub openai_base_url: Option<String>,
 
+    /// Base URL for Anthropic API (default: https://api.anthropic.com/v1)
+    #[serde(default)]
+    pub anthropic_base_url: Option<String>,
+
     /// Commit message format options
     #[serde(default)]
     pub format: CommitFormat,
@@ -147,6 +151,7 @@ impl Default for Config {
             temperature: default_temperature(),
             num_predict: default_num_predict(),
             openai_base_url: None,
+            anthropic_base_url: None,
             format: CommitFormat::default(),
         }
     }
@@ -224,6 +229,9 @@ impl Config {
         }
         if let Some(ref m) = cli.model {
             self.model = m.clone();
+        }
+        if cli.no_scope {
+            self.format.include_scope = false;
         }
     }
 
