@@ -15,10 +15,15 @@ use tracing::{debug, warn};
 
 use crate::cli::{Cli, Commands, HookAction};
 use crate::config::Config;
+use crate::domain::{ChangeStatus, CodeSymbol, StagedChanges};
 use crate::error::{Error, Result};
 use crate::services::{
-    analyzer::AnalyzerService, context::ContextBuilder, git::GitService, llm, safety,
+    analyzer::AnalyzerService,
+    context::ContextBuilder,
+    git::GitService,
+    llm, safety,
     sanitizer::CommitSanitizer,
+    splitter::{CommitSplitter, SplitSuggestion},
 };
 
 pub struct App {
@@ -137,6 +142,29 @@ impl App {
         );
 
         debug!(count = symbols.len(), "symbols extracted");
+
+        // Step 3.5: Split detection
+        if !self.cli.no_split {
+            let is_interactive = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
+
+            if is_interactive && !self.cli.yes {
+                let suggestion = CommitSplitter::analyze(&changes, &symbols);
+
+                if let SplitSuggestion::SuggestSplit(groups) = suggestion {
+                    Self::display_split_suggestion(&groups, &changes);
+
+                    let split_confirm = Confirm::new()
+                        .with_prompt("Split into separate commits?")
+                        .default(true)
+                        .interact()?;
+
+                    if split_confirm {
+                        return self.run_split_flow(&git, groups, &changes, &symbols).await;
+                    }
+                    self.print_info("Proceeding with single commit");
+                }
+            }
+        }
 
         // Step 4: Build context
         let context = ContextBuilder::build(&changes, &symbols, &self.config);
@@ -402,6 +430,222 @@ impl App {
         eprintln!("{} Diagnostics complete.", style("✓").green().bold());
 
         Ok(())
+    }
+
+    // ─── Split Detection ───
+
+    async fn run_split_flow(
+        &self,
+        git: &GitService,
+        groups: Vec<crate::services::splitter::CommitGroup>,
+        changes: &StagedChanges,
+        symbols: &[CodeSymbol],
+    ) -> Result<()> {
+        // Safety: check for files with both staged and unstaged changes
+        let overlap = git.has_unstaged_overlap().await?;
+        if !overlap.is_empty() {
+            self.print_warning("Cannot split: some staged files also have unstaged changes:");
+            for path in &overlap {
+                eprintln!("  {}", path.display());
+            }
+            self.print_info("Stash or commit unstaged changes first, or use --no-split");
+            return Err(Error::SplitAborted);
+        }
+
+        // Generate messages for each group
+        self.print_status(&format!(
+            "Contacting {} ({})...",
+            self.config.provider, self.config.model
+        ));
+
+        let provider = llm::create_provider(&self.config)?;
+        provider.verify().await?;
+
+        let mut commit_messages: Vec<(String, Vec<PathBuf>)> = Vec::new();
+
+        for (i, group) in groups.iter().enumerate() {
+            if self.cancel_token.is_cancelled() {
+                return Err(Error::Cancelled);
+            }
+
+            eprintln!(
+                "{} Generating message for group {}/{}...",
+                style("info:").cyan(),
+                i + 1,
+                groups.len(),
+            );
+
+            // Build sub-context for this group
+            let sub_changes = changes.subset(&group.files);
+            let sub_symbols: Vec<CodeSymbol> = symbols
+                .iter()
+                .filter(|s| group.files.contains(&s.file))
+                .cloned()
+                .collect();
+
+            let context = ContextBuilder::build(&sub_changes, &sub_symbols, &self.config);
+            let prompt = context.to_prompt();
+
+            if self.cli.show_prompt {
+                eprintln!(
+                    "{}",
+                    style(format!("--- PROMPT (Group {}) ---", i + 1)).dim()
+                );
+                eprintln!("{}", prompt);
+                eprintln!("{}", style("--- END PROMPT ---").dim());
+            }
+
+            let (tx, mut rx) = mpsc::channel::<String>(64);
+            let cancel_for_printer = self.cancel_token.clone();
+            let print_handle = tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        _ = cancel_for_printer.cancelled() => break,
+                        token = rx.recv() => {
+                            match token {
+                                Some(_) => {}
+                                None => break,
+                            }
+                        }
+                    }
+                }
+            });
+
+            let raw_message = provider
+                .generate(&prompt, tx, self.cancel_token.clone())
+                .await?;
+
+            let _ = print_handle.await;
+
+            if raw_message.trim().is_empty() {
+                return Err(Error::Provider {
+                    provider: provider.name().into(),
+                    message: format!("Empty response for group {}", i + 1),
+                });
+            }
+
+            debug!(
+                raw_len = raw_message.len(),
+                group = i + 1,
+                "sanitizing split group response"
+            );
+            let message = CommitSanitizer::sanitize(&raw_message, &self.config.format)?;
+            commit_messages.push((message, group.files.clone()));
+        }
+
+        // Display overview
+        Self::display_split_overview(&commit_messages);
+
+        // Dry run: stop here
+        if self.cli.dry_run {
+            for (msg, _) in &commit_messages {
+                println!("\n{}", msg);
+            }
+            return Ok(());
+        }
+
+        // Confirm
+        let confirm = Confirm::new()
+            .with_prompt(format!("Create {} commits?", commit_messages.len()))
+            .default(true)
+            .interact()?;
+
+        if !confirm {
+            return Err(Error::Cancelled);
+        }
+
+        // Execute: unstage all, then stage+commit per group
+        for (i, (message, files)) in commit_messages.iter().enumerate() {
+            git.unstage_all().await?;
+            git.stage_files(files).await?;
+            git.commit(message).await?;
+
+            eprintln!(
+                "{} Commit {}/{}: {}",
+                style("✓").green().bold(),
+                i + 1,
+                commit_messages.len(),
+                message.lines().next().unwrap_or(""),
+            );
+        }
+
+        eprintln!(
+            "\n{} {} commits created!",
+            style("✓").green().bold(),
+            commit_messages.len(),
+        );
+
+        Ok(())
+    }
+
+    fn display_split_suggestion(
+        groups: &[crate::services::splitter::CommitGroup],
+        changes: &StagedChanges,
+    ) {
+        eprintln!();
+        eprintln!(
+            "{} Commit split suggested — {} logical change groups detected:",
+            style("⚡").yellow(),
+            groups.len(),
+        );
+        eprintln!();
+
+        for (i, group) in groups.iter().enumerate() {
+            let scope_str = group
+                .scope
+                .as_ref()
+                .map(|s| format!("({})", s))
+                .unwrap_or_default();
+            let file_count = group.files.len();
+            let files_label = if file_count == 1 { "file" } else { "files" };
+
+            eprintln!(
+                "  Group {}: {}{}  [{} {}]",
+                i + 1,
+                group.commit_type.as_str(),
+                scope_str,
+                file_count,
+                files_label,
+            );
+
+            for file_path in &group.files {
+                if let Some(fc) = changes.files.iter().find(|f| f.path == *file_path) {
+                    let status = match fc.status {
+                        ChangeStatus::Added => "[+]",
+                        ChangeStatus::Modified => "[M]",
+                        ChangeStatus::Deleted => "[-]",
+                    };
+                    eprintln!(
+                        "    {} {} (+{} -{})",
+                        status,
+                        file_path.display(),
+                        fc.additions,
+                        fc.deletions,
+                    );
+                }
+            }
+            eprintln!();
+        }
+    }
+
+    fn display_split_overview(commits: &[(String, Vec<PathBuf>)]) {
+        eprintln!();
+        eprintln!("{}", style("→ Proposed commits:").cyan().bold());
+        eprintln!();
+
+        for (i, (message, files)) in commits.iter().enumerate() {
+            let first_line = message.lines().next().unwrap_or("(empty)");
+            eprintln!(
+                "  Commit {}/{}: {}",
+                i + 1,
+                commits.len(),
+                style(first_line).green(),
+            );
+
+            let files_str: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
+            eprintln!("    Files: {}", files_str.join(", "));
+            eprintln!();
+        }
     }
 
     // ─── Candidate Selection ───
