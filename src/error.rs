@@ -48,6 +48,13 @@ pub enum Error {
     )]
     SecretsDetected { patterns: Vec<String> },
 
+    #[error("Commit split aborted: files with both staged and unstaged changes")]
+    #[diagnostic(
+        code(commitbee::split::aborted),
+        help("Stash or commit unstaged changes first, or use --no-split")
+    )]
+    SplitAborted,
+
     #[error("Cannot connect to Ollama at {host}")]
     #[diagnostic(
         code(commitbee::ollama::not_running),
