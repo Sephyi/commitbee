@@ -6,6 +6,11 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # 🐝 CommitBee
 
+[![CI](https://github.com/sephyi/commitbee/actions/workflows/ci.yml/badge.svg?branch=development)](https://github.com/sephyi/commitbee/actions/workflows/ci.yml)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm--Noncommercial-blue)](LICENSES/PolyForm-Noncommercial-1.0.0.txt)
+[![MSRV: 1.85](https://img.shields.io/badge/MSRV-1.85-orange)](https://blog.rust-lang.org/)
+[![REUSE](https://api.reuse.software/badge/github.com/sephyi/commitbee)](https://api.reuse.software/info/github.com/sephyi/commitbee)
+
 **The commit message generator that actually understands your code.**
 
 CommitBee is a Rust-native CLI tool that uses **tree-sitter semantic analysis** and LLMs to generate high-quality [conventional commit](https://www.conventionalcommits.org/) messages. Unlike every other tool in this space, CommitBee doesn't just pipe raw `git diff` output to an LLM — it parses both the staged and HEAD versions of your files, maps diff hunks to symbol spans (functions, classes, methods), and provides structured semantic context. This produces fundamentally better commit messages, especially for complex multi-file changes.
