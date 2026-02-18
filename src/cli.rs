@@ -37,6 +37,14 @@ pub struct Cli {
     #[arg(long)]
     pub show_prompt: bool,
 
+    /// Disable commit split suggestions
+    #[arg(long)]
+    pub no_split: bool,
+
+    /// Disable scope in commit messages
+    #[arg(long)]
+    pub no_scope: bool,
+
     /// Verbose output
     #[arg(short, long)]
     pub verbose: bool,
