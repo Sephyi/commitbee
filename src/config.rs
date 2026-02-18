@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use directories::ProjectDirs;
+use figment::Figment;
+use figment::providers::{Env, Format, Serialized, Toml};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -70,7 +72,7 @@ pub struct Config {
     #[serde(default = "default_ollama_host")]
     pub ollama_host: String,
 
-    #[serde(skip)]
+    #[serde(default)]
     pub api_key: Option<String>,
 
     #[serde(default = "default_max_diff_lines")]
@@ -151,10 +153,43 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Load with priority: CLI > ENV > file > defaults
+    /// Load with priority: CLI > ENV > user config > project config > defaults
     pub fn load(cli: &Cli) -> Result<Self> {
-        let mut config = Self::load_from_file()?;
-        config.apply_env();
+        let mut figment = Figment::new().merge(Serialized::defaults(Config::default()));
+
+        // Project-level config (.commitbee.toml in repo root)
+        if let Ok(cwd) = std::env::current_dir() {
+            let project_config = cwd.join(".commitbee.toml");
+            if project_config.exists() {
+                figment = figment.merge(Toml::file(&project_config));
+            }
+        }
+
+        // User-level config
+        if let Some(path) = Self::config_path() {
+            if path.exists() {
+                figment = figment.merge(Toml::file(&path));
+            }
+        }
+
+        // Environment variables (COMMITBEE_MODEL, COMMITBEE_PROVIDER, etc.)
+        // Use __ separator for nested keys (e.g., COMMITBEE_FORMAT__INCLUDE_BODY)
+        figment = figment.merge(Env::prefixed("COMMITBEE_").split("__"));
+
+        let mut config: Config = figment
+            .extract()
+            .map_err(|e| Error::Config(e.to_string()))?;
+
+        // Provider-specific API key fallback
+        if config.api_key.is_none() {
+            config.api_key = match config.provider {
+                Provider::OpenAI => std::env::var("OPENAI_API_KEY").ok(),
+                Provider::Anthropic => std::env::var("ANTHROPIC_API_KEY").ok(),
+                Provider::Ollama => None,
+            };
+        }
+
+        // CLI overrides (highest priority)
         config.apply_cli(cli);
         config.validate()?;
         Ok(config)
@@ -166,46 +201,6 @@ impl Config {
 
     pub fn config_path() -> Option<PathBuf> {
         Self::config_dir().map(|d| d.join("config.toml"))
-    }
-
-    fn load_from_file() -> Result<Self> {
-        let Some(path) = Self::config_path() else {
-            return Ok(Self::default());
-        };
-
-        if !path.exists() {
-            return Ok(Self::default());
-        }
-
-        let content = fs::read_to_string(&path)?;
-        toml::from_str(&content).map_err(|e| Error::Config(e.to_string()))
-    }
-
-    fn apply_env(&mut self) {
-        if let Ok(p) = std::env::var("COMMITBEE_PROVIDER") {
-            self.provider = match p.to_lowercase().as_str() {
-                "openai" => Provider::OpenAI,
-                "anthropic" => Provider::Anthropic,
-                _ => Provider::Ollama,
-            };
-        }
-
-        if let Ok(m) = std::env::var("COMMITBEE_MODEL") {
-            self.model = m;
-        }
-
-        if let Ok(h) = std::env::var("COMMITBEE_OLLAMA_HOST") {
-            self.ollama_host = h;
-        }
-
-        // API key: COMMITBEE_API_KEY > provider-specific
-        self.api_key = std::env::var("COMMITBEE_API_KEY")
-            .or_else(|_| match self.provider {
-                Provider::OpenAI => std::env::var("OPENAI_API_KEY"),
-                Provider::Anthropic => std::env::var("ANTHROPIC_API_KEY"),
-                Provider::Ollama => Err(std::env::VarError::NotPresent),
-            })
-            .ok();
     }
 
     fn apply_cli(&mut self, cli: &Cli) {
