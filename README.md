@@ -78,7 +78,7 @@ That's it. CommitBee works with zero configuration if Ollama is running locally.
 
 ## 🔧 Configuration
 
-CommitBee looks for configuration at `~/.config/commitbee/config.toml`. Create one with:
+CommitBee stores configuration in a platform-specific directory. Create a config with:
 
 ```bash
 commitbee init

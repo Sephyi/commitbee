@@ -46,7 +46,7 @@ commitbee config       # Show current configuration
 
 ## Config
 
-Location: `~/.config/commitbee/config.toml`
+Location: platform-dependent (use `commitbee init` to create, `commitbee doctor` to show path)
 
 ```toml
 provider = "ollama"
