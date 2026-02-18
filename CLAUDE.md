@@ -31,6 +31,8 @@ cargo build --release
 5. **Structured JSON output** - Prompt requests JSON for reliable parsing
 6. **System prompt** - Ollama API gets a dedicated system prompt to guide smaller models
 7. **Simplified user prompt** - Concise format optimized for <4B parameter models
+8. **Commit splitting** - Detects multi-concern changes, suggests splitting into separate commits
+9. **Body line wrapping** - Sanitizer wraps body text at 72 characters
 
 ## Commands
 
@@ -41,6 +43,8 @@ commitbee --yes              # Auto-confirm and commit
 commitbee -n 3               # Generate 3 candidates, pick interactively
 commitbee --verbose          # Show symbol extraction details
 commitbee --show-prompt      # Debug: show the LLM prompt
+commitbee --no-split         # Disable commit split suggestions
+commitbee --no-scope         # Disable scope in commit messages
 commitbee init               # Create config file
 commitbee config             # Show current configuration
 commitbee doctor             # Check configuration and connectivity
@@ -97,6 +101,7 @@ src/
     ├── context.rs       # ContextBuilder (token budget)
     ├── safety.rs        # Secret scanning, conflict detection
     ├── sanitizer.rs     # CommitSanitizer (JSON + plain text)
+    ├── splitter.rs      # CommitSplitter (multi-commit detection)
     └── llm/
         ├── mod.rs       # LlmProvider trait + enum dispatch
         ├── ollama.rs    # OllamaProvider (streaming NDJSON)
@@ -128,7 +133,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (101 tests)
+cargo test                    # All tests (118 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -180,13 +185,15 @@ git add some-file.rs
 - `gix` API: use `repo.workdir()` not `repo.work_dir()` (deprecated)
 - `CommitType::parse()` not `from_str()` — avoids clippy `should_implement_trait` warning
 - Enum variants used only via `CommitType::ALL` const need `#[allow(dead_code)]`
-- `CommitSanitizer::clean_text` has a known bug with overlapping preamble patterns (indexes modified string with original offsets) — documented, not yet fixed
 - Parallel subagents running `cargo fmt` may create unstaged changes — commit formatting separately
 - Secret pattern `sk-[a-zA-Z0-9]{48}` requires exactly 48 chars after `sk-` in test data
-- `AnthropicProvider` has hardcoded `BASE_URL` — cannot redirect to wiremock; test via sanitizer pipeline instead
 - `tokio::process::Command` output needs explicit `std::process::Output` type annotation when using `.ok()?`
 - Tree-sitter is CPU-bound/sync — pre-fetch file content into HashMaps async, then pass as sync closures
 - `#[cfg(feature = "secure-storage")]` gates both the error variant and CLI commands for keyring
+
+### Known Issues
+
+- **No streaming during split generation**: When commit splitting generates per-group messages, LLM output is not streamed to the terminal (tokens are consumed silently). Single-commit generation streams normally. Low priority — split generation is fast since each sub-prompt is smaller.
 
 ### Markdown Conventions
 

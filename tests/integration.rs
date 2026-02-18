@@ -13,6 +13,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use commitbee::config::{CommitFormat, Config, Provider};
 use commitbee::error::Error;
+use commitbee::services::llm::anthropic::AnthropicProvider;
 use commitbee::services::llm::ollama::OllamaProvider;
 use commitbee::services::llm::openai::OpenAiProvider;
 use commitbee::services::sanitizer::CommitSanitizer;
@@ -36,6 +37,19 @@ fn openai_config(server_url: &str) -> Config {
         provider: Provider::OpenAI,
         model: "gpt-4o-mini".into(),
         openai_base_url: Some(server_url.to_string()),
+        api_key: Some("test-key".into()),
+        timeout_secs: 5,
+        temperature: 0.3,
+        num_predict: 256,
+        ..Config::default()
+    }
+}
+
+fn anthropic_config(server_url: &str) -> Config {
+    Config {
+        provider: Provider::Anthropic,
+        model: "claude-sonnet-4-20250514".into(),
+        anthropic_base_url: Some(format!("{server_url}/v1")),
         api_key: Some("test-key".into()),
         timeout_secs: 5,
         temperature: 0.3,
@@ -266,10 +280,107 @@ async fn openai_unauthorized() {
     }
 }
 
-// ─── Anthropic provider (base URL is hardcoded) ──────────────────────────────
-// The AnthropicProvider uses a hardcoded `BASE_URL` const pointing to
-// `https://api.anthropic.com/v1`, so we cannot redirect it to wiremock.
-// Instead, we test the Anthropic SSE format via the sanitizer pipeline below.
+// ─── Anthropic streaming response ─────────────────────────────────────────────
+
+#[tokio::test]
+async fn anthropic_streaming_response() {
+    let server = MockServer::start().await;
+
+    // Anthropic SSE format: "event:" line followed by "data:" line
+    let body = [
+        "event: content_block_delta",
+        r#"data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"feat"}}"#,
+        "",
+        "event: content_block_delta",
+        r#"data: {"type":"content_block_delta","delta":{"type":"text_delta","text":": add streaming"}}"#,
+        "",
+        "event: message_stop",
+        r#"data: {"type":"message_stop"}"#,
+        "",
+    ]
+    .join("\n");
+
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .mount(&server)
+        .await;
+
+    let provider = AnthropicProvider::new(&anthropic_config(&server.uri()));
+    let (tx, rx) = mpsc::channel(32);
+    let cancel = CancellationToken::new();
+
+    let result = provider.generate("test prompt", tx, cancel).await.unwrap();
+
+    assert_eq!(result, "feat: add streaming");
+
+    let tokens = drain_tokens(rx).await;
+    assert!(
+        !tokens.is_empty(),
+        "expected streaming tokens to be received"
+    );
+}
+
+// ─── Anthropic verify connection ──────────────────────────────────────────────
+
+#[tokio::test]
+async fn anthropic_verify_missing_key() {
+    let config = Config {
+        provider: Provider::Anthropic,
+        model: "claude-sonnet-4-20250514".into(),
+        api_key: None,
+        timeout_secs: 5,
+        ..Config::default()
+    };
+
+    let provider = AnthropicProvider::new(&config);
+    let result = provider.verify_connection().await;
+
+    assert!(result.is_err(), "expected error for missing API key");
+    let err = result.unwrap_err();
+    match err {
+        Error::Provider { provider, message } => {
+            assert_eq!(provider, "anthropic");
+            assert!(
+                message.contains("API key"),
+                "expected API key message, got: {message}"
+            );
+        }
+        other => panic!("expected Provider error, got: {other:?}"),
+    }
+}
+
+// ─── Anthropic HTTP error ─────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn anthropic_server_error() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(500).set_body_string("Internal Server Error"))
+        .mount(&server)
+        .await;
+
+    let provider = AnthropicProvider::new(&anthropic_config(&server.uri()));
+    let (tx, _rx) = mpsc::channel(32);
+    let cancel = CancellationToken::new();
+
+    let result = provider.generate("test prompt", tx, cancel).await;
+
+    assert!(result.is_err(), "expected error for 500 response");
+    let err = result.unwrap_err();
+    match err {
+        Error::Provider { provider, message } => {
+            assert_eq!(provider, "anthropic");
+            assert!(
+                message.contains("500"),
+                "expected message to contain status code 500, got: {message}"
+            );
+        }
+        other => panic!("expected Provider error, got: {other:?}"),
+    }
+}
 
 // ─── Sanitizer: full JSON pipeline ───────────────────────────────────────────
 
@@ -290,8 +401,6 @@ fn sanitizer_integration_with_llm_json() {
 #[test]
 fn sanitizer_integration_with_llm_preamble() {
     // Simulate an LLM that emits a preamble before the actual commit message.
-    // Uses "Suggested commit:" which is a single-pattern match (avoids the known
-    // overlapping preamble bug documented in CLAUDE.md).
     let raw = "Suggested commit: feat(cli): add verbose flag";
     let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
 
@@ -299,8 +408,6 @@ fn sanitizer_integration_with_llm_preamble() {
 }
 
 // ─── Sanitizer: Anthropic-style output ───────────────────────────────────────
-// Since we can't point AnthropicProvider at wiremock, we test that the
-// sanitizer correctly handles the kind of output Anthropic models produce.
 
 #[test]
 fn sanitizer_integration_with_anthropic_style_output() {

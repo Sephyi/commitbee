@@ -6,10 +6,12 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 2.1
-**Date**: 2026-02-17
+**Version**: 2.2
+**Date**: 2026-02-18
 **Status**: Draft — pending approval
 **Author**: Sephyi + Claude investigation team
+
+**Revision 2.2**: Implementation status update + commit splitting (2026-02-18) — added FR-023 (commit splitting), FR-024 (commit history style learning, experimental), updated competitive matrix and roadmap to reflect v0.3.0 features already implemented (OpenAI, Anthropic, hooks, multi-generate, completions, figment config, miette, tracing, single-pass diff, async git, keyring, 118 tests). Updated architecture with `splitter.rs`.
 
 **Revision 2.1**: Enhancement review integration (2026-02-17) — incorporated evaluation harness, symbol extraction fallback ladder, cancellation contract, streaming trait abstraction, golden test fixtures, output format contracts, hook edge cases, JSON retry logic, and 12 additional refinements from verification review.
 
@@ -46,23 +48,25 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 ### 2.2 Unique Differentiators (No Competitor Has These)
 
 1. **Tree-sitter semantic analysis** — Every competitor sends raw diffs to LLMs
-2. **Built-in secret scanning** — Only ORCommit[^1] also has this (via external Gitleaks)
-3. **Token budget management** with adaptive truncation — Most competitors blindly send full diffs
-4. **Streaming output** with cancellation — Most wait for complete response
-5. **Prompt debug mode** (`--show-prompt`) — Transparency no one else offers
+2. **Commit splitting** — Detects multi-concern staged changes and splits into separate well-typed commits automatically. No competitor offers this.
+3. **Built-in secret scanning** — Only ORCommit[^1] also has this (via external Gitleaks)
+4. **Token budget management** with adaptive truncation — Most competitors blindly send full diffs
+5. **Streaming output** with cancellation — Most wait for complete response
+6. **Prompt debug mode** (`--show-prompt`) — Transparency no one else offers
 
 [^1]: ORCommit (<https://github.com/reacherhq/orcommit>) — a Rust-based commit message generator with Gitleaks integration and interactive regeneration with feedback.
 
-### 2.3 Critical Gaps vs. Competitors
+### 2.3 Gap Status vs. Competitors
 
-| Feature                                                        | Market Expectation            | Current State |
-| -------------------------------------------------------------- | ----------------------------- | ------------- |
-| Cloud LLM providers (OpenAI, Anthropic)                        | Universal                     | Missing       |
-| Git hook integration                                           | Universal                     | Missing       |
-| Shell completions                                              | Expected for CLI tools        | Missing       |
-| Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | Missing       |
-| Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | Missing       |
-| Unit/integration tests                                         | Non-negotiable for quality.   | Zero tests    |
+| Feature                                                        | Market Expectation            | Current State     |
+| -------------------------------------------------------------- | ----------------------------- | ----------------- |
+| Cloud LLM providers (OpenAI, Anthropic)                        | Universal                     | **Implemented**   |
+| Git hook integration                                           | Universal                     | **Implemented**   |
+| Shell completions                                              | Expected for CLI tools        | **Implemented**   |
+| Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | **Implemented**   |
+| Unit/integration tests                                         | Non-negotiable for quality    | **118 tests**     |
+| Commit splitting (multi-concern detection)                     | No competitor has this        | **Implemented**   |
+| Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | Missing           |
 
 ## 3. Architecture Requirements
 
@@ -137,7 +141,8 @@ commitbee
 │       ├── analyzer.rs      # AnalyzerService (reusable parser, cancellation)
 │       ├── context.rs       # ContextBuilder (fixed budget math, fallback ladder)
 │       ├── safety.rs        # Secret scanning (expanded patterns)
-│       ├── sanitizer.rs     # CommitSanitizer (UTF-8 safe)
+│       ├── sanitizer.rs     # CommitSanitizer (UTF-8 safe, body wrapping)
+│       ├── splitter.rs      # CommitSplitter (multi-commit detection + grouping)
 │       └── llm/
 │           ├── mod.rs       # LlmProvider trait (native async, enum dispatch)
 │           ├── ollama.rs    # Ollama (timeout, error differentiation)
@@ -348,6 +353,28 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
   - Ollama mocked with `wiremock`
   - Tests cover: normal flow, empty staging, binary files, large diffs, unicode paths, LLM errors, LLM malformed output, cancelled generation
   - CLI tests with `assert_cmd` / `insta-cmd`
+
+#### FR-023: Commit Splitting (Multi-Concern Detection)
+
+- **What**: Detect when staged changes contain logically independent changes that should be separate commits. Offer to split automatically with per-group LLM message generation.
+- **Status**: **Implemented** (v0.2.0)
+- **How it works**:
+  1. **Module detection**: Group source files by parent directory (e.g., `src/services/llm/*.rs` → "llm"). Fall back to file stem when parent is generic (`src`, `services`, `lib`).
+  2. **Support file attachment**: Test/doc/config files attach to the largest source group, except test files whose stem matches a source module name (attached to that group).
+  3. **Type+scope inference per group**: Each group gets its own `infer_commit_type()` and `infer_scope()`.
+  4. **Collapse check**: If all groups have the same type and scope, suggest a single commit instead of splitting.
+  5. **Split execution**: Unstage all → stage group files → commit → repeat for each group.
+- **Safety**: Refuses to split when any staged file also has unstaged modifications (data loss risk).
+- **CLI**: `--no-split` disables the feature. `--yes` and non-TTY mode skip split suggestion (default to single commit).
+- **Acceptance**: Tested with 11 dedicated integration tests covering single module, multi-module, all-tests, all-docs, same-type collapse, test attachment, and sort order.
+
+#### FR-024: Commit History Style Learning (Experimental, Future)
+
+- **What**: Analyze existing commit history in the repository to learn the project's commit style, then align generated messages accordingly. This includes scope naming conventions, type usage patterns, subject phrasing style, and body conventions.
+- **Status**: Planned (experimental — may diverge from strict Conventional Commits compliance)
+- **Priority**: P3 (future exploration)
+- **Rationale**: GitHub Copilot does this implicitly. Making it explicit and configurable would be a differentiator. However, blindly mimicking a repository's history could produce non-compliant messages if the history is inconsistent.
+- **Acceptance**: Feature-gated behind `--experimental-history` or a config flag. Samples last N commits, extracts patterns, injects as additional context in the LLM prompt. Does not override conventional commits structure — only influences scope naming and subject phrasing style.
 
 ### 4.3 P2 — Medium Priority (v0.4.0: Differentiation)
 
@@ -620,6 +647,8 @@ commitbee --yes                        # Generate and auto-commit
 commitbee --generate N                 # Generate N options
 commitbee --show-prompt                # Debug: show LLM prompt
 commitbee --verbose / -v               # Verbose output
+commitbee --no-split                   # Disable commit split suggestions
+commitbee --no-scope                   # Disable scope in commit messages
 commitbee --clipboard                  # Copy to clipboard
 
 commitbee init                         # Create config file
@@ -841,20 +870,21 @@ opt-level = "z"  # or "s" — benchmark both
 
 **Goal**: Rich errors, cloud providers, git hooks, developer experience.
 
-- FR-039: Config validation & doctor command (early — underpins other P1 features)
-- FR-010: miette diagnostics
-- FR-011: OpenAI-compatible provider (with `generate_stream()`)
-- FR-012: Anthropic provider (with `generate_stream()`)
-- FR-013: Ollama hardening (with `generate_stream()`)
-- FR-014: Git hook integration (with edge case handling)
-- FR-015: Shell completions
-- FR-016: Multiple message generation (with `dialoguer`)
-- FR-017: figment configuration (with platform-specific paths)
-- FR-018: tracing logging
-- FR-019: Secure API key storage
-- FR-020: Async git operations
-- FR-021: Single-pass diff parsing
-- FR-022: Integration test suite
+- FR-039: Config validation & doctor command ✅
+- FR-010: miette diagnostics ✅
+- FR-011: OpenAI-compatible provider (with streaming) ✅
+- FR-012: Anthropic provider (with streaming) ✅
+- FR-013: Ollama hardening (with streaming) ✅
+- FR-014: Git hook integration (with edge case handling) ✅
+- FR-015: Shell completions ✅
+- FR-016: Multiple message generation (with `dialoguer`) ✅
+- FR-017: figment configuration (with platform-specific paths) ✅
+- FR-018: tracing logging ✅
+- FR-019: Secure API key storage ✅ (feature-gated)
+- FR-020: Async git operations ✅
+- FR-021: Single-pass diff parsing ✅
+- FR-022: Integration test suite ✅ (118 tests)
+- FR-023: Commit splitting ✅
 
 ### Phase 3: Differentiation (v0.4.0)
 
@@ -884,7 +914,7 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-055: Version bumping
 - FR-056: GitHub Action
 - FR-057: Additional language support (feature-gated)
-- FR-058: Learning from commit history
+- FR-058: Learning from commit history (see also FR-024 for experimental approach)
 
 ## 12. Success Metrics
 
@@ -910,22 +940,23 @@ opt-level = "z"  # or "s" — benchmark both
 
 ## Appendix A: Competitive Feature Matrix
 
-| Feature               | commitbee | opencommit | aicommits | aicommit2 | rusty-commit | cocogitto |
-| --------------------- | --------- | ---------- | --------- | --------- | ------------ | --------- |
-| **Tree-sitter AST**   | **Yes**   | No         | No        | No        | No           | No        |
-| **Secret scanning**   | **Yes**   | No         | No        | No        | No           | No        |
-| **Token budget**      | **Yes**   | No         | No        | No        | No           | N/A       |
-| **Streaming**         | **Yes**   | No         | No        | No        | No           | N/A       |
-| **Local LLM**         | Yes       | Yes        | Yes       | Yes       | Yes          | N/A       |
-| **OpenAI**            | Planned   | Yes        | Yes       | Yes       | Yes          | N/A       |
-| **Anthropic**         | Planned   | Yes        | No        | Yes       | Yes          | N/A       |
-| **Git hooks**         | Planned   | Yes        | Yes       | No        | Yes          | Yes       |
-| **Multi-generate**    | Planned   | Yes        | Yes       | No        | No           | No        |
-| **Shell completions** | Planned   | No         | No        | No        | No           | Yes       |
-| **MCP server**        | Planned   | No         | No        | No        | Yes          | No        |
-| **Changelog**         | Future    | No         | No        | No        | No           | Yes       |
-| **Version bumping**   | Future    | No         | No        | No        | No           | Yes       |
-| **Monorepo**          | Future    | No         | No        | No        | No           | Yes       |
+| Feature               | commitbee  | opencommit | aicommits | aicommit2 | rusty-commit | cocogitto |
+| --------------------- | ---------- | ---------- | --------- | --------- | ------------ | --------- |
+| **Tree-sitter AST**   | **Yes**    | No         | No        | No        | No           | No        |
+| **Commit splitting**  | **Yes**    | No         | No        | No        | No           | No        |
+| **Secret scanning**   | **Yes**    | No         | No        | No        | No           | No        |
+| **Token budget**      | **Yes**    | No         | No        | No        | No           | N/A       |
+| **Streaming**         | **Yes**    | No         | No        | No        | No           | N/A       |
+| **Local LLM**         | Yes        | Yes        | Yes       | Yes       | Yes          | N/A       |
+| **OpenAI**            | **Yes**    | Yes        | Yes       | Yes       | Yes          | N/A       |
+| **Anthropic**         | **Yes**    | Yes        | No        | Yes       | Yes          | N/A       |
+| **Git hooks**         | **Yes**    | Yes        | Yes       | No        | Yes          | Yes       |
+| **Multi-generate**    | **Yes**    | Yes        | Yes       | No        | No           | No        |
+| **Shell completions** | **Yes**    | No         | No        | No        | No           | Yes       |
+| **MCP server**        | Planned    | No         | No        | No        | Yes          | No        |
+| **Changelog**         | Future     | No         | No        | No        | No           | Yes       |
+| **Version bumping**   | Future     | No         | No        | No        | No           | Yes       |
+| **Monorepo**          | Future     | No         | No        | No        | No           | Yes       |
 
 ## Appendix B: Research Sources
 

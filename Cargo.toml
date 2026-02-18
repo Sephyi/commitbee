@@ -4,7 +4,7 @@
 
 [package]
 name = "commitbee"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 description = "AI-powered commit message generator using tree-sitter semantic analysis and local LLMs"

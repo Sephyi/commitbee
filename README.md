@@ -20,17 +20,35 @@ CommitBee is a Rust-native CLI tool that uses **tree-sitter semantic analysis** 
 
 ## ✨ What Makes CommitBee Different
 
-| Feature                            | CommitBee | Others          |
-| ---------------------------------- | --------- | --------------- |
-| 🌳 Tree-sitter semantic analysis   | **Yes**   | No              |
-| 🔒 Built-in secret scanning        | **Yes**   | Rarely          |
-| 📊 Token budget management         | **Yes**   | No              |
-| ⚡ Streaming LLM output            | **Yes**   | Rarely          |
-| 🔍 Prompt debug mode               | **Yes**   | No              |
-| 🏠 Local-first (Ollama default)    | **Yes**   | Cloud-first     |
-| 🦀 Single static binary            | **Yes**   | Node.js/Python  |
+| Feature                              | CommitBee | Others          |
+| ------------------------------------ | --------- | --------------- |
+| 🌳 Tree-sitter semantic analysis     | **Yes**   | No              |
+| 🔀 Automatic commit splitting        | **Yes**   | No              |
+| 🔒 Built-in secret scanning          | **Yes**   | Rarely          |
+| 📊 Token budget management           | **Yes**   | No              |
+| ⚡ Streaming LLM output              | **Yes**   | Rarely          |
+| 🔍 Prompt debug mode                 | **Yes**   | No              |
+| 🏠 Local-first (Ollama default)      | **Yes**   | Cloud-first     |
+| 🦀 Single static binary              | **Yes**   | Node.js/Python  |
 
 Every competitor sends raw diffs to LLMs. CommitBee sends **semantic context** — which functions changed, what was added or removed, and why the change matters structurally.
+
+### Commit splitting
+
+When your staged changes contain logically independent work (e.g., a bugfix in one module + a refactor in another), CommitBee detects this and offers to split them into separate, well-typed commits automatically. No other tool in the space does this.
+
+```txt
+⚡ Commit split suggested — 2 logical change groups detected:
+
+  Group 1: feat(llm)  [2 files]
+    [M] src/services/llm/anthropic.rs (+20 -5)
+    [M] src/services/llm/openai.rs (+8 -3)
+
+  Group 2: fix(sanitizer)  [1 file]
+    [M] src/services/sanitizer.rs (+3 -1)
+
+? Split into separate commits? (Y/n)
+```
 
 ## 📦 Installation
 
@@ -122,13 +140,16 @@ commitbee [OPTIONS] [COMMAND]
 
 ### Options
 
-| Flag              | Description                            |
-| ----------------- | -------------------------------------- |
-| `--dry-run`       | Print message only, don't commit       |
-| `--yes`           | Auto-confirm and commit                |
-| `-n, --generate`  | Generate N candidates (1-5, default 1) |
-| `--verbose`       | Show symbol extraction details         |
-| `--show-prompt`   | Debug: display the full LLM prompt     |
+| Flag               | Description                            |
+| ------------------ | -------------------------------------- |
+| `--dry-run`        | Print message only, don't commit       |
+| `--yes`            | Auto-confirm and commit                |
+| `-n, --generate`   | Generate N candidates (1-5, default 1) |
+| `--no-split`       | Disable commit split suggestions       |
+| `--no-scope`       | Disable scope in commit messages       |
+| `--allow-secrets`  | Allow committing with detected secrets |
+| `--verbose`        | Show symbol extraction details         |
+| `--show-prompt`    | Debug: display the full LLM prompt     |
 
 ### Commands
 
@@ -147,22 +168,23 @@ commitbee [OPTIONS] [COMMAND]
 CommitBee's pipeline goes beyond simple diff forwarding:
 
 ```txt
-┌─────────┐    ┌──────────┐    ┌────────────┐    ┌───────────┐    ┌─────────┐
-│  Stage  │ →  │   Git    │ →  │ Tree-sitter│ →  │  Context  │ →  │   LLM   │
-│ Changes │    │  Service │    │  Analyzer  │    │  Builder  │    │Provider │
-└─────────┘    └──────────┘    └────────────┘    └───────────┘    └─────────┘
-                    │                │                  │               │
-               Staged diff      Symbol spans      Budget-aware     Commit message
-               + file list      (functions,       prompt with      (conventional
-                                classes, etc.)    semantic context    format)
+┌─────────┐    ┌──────────┐    ┌────────────┐    ┌──────────┐    ┌───────────┐    ┌─────────┐
+│  Stage  │ →  │   Git    │ →  │ Tree-sitter│ →  │  Split   │ →  │  Context  │ →  │   LLM   │
+│ Changes │    │  Service │    │  Analyzer  │    │ Detector │    │  Builder  │    │Provider │
+└─────────┘    └──────────┘    └────────────┘    └──────────┘    └───────────┘    └─────────┘
+                    │                │                 │                │               │
+               Staged diff      Symbol spans     Group files      Budget-aware     Commit message
+               + file list      (functions,      by module,       prompt with      (conventional
+                                classes, etc.)   suggest split    semantic context    format)
 ```
 
 1. **Git Service** — Discovers the repo, reads staged changes and diffs
 2. **Tree-sitter Analyzer** — Parses both staged and HEAD file versions, maps diff hunks to symbol spans (functions, structs, methods)
-3. **Context Builder** — Assembles a budget-aware prompt with file breakdown, semantic symbols, inferred commit type/scope, and truncated diff
-4. **Safety Scanner** — Checks for secrets and merge conflicts before anything leaves your machine
-5. **LLM Provider** — Streams the prompt to your chosen model and parses the response
-6. **Commit Sanitizer** — Validates the output as proper conventional commit format (JSON or plain text)
+3. **Commit Splitter** — Groups files by module, detects multi-concern changes, offers to split into separate commits
+4. **Context Builder** — Assembles a budget-aware prompt with file breakdown, semantic symbols, inferred commit type/scope, and truncated diff
+5. **Safety Scanner** — Checks for secrets and merge conflicts before anything leaves your machine
+6. **LLM Provider** — Streams the prompt to your chosen model and parses the response
+7. **Commit Sanitizer** — Validates the output as proper conventional commit format (JSON or plain text), wraps body at 72 chars
 
 ### Supported languages
 
@@ -207,7 +229,8 @@ src/
     ├── analyzer.rs      # AnalyzerService (tree-sitter)
     ├── context.rs       # ContextBuilder (token budget)
     ├── safety.rs        # Secret scanning, conflict detection
-    ├── sanitizer.rs     # CommitSanitizer (JSON + plain text)
+    ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, body wrapping)
+    ├── splitter.rs      # CommitSplitter (multi-commit detection)
     └── llm/
         ├── mod.rs       # LlmProvider trait + enum dispatch
         ├── ollama.rs    # OllamaProvider (streaming NDJSON)
@@ -218,8 +241,9 @@ src/
 ## 🧪 Testing
 
 ```bash
-cargo test                    # All tests (101 tests)
+cargo test                    # All tests (118 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
+cargo test --test splitter    # CommitSplitter tests
 cargo test --test safety      # Secret scanner tests
 cargo test --test context     # ContextBuilder tests
 cargo test --test commit_type # CommitType tests
@@ -233,13 +257,14 @@ The test suite includes snapshot tests ([insta](https://insta.rs/)), property-ba
 | Phase                       | Version    | Status           |
 | --------------------------- | ---------- | ---------------- |
 | 🔧 Stability & Correctness  | `v0.2.0`   | ✅ Complete       |
-| ✨ Polish & Providers       | `v0.3.0`   | 🚧 In Progress   |
+| ✨ Polish & Providers       | `v0.3.0`   | ✅ Complete       |
 | 🚀 Differentiation          | `v0.4.0`   | 📋 Planned       |
 | 👑 Market Leadership        | `v1.0+`    | 🔮 Future        |
 
-### v0.3.0 highlights (in progress)
+### v0.3.0 highlights (complete)
 
 - **Cloud providers** — OpenAI-compatible and Anthropic streaming support
+- **Commit splitting** — Automatic detection and splitting of multi-concern staged changes
 - **Git hook integration** — `commitbee hook install/uninstall/status`
 - **Shell completions** — bash, zsh, fish, powershell via `clap_complete`
 - **Rich error diagnostics** — `miette` for actionable error messages
@@ -248,6 +273,7 @@ The test suite includes snapshot tests ([insta](https://insta.rs/)), property-ba
 - **Structured logging** — `tracing` with `COMMITBEE_LOG` env filter
 - **Doctor command** — `commitbee doctor` for connectivity and config checks
 - **Secure key storage** — OS keychain via `keyring` (optional feature)
+- **Body line wrapping** — Commit body text wrapped at 72 characters
 
 See [`PRD.md`](PRD.md) for the full product requirements document.
 
