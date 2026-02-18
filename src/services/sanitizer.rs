@@ -36,6 +36,47 @@ static PREAMBLE_PATTERNS: &[&str] = &[
 pub struct CommitSanitizer;
 
 impl CommitSanitizer {
+    /// Word-wrap text to at most `max_width` characters per line.
+    /// Preserves existing newlines (paragraph breaks). Handles words longer
+    /// than `max_width` by placing them on their own line (no mid-word break).
+    fn wrap_body(text: &str, max_width: usize) -> String {
+        let mut result = String::new();
+
+        for (i, paragraph) in text.split('\n').enumerate() {
+            if i > 0 {
+                result.push('\n');
+            }
+
+            let trimmed = paragraph.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let mut line_len = 0;
+            for (j, word) in trimmed.split_whitespace().enumerate() {
+                let word_len = word.chars().count();
+
+                if j == 0 {
+                    // First word on the line
+                    result.push_str(word);
+                    line_len = word_len;
+                } else if line_len + 1 + word_len > max_width {
+                    // Word would exceed line limit — wrap
+                    result.push('\n');
+                    result.push_str(word);
+                    line_len = word_len;
+                } else {
+                    // Word fits on current line
+                    result.push(' ');
+                    result.push_str(word);
+                    line_len += 1 + word_len;
+                }
+            }
+        }
+
+        result
+    }
+
     /// Truncate a string to at most `max_chars` characters, appending "..." if truncated.
     /// Safe for multi-byte UTF-8 (never slices mid-character).
     fn truncate_with_ellipsis(s: &str, max_chars: usize) -> String {
@@ -166,7 +207,8 @@ impl CommitSanitizer {
         let message = if format.include_body {
             match &s.body {
                 Some(body) if !body.trim().is_empty() => {
-                    format!("{}\n\n{}", first_line, body.trim())
+                    let wrapped = Self::wrap_body(body.trim(), 72);
+                    format!("{}\n\n{}", first_line, wrapped)
                 }
                 _ => first_line,
             }
@@ -193,8 +235,8 @@ impl CommitSanitizer {
         }
 
         // Remove common preambles (case insensitive)
-        let lower = cleaned.to_lowercase();
         for pattern in PREAMBLE_PATTERNS {
+            let lower = cleaned.to_lowercase();
             if let Some(pos) = lower.find(pattern) {
                 let after = &cleaned[pos + pattern.len()..];
                 cleaned = after.trim_start_matches(':').trim().to_string();

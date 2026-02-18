@@ -292,3 +292,49 @@ proptest! {
         let _ = CommitSanitizer::sanitize(&raw, &format);
     }
 }
+
+// ─── Body wrapping tests ─────────────────────────────────────────────────────
+
+#[test]
+fn sanitize_json_body_wrapped_at_72() {
+    let long_body = "This is a very long body line that should be wrapped because it exceeds the seventy-two character limit for conventional commit body lines.";
+    let json = format!(
+        r#"{{"type": "feat", "scope": "core", "subject": "add new feature", "body": "{}"}}"#,
+        long_body
+    );
+    let result = CommitSanitizer::sanitize(&json, &default_format()).unwrap();
+
+    let lines: Vec<&str> = result.lines().collect();
+    // Skip header line and blank separator line
+    for line in &lines[2..] {
+        assert!(
+            line.chars().count() <= 72,
+            "Body line exceeds 72 chars: '{}' ({})",
+            line,
+            line.chars().count()
+        );
+    }
+    // Verify the body content is preserved (not lost)
+    let body_text: String = lines[2..].join(" ");
+    assert!(body_text.contains("seventy-two character limit"));
+}
+
+#[test]
+fn sanitize_json_body_short_not_wrapped() {
+    let json = r#"{"type": "fix", "scope": null, "subject": "fix bug", "body": "Short body."}"#;
+    let result = CommitSanitizer::sanitize(json, &default_format()).unwrap();
+
+    let lines: Vec<&str> = result.lines().collect();
+    assert_eq!(lines.len(), 3); // header + blank + body
+    assert_eq!(lines[2], "Short body.");
+}
+
+#[test]
+fn sanitize_json_body_preserves_paragraphs() {
+    let json = r#"{"type": "feat", "scope": null, "subject": "add feature", "body": "First paragraph.\n\nSecond paragraph."}"#;
+    let result = CommitSanitizer::sanitize(json, &default_format()).unwrap();
+
+    let lines: Vec<&str> = result.lines().collect();
+    assert!(lines.contains(&"First paragraph."));
+    assert!(lines.contains(&"Second paragraph."));
+}
