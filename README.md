@@ -121,15 +121,21 @@ commitbee [OPTIONS] [COMMAND]
 | ----------------- | -------------------------------------- |
 | `--dry-run`       | Print message only, don't commit       |
 | `--yes`           | Auto-confirm and commit                |
+| `-n, --generate`  | Generate N candidates (1-5, default 1) |
 | `--verbose`       | Show symbol extraction details         |
 | `--show-prompt`   | Debug: display the full LLM prompt     |
 
 ### Commands
 
-| Command           | Description                            |
-| ----------------- | -------------------------------------- |
-| `init`            | Create a config file                   |
-| `config`          | Show current configuration             |
+| Command               | Description                            |
+| --------------------- | -------------------------------------- |
+| `init`                | Create a config file                   |
+| `config`              | Show current configuration             |
+| `doctor`              | Check configuration and connectivity   |
+| `completions <shell>` | Generate shell completions             |
+| `hook install`        | Install prepare-commit-msg hook        |
+| `hook uninstall`      | Remove prepare-commit-msg hook         |
+| `hook status`         | Check if hook is installed             |
 
 ## 🌳 How It Works
 
@@ -184,8 +190,8 @@ src/
 ├── lib.rs               # Library exports
 ├── app.rs               # Application orchestrator
 ├── cli.rs               # CLI arguments (clap)
-├── config.rs            # Configuration (XDG + ENV)
-├── error.rs             # Error types (thiserror)
+├── config.rs            # Configuration (figment layered)
+├── error.rs             # Error types (thiserror + miette)
 ├── domain/
 │   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
 │   ├── symbol.rs        # CodeSymbol, SymbolKind
@@ -198,38 +204,45 @@ src/
     ├── safety.rs        # Secret scanning, conflict detection
     ├── sanitizer.rs     # CommitSanitizer (JSON + plain text)
     └── llm/
-        ├── mod.rs       # LlmProvider trait
-        └── ollama.rs    # OllamaProvider (streaming)
+        ├── mod.rs       # LlmProvider trait + enum dispatch
+        ├── ollama.rs    # OllamaProvider (streaming NDJSON)
+        ├── openai.rs    # OpenAiProvider (SSE streaming)
+        └── anthropic.rs # AnthropicProvider (SSE streaming)
 ```
 
 ## 🧪 Testing
 
 ```bash
-cargo test                    # All tests (55 tests)
+cargo test                    # All tests (101 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Secret scanner tests
 cargo test --test context     # ContextBuilder tests
 cargo test --test commit_type # CommitType tests
+cargo test --test integration # LLM provider integration tests
 ```
 
-The test suite includes snapshot tests ([insta](https://insta.rs/)), property-based tests ([proptest](https://proptest-rs.github.io/proptest/)), and never-panic guarantees for all user-facing parsers.
+The test suite includes snapshot tests ([insta](https://insta.rs/)), property-based tests ([proptest](https://proptest-rs.github.io/proptest/)), never-panic guarantees for all user-facing parsers, and integration tests using [wiremock](https://docs.rs/wiremock) for LLM provider mocking.
 
 ## 🗺️ Roadmap
 
 | Phase                       | Version    | Status           |
 | --------------------------- | ---------- | ---------------- |
-| 🔧 Stability & Correctness  | `v0.2.0`   | 🚧 In Progress   |
-| ✨ Polish & Providers       | `v0.3.0`   | 📋 Planned       |
+| 🔧 Stability & Correctness  | `v0.2.0`   | ✅ Complete       |
+| ✨ Polish & Providers       | `v0.3.0`   | 🚧 In Progress   |
 | 🚀 Differentiation          | `v0.4.0`   | 📋 Planned       |
 | 👑 Market Leadership        | `v1.0+`    | 🔮 Future        |
 
-### Coming next
+### v0.3.0 highlights (in progress)
 
-- **Cloud providers** — OpenAI-compatible and Anthropic support
-- **Git hook integration** — `commitbee hook install` for `prepare-commit-msg`
-- **Shell completions** — bash, zsh, fish, powershell
-- **Rich error diagnostics** — Actionable error messages with help suggestions
-- **Multiple message generation** — Generate N candidates, pick the best
+- **Cloud providers** — OpenAI-compatible and Anthropic streaming support
+- **Git hook integration** — `commitbee hook install/uninstall/status`
+- **Shell completions** — bash, zsh, fish, powershell via `clap_complete`
+- **Rich error diagnostics** — `miette` for actionable error messages
+- **Multiple message generation** — `--generate N` with interactive candidate selection
+- **Hierarchical config** — `figment`-based layering (CLI > Env > File > Defaults)
+- **Structured logging** — `tracing` with `COMMITBEE_LOG` env filter
+- **Doctor command** — `commitbee doctor` for connectivity and config checks
+- **Secure key storage** — OS keychain via `keyring` (optional feature)
 
 See [`PRD.md`](PRD.md) for the full product requirements document.
 

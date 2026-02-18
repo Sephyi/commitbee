@@ -35,13 +35,19 @@ cargo build --release
 ## Commands
 
 ```bash
-commitbee              # Generate commit message (interactive)
-commitbee --dry-run    # Print message only, don't commit
-commitbee --yes        # Auto-confirm and commit
-commitbee --verbose    # Show symbol extraction details
-commitbee --show-prompt # Debug: show the LLM prompt
-commitbee init         # Create config file
-commitbee config       # Show current configuration
+commitbee                    # Generate commit message (interactive)
+commitbee --dry-run          # Print message only, don't commit
+commitbee --yes              # Auto-confirm and commit
+commitbee -n 3               # Generate 3 candidates, pick interactively
+commitbee --verbose          # Show symbol extraction details
+commitbee --show-prompt      # Debug: show the LLM prompt
+commitbee init               # Create config file
+commitbee config             # Show current configuration
+commitbee doctor             # Check configuration and connectivity
+commitbee completions bash   # Generate shell completions
+commitbee hook install       # Install prepare-commit-msg hook
+commitbee hook uninstall     # Remove prepare-commit-msg hook
+commitbee hook status        # Check if hook is installed
 ```
 
 ## Config
@@ -76,8 +82,8 @@ src/
 ├── lib.rs               # Library exports
 ├── app.rs               # Application orchestrator
 ├── cli.rs               # CLI arguments (clap)
-├── config.rs            # Configuration (XDG + ENV)
-├── error.rs             # Error types (thiserror)
+├── config.rs            # Configuration (figment layered)
+├── error.rs             # Error types (thiserror + miette)
 ├── domain/
 │   ├── mod.rs
 │   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
@@ -92,13 +98,16 @@ src/
     ├── safety.rs        # Secret scanning, conflict detection
     ├── sanitizer.rs     # CommitSanitizer (JSON + plain text)
     └── llm/
-        ├── mod.rs       # LlmProvider trait
-        └── ollama.rs    # OllamaProvider (streaming)
+        ├── mod.rs       # LlmProvider trait + enum dispatch
+        ├── ollama.rs    # OllamaProvider (streaming NDJSON)
+        ├── openai.rs    # OpenAiProvider (SSE streaming)
+        └── anthropic.rs # AnthropicProvider (SSE streaming)
 ```
 
 ## References
 
 - **PRD & Roadmap**: `PRD.md`
+- **v0.3.0 enhancement plan**: `.claude/plans/PLAN_V030_ENHANCEMENTS.md`
 - **Implementation plan (v1, outdated)**: `.claude/plans/PLAN_COMMITBEE_V1.md` — superseded by PRD v2.1
 
 ## Development Notes
@@ -119,11 +128,12 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (55 tests)
-cargo test --test sanitizer   # Specific integration test file
+cargo test                    # All tests (101 tests)
+cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
 cargo test --test commit_type # CommitType tests
+cargo test --test integration # LLM provider integration tests (wiremock)
 cargo test -- --nocapture     # Show println output
 ```
 
@@ -173,6 +183,10 @@ git add some-file.rs
 - `CommitSanitizer::clean_text` has a known bug with overlapping preamble patterns (indexes modified string with original offsets) — documented, not yet fixed
 - Parallel subagents running `cargo fmt` may create unstaged changes — commit formatting separately
 - Secret pattern `sk-[a-zA-Z0-9]{48}` requires exactly 48 chars after `sk-` in test data
+- `AnthropicProvider` has hardcoded `BASE_URL` — cannot redirect to wiremock; test via sanitizer pipeline instead
+- `tokio::process::Command` output needs explicit `std::process::Output` type annotation when using `.ok()?`
+- Tree-sitter is CPU-bound/sync — pre-fetch file content into HashMaps async, then pass as sync closures
+- `#[cfg(feature = "secure-storage")]` gates both the error variant and CLI commands for keyring
 
 ### Markdown Conventions
 
