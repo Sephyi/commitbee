@@ -8,6 +8,7 @@ use std::io::IsTerminal;
 use tokio::signal;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, warn};
 
 use crate::cli::{Cli, Commands};
 use crate::config::Config;
@@ -26,6 +27,12 @@ pub struct App {
 impl App {
     pub fn new(cli: Cli) -> Result<Self> {
         let config = Config::load(&cli)?;
+        debug!(
+            provider = %config.provider,
+            model = %config.model,
+            max_diff_lines = config.max_diff_lines,
+            "config loaded"
+        );
         let cancel_token = CancellationToken::new();
         Ok(Self {
             cli,
@@ -75,6 +82,10 @@ impl App {
 
         let secrets = safety::scan_for_secrets(&changes);
         if !secrets.is_empty() && !self.cli.allow_secrets {
+            warn!(
+                count = secrets.len(),
+                "potential secrets detected in staged changes"
+            );
             self.print_warning("Potential secrets detected:");
             for s in &secrets {
                 eprintln!(
@@ -109,12 +120,11 @@ impl App {
             &|path| git_ref.get_head_content(path),
         );
 
-        if self.cli.verbose && !symbols.is_empty() {
-            eprintln!("{} Found {} symbols", style("info:").cyan(), symbols.len());
-        }
+        debug!(count = symbols.len(), "symbols extracted");
 
         // Step 4: Build context
         let context = ContextBuilder::build(&changes, &symbols, &self.config);
+        debug!(prompt_chars = context.to_prompt().len(), "context built");
 
         let prompt = context.to_prompt();
 
@@ -135,6 +145,7 @@ impl App {
         ));
 
         let provider = llm::create_provider(&self.config)?;
+        debug!(provider = provider.name(), "verifying provider");
         provider.verify().await?;
 
         // Setup streaming output
@@ -175,6 +186,7 @@ impl App {
         }
 
         // Step 6: Sanitize and validate the commit message
+        debug!(raw_len = raw_message.len(), "sanitizing LLM response");
         let message = CommitSanitizer::sanitize(&raw_message, &self.config.format)?;
 
         // Step 7: Confirm and commit
