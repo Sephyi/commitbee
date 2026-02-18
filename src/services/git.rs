@@ -255,6 +255,44 @@ impl GitService {
         )
     }
 
+    // ─── Staging Operations ───
+
+    /// Check if any staged file also has unstaged modifications.
+    /// Returns the list of overlapping file paths.
+    pub async fn has_unstaged_overlap(&self) -> Result<Vec<PathBuf>> {
+        let (staged_output, unstaged_output) = tokio::try_join!(
+            self.run_git(&["diff", "--cached", "--name-only"]),
+            self.run_git(&["diff", "--name-only"]),
+        )?;
+
+        let staged: std::collections::HashSet<&str> =
+            staged_output.lines().filter(|l| !l.is_empty()).collect();
+        let unstaged: std::collections::HashSet<&str> =
+            unstaged_output.lines().filter(|l| !l.is_empty()).collect();
+
+        Ok(staged.intersection(&unstaged).map(PathBuf::from).collect())
+    }
+
+    /// Unstage all currently staged files (soft reset).
+    pub async fn unstage_all(&self) -> Result<()> {
+        self.run_git(&["reset", "HEAD"]).await?;
+        Ok(())
+    }
+
+    /// Stage specific files by path.
+    pub async fn stage_files(&self, paths: &[PathBuf]) -> Result<()> {
+        if paths.is_empty() {
+            return Ok(());
+        }
+
+        let path_strs: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
+        let mut args: Vec<&str> = vec!["add", "--"];
+        args.extend(path_strs.iter().map(|s| s.as_str()));
+
+        self.run_git(&args).await?;
+        Ok(())
+    }
+
     // ─── Commit ───
 
     pub async fn commit(&self, message: &str) -> Result<()> {
