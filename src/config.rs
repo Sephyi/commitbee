@@ -96,6 +96,10 @@ pub struct Config {
     #[serde(default = "default_num_predict")]
     pub num_predict: u32,
 
+    /// Base URL for OpenAI-compatible APIs (default: https://api.openai.com/v1)
+    #[serde(default)]
+    pub openai_base_url: Option<String>,
+
     /// Commit message format options
     #[serde(default)]
     pub format: CommitFormat,
@@ -140,6 +144,7 @@ impl Default for Config {
             timeout_secs: default_timeout_secs(),
             temperature: default_temperature(),
             num_predict: default_num_predict(),
+            openai_base_url: None,
             format: CommitFormat::default(),
         }
     }

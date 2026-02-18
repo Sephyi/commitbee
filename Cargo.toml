@@ -27,6 +27,7 @@ toml = "0.9"
 
 # Config & paths
 directories = "6.0"
+figment = { version = "0.10", features = ["toml", "env"] }
 
 # HTTP client
 reqwest = { version = "0.13", features = ["json", "stream"] }

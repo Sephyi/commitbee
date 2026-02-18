@@ -5,7 +5,9 @@
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+pub mod anthropic;
 pub mod ollama;
+pub mod openai;
 
 use crate::config::{Config, Provider};
 use crate::error::Result;
@@ -13,6 +15,8 @@ use crate::error::Result;
 /// Enum dispatch for LLM providers — avoids async-trait / dyn overhead.
 pub enum LlmBackend {
     Ollama(ollama::OllamaProvider),
+    OpenAi(openai::OpenAiProvider),
+    Anthropic(anthropic::AnthropicProvider),
 }
 
 impl LlmBackend {
@@ -25,12 +29,16 @@ impl LlmBackend {
     ) -> Result<String> {
         match self {
             Self::Ollama(p) => p.generate(prompt, token_tx, cancel).await,
+            Self::OpenAi(p) => p.generate(prompt, token_tx, cancel).await,
+            Self::Anthropic(p) => p.generate(prompt, token_tx, cancel).await,
         }
     }
 
     pub fn name(&self) -> &str {
         match self {
             Self::Ollama(p) => p.name(),
+            Self::OpenAi(p) => p.name(),
+            Self::Anthropic(p) => p.name(),
         }
     }
 
@@ -38,6 +46,8 @@ impl LlmBackend {
     pub async fn verify(&self) -> Result<()> {
         match self {
             Self::Ollama(p) => p.verify_model().await,
+            Self::OpenAi(p) => p.verify_connection().await,
+            Self::Anthropic(p) => p.verify_connection().await,
         }
     }
 }
@@ -45,19 +55,9 @@ impl LlmBackend {
 pub fn create_provider(config: &Config) -> Result<LlmBackend> {
     match config.provider {
         Provider::Ollama => Ok(LlmBackend::Ollama(ollama::OllamaProvider::new(config))),
-        Provider::OpenAI => {
-            // TODO: Implement OpenAI provider
-            Err(crate::error::Error::Provider {
-                provider: "openai".into(),
-                message: "OpenAI provider not yet implemented".into(),
-            })
-        }
-        Provider::Anthropic => {
-            // TODO: Implement Anthropic provider
-            Err(crate::error::Error::Provider {
-                provider: "anthropic".into(),
-                message: "Anthropic provider not yet implemented".into(),
-            })
-        }
+        Provider::OpenAI => Ok(LlmBackend::OpenAi(openai::OpenAiProvider::new(config))),
+        Provider::Anthropic => Ok(LlmBackend::Anthropic(anthropic::AnthropicProvider::new(
+            config,
+        ))),
     }
 }
