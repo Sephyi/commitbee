@@ -257,6 +257,80 @@ fn no_conflicts_in_clean_diff() {
     );
 }
 
+// ─── Additional secret patterns ──────────────────────────────────────────────
+
+#[test]
+fn detects_anthropic_key() {
+    // sk-ant- followed by exactly 80 alphanumeric characters
+    let key = format!("+sk-ant-{}\n", "a".repeat(80));
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/llm.rs",
+        ChangeStatus::Modified,
+        &key,
+        1,
+        0,
+    )]);
+
+    let matches = scan_for_secrets(&changes);
+    assert!(
+        !matches.is_empty(),
+        "expected at least one secret match for Anthropic key"
+    );
+    assert_eq!(matches[0].pattern_name, "Anthropic Key");
+}
+
+#[test]
+fn multiple_secrets_same_file() {
+    let diff = "+API_KEY=abcdefghijklmnopqrstuvwxyz1234567890abcdef\n\
+         +AKIAIOSFODNN7EXAMPLE\n\
+         +password = \"super_secret_value\"\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/config.rs",
+        ChangeStatus::Modified,
+        diff,
+        3,
+        0,
+    )]);
+
+    let matches = scan_for_secrets(&changes);
+    assert!(
+        matches.len() >= 3,
+        "expected at least 3 secret matches from 3 different lines, got {}",
+        matches.len()
+    );
+
+    let names: Vec<&str> = matches.iter().map(|m| m.pattern_name.as_str()).collect();
+    assert!(names.contains(&"API Key"), "should detect API Key");
+    assert!(names.contains(&"AWS Key"), "should detect AWS Key");
+    assert!(
+        names.contains(&"Generic Secret"),
+        "should detect Generic Secret"
+    );
+}
+
+// ─── Additional conflict detection ───────────────────────────────────────────
+
+#[test]
+fn ignores_conflict_markers_in_doc_paths() {
+    let diff = "\
++<<<<<<< HEAD\n\
++this is a documentation example of merge conflicts\n\
++>>>>>>> main\n\
+";
+    let changes = make_staged_changes(vec![make_file_change(
+        "docs/merge-guide.md",
+        ChangeStatus::Modified,
+        diff,
+        3,
+        0,
+    )]);
+
+    assert!(
+        !check_for_conflicts(&changes),
+        "conflict markers in docs/ paths should not be reported"
+    );
+}
+
 // ─── Proptest: never-panic guarantees ─────────────────────────────────────────
 
 proptest::proptest! {

@@ -366,3 +366,170 @@ fn file_category_build() {
         assert_eq!(got, expected, "{} should be classified as Build", path);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Additional CommitType inference
+// ---------------------------------------------------------------------------
+
+#[test]
+fn infer_type_more_deletions_is_refactor() {
+    // 50 deletions > 10 insertions * 2 = 20
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/services/old_module.rs",
+        ChangeStatus::Modified,
+        "",
+        10,
+        50,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(
+        ctx.suggested_type,
+        CommitType::Refactor,
+        "deletions > insertions*2 should infer Refactor"
+    );
+}
+
+#[test]
+fn infer_type_default_fallback_is_feat() {
+    // 30 insertions, 30 deletions (not small, not deletion-heavy, not special category)
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/services/module.rs",
+        ChangeStatus::Modified,
+        "",
+        30,
+        30,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(
+        ctx.suggested_type,
+        CommitType::Feat,
+        "large non-special change should fallback to Feat"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Additional budget and truncation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn symbols_budget_truncation() {
+    // Create 20 symbols, with a very small budget
+    let symbols: Vec<CodeSymbol> = (0..20)
+        .map(|i| {
+            make_symbol(
+                &format!("function_{}", i),
+                SymbolKind::Function,
+                "src/lib.rs",
+                true,
+                true,
+            )
+        })
+        .collect();
+
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "",
+        100,
+        0,
+    )]);
+
+    let mut config = default_config();
+    // Very small budget to force truncation
+    config.max_context_chars = 500;
+
+    let ctx = ContextBuilder::build(&changes, &symbols, &config);
+    let prompt = ctx.to_prompt();
+
+    assert!(
+        prompt.contains("more symbols"),
+        "prompt should indicate truncated symbols when budget is exceeded"
+    );
+}
+
+#[test]
+fn skip_content_lock_files() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "Cargo.lock",
+        ChangeStatus::Modified,
+        "+lots of lock file content\n".repeat(100).as_str(),
+        100,
+        50,
+    )]);
+
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.truncated_diff.contains("lock file - content skipped"),
+        "lock file diff should contain skip message, got: {}",
+        &ctx.truncated_diff[..ctx.truncated_diff.len().min(200)]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Additional scope inference
+// ---------------------------------------------------------------------------
+
+#[test]
+fn scope_from_packages_prefix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "packages/foo/src/bar.rs",
+        ChangeStatus::Modified,
+        "",
+        5,
+        2,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(
+        ctx.suggested_scope,
+        Some("foo".to_string()),
+        "packages/foo/src/bar.rs should yield scope 'foo'"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Additional FileCategory classification
+// ---------------------------------------------------------------------------
+
+#[test]
+fn file_category_other() {
+    let path = PathBuf::from("data/file.xyz");
+    let got = FileCategory::from_path(&path);
+    assert_eq!(
+        got,
+        FileCategory::Other,
+        "unknown extension .xyz should be classified as Other"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Multi-file diff truncation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn diff_truncation_multiple_files() {
+    let huge_diff = "+line of code\n".repeat(500);
+    let files: Vec<_> = (0..10)
+        .map(|i| {
+            make_file_change(
+                &format!("src/module_{}.rs", i),
+                ChangeStatus::Modified,
+                &huge_diff,
+                500,
+                0,
+            )
+        })
+        .collect();
+
+    let changes = make_staged_changes(files);
+
+    let mut config = default_config();
+    config.max_context_chars = 3_000;
+
+    let ctx = ContextBuilder::build(&changes, &[], &config);
+    assert!(
+        ctx.truncated_diff.contains("files not shown due to budget")
+            || ctx.truncated_diff.contains("budget exceeded")
+            || ctx.truncated_diff.contains("lines truncated"),
+        "huge multi-file diff should show truncation indicators"
+    );
+}

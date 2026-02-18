@@ -185,6 +185,103 @@ fn sanitize_no_lowercase() {
     insta::assert_snapshot!(result, @"fix(git): Handle Detached HEAD State");
 }
 
+// ─── Scope handling ──────────────────────────────────────────────────────────
+
+#[test]
+fn sanitize_scope_with_spaces() {
+    let raw = r#"{"type": "feat", "scope": "my scope", "subject": "add feature", "body": null}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat(my-scope): add feature");
+}
+
+#[test]
+fn sanitize_scope_invalid_chars() {
+    let raw = r#"{"type": "feat", "scope": "@#$%", "subject": "add feature", "body": null}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat: add feature");
+}
+
+// ─── Truncation boundary ─────────────────────────────────────────────────────
+
+#[test]
+fn sanitize_truncation_boundary_72() {
+    // "feat: " is 6 chars, so subject needs to be 66 chars for exactly 72
+    let subject_66 = "a".repeat(66);
+    let raw = format!(
+        r#"{{"type": "feat", "scope": null, "subject": "{}", "body": null}}"#,
+        subject_66
+    );
+    let result = CommitSanitizer::sanitize(&raw, &default_format()).unwrap();
+    assert_eq!(
+        result.chars().count(),
+        72,
+        "exactly 72 chars should not be truncated"
+    );
+
+    // 67 chars → first line = 73 chars → should be truncated
+    let subject_67 = "b".repeat(67);
+    let raw = format!(
+        r#"{{"type": "feat", "scope": null, "subject": "{}", "body": null}}"#,
+        subject_67
+    );
+    let result = CommitSanitizer::sanitize(&raw, &default_format()).unwrap();
+    assert!(
+        result.chars().count() <= 72,
+        "73+ char first line should be truncated to ≤72, got {}",
+        result.chars().count()
+    );
+    assert!(
+        result.ends_with("..."),
+        "truncated line should end with '...'"
+    );
+}
+
+// ─── Subject normalization ───────────────────────────────────────────────────
+
+#[test]
+fn sanitize_subject_trailing_period() {
+    let raw =
+        r#"{"type": "fix", "scope": "git", "subject": "resolve merge conflicts.", "body": null}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"fix(git): resolve merge conflicts");
+}
+
+#[test]
+fn sanitize_uppercase_type_in_json() {
+    let raw = r#"{"type": "FEAT", "scope": "cli", "subject": "add verbose flag", "body": null}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat(cli): add verbose flag");
+}
+
+// ─── Body handling ───────────────────────────────────────────────────────────
+
+#[test]
+fn sanitize_json_null_body() {
+    // Explicit null
+    let raw_null = r#"{"type": "fix", "scope": null, "subject": "patch bug", "body": null}"#;
+    let result_null = CommitSanitizer::sanitize(raw_null, &default_format()).unwrap();
+
+    // Missing body field entirely — serde_json deserializes missing Option<String>
+    // as None, so both variants parse successfully and produce identical output.
+    let raw_missing = r#"{"type": "fix", "scope": null, "subject": "patch bug"}"#;
+    let result_missing = CommitSanitizer::sanitize(raw_missing, &default_format()).unwrap();
+
+    assert_eq!(
+        result_null, result_missing,
+        "null body and missing body should produce identical output"
+    );
+    insta::assert_snapshot!(result_null, @"fix: patch bug");
+}
+
+// ─── Code fence stripping ────────────────────────────────────────────────────
+
+#[test]
+fn sanitize_code_fence_in_plain_text() {
+    let raw = "```\nsome preamble\n```\nfeat(cli): add verbose flag";
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat(cli): add verbose flag");
+}
+
 // ─── Proptest: never panics ───────────────────────────────────────────────────
 
 proptest! {
