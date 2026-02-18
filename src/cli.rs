@@ -47,4 +47,12 @@ pub enum Commands {
     Init,
     /// Show current configuration
     Config,
+    /// Check configuration and provider connectivity
+    Doctor,
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }

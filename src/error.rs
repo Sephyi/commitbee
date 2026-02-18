@@ -11,7 +11,10 @@ use thiserror::Error;
 #[derive(Error, Diagnostic, Debug)]
 pub enum Error {
     #[error("No staged changes found")]
-    #[diagnostic(code(commitbee::git::no_staged), help("Stage files with: git add <files>"))]
+    #[diagnostic(
+        code(commitbee::git::no_staged),
+        help("Stage files with: git add <files>")
+    )]
     NoStagedChanges,
 
     #[error("Not a git repository")]

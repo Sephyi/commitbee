@@ -9,7 +9,7 @@ use tokio::signal;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::cli::Cli;
+use crate::cli::{Cli, Commands};
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::services::{
@@ -44,7 +44,7 @@ impl App {
 
         // Handle subcommands
         if let Some(ref cmd) = self.cli.command {
-            return self.handle_command(cmd);
+            return self.handle_command(cmd).await;
         }
 
         self.generate_commit().await
@@ -216,19 +216,23 @@ impl App {
         Ok(())
     }
 
-    fn handle_command(&self, cmd: &crate::cli::Commands) -> Result<()> {
+    async fn handle_command(&self, cmd: &Commands) -> Result<()> {
         match cmd {
-            crate::cli::Commands::Init => {
+            Commands::Init => {
                 let path = Config::create_default()?;
                 println!("Created config: {}", path.display());
                 Ok(())
             }
-            crate::cli::Commands::Config => {
+            Commands::Config => {
                 println!("Provider: {}", self.config.provider);
                 println!("Model: {}", self.config.model);
                 println!("Ollama host: {}", self.config.ollama_host);
                 println!("Max diff lines: {}", self.config.max_diff_lines);
                 println!("Max file lines: {}", self.config.max_file_lines);
+                println!("Max context chars: {}", self.config.max_context_chars);
+                println!("Timeout: {}s", self.config.timeout_secs);
+                println!("Temperature: {}", self.config.temperature);
+                println!("Max tokens: {}", self.config.num_predict);
                 println!();
                 println!("[format]");
                 println!("  include_body: {}", self.config.format.include_body);
@@ -239,7 +243,90 @@ impl App {
                 );
                 Ok(())
             }
+            Commands::Doctor => self.run_doctor().await,
+            Commands::Completions { shell } => {
+                let mut cmd = <Cli as clap::CommandFactory>::command();
+                clap_complete::generate(*shell, &mut cmd, "commitbee", &mut std::io::stdout());
+                Ok(())
+            }
         }
+    }
+
+    async fn run_doctor(&self) -> Result<()> {
+        eprintln!("{} Running diagnostics...\n", style("→").cyan());
+
+        // Config summary
+        eprintln!("{}", style("Configuration").bold().underlined());
+        eprintln!("  Provider:    {}", self.config.provider);
+        eprintln!("  Model:       {}", self.config.model);
+        eprintln!("  Timeout:     {}s", self.config.timeout_secs);
+        if let Some(ref path) = Config::config_path() {
+            let status = if path.exists() { "found" } else { "not found" };
+            eprintln!("  Config file: {} ({})", path.display(), status);
+        }
+        eprintln!();
+
+        // Provider connectivity
+        eprintln!("{}", style("Provider Check").bold().underlined());
+        match self.config.provider {
+            crate::config::Provider::Ollama => {
+                eprint!("  Ollama ({}): ", self.config.ollama_host);
+                let provider = llm::create_provider(&self.config)?;
+                match provider.verify().await {
+                    Ok(()) => {
+                        eprintln!("{}", style("OK").green().bold());
+                        eprintln!(
+                            "  Model '{}': {}",
+                            self.config.model,
+                            style("available").green()
+                        );
+                    }
+                    Err(Error::OllamaNotRunning { .. }) => {
+                        eprintln!("{}", style("NOT RUNNING").red().bold());
+                        eprintln!("  Start with: {}", style("ollama serve").yellow());
+                    }
+                    Err(Error::ModelNotFound { ref available, .. }) => {
+                        eprintln!("{}", style("connected").green());
+                        eprintln!(
+                            "  Model '{}': {}",
+                            self.config.model,
+                            style("NOT FOUND").red().bold()
+                        );
+                        eprintln!(
+                            "  Pull with: {}",
+                            style(format!("ollama pull {}", self.config.model)).yellow()
+                        );
+                        if !available.is_empty() {
+                            eprintln!("  Available: {}", available.join(", "));
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{}: {}", style("ERROR").red().bold(), e);
+                    }
+                }
+            }
+            other => {
+                eprint!("  {} API key: ", other);
+                if self.config.api_key.is_some() {
+                    eprintln!("{}", style("configured").green());
+                } else {
+                    eprintln!("{}", style("MISSING").red().bold());
+                }
+            }
+        }
+        eprintln!();
+
+        // Git check
+        eprintln!("{}", style("Git Repository").bold().underlined());
+        match GitService::discover() {
+            Ok(_) => eprintln!("  Repository: {}", style("found").green()),
+            Err(_) => eprintln!("  Repository: {}", style("NOT FOUND").red().bold()),
+        }
+
+        eprintln!();
+        eprintln!("{} Diagnostics complete.", style("✓").green().bold());
+
+        Ok(())
     }
 
     fn print_status(&self, msg: &str) {
