@@ -261,6 +261,10 @@ impl App {
                 clap_complete::generate(*shell, &mut cmd, "commitbee", &mut std::io::stdout());
                 Ok(())
             }
+            #[cfg(feature = "secure-storage")]
+            Commands::SetKey { provider } => self.set_api_key(provider),
+            #[cfg(feature = "secure-storage")]
+            Commands::GetKey { provider } => self.get_api_key(provider),
         }
     }
 
@@ -340,6 +344,88 @@ impl App {
 
         Ok(())
     }
+
+    // ─── Keyring Commands ───
+
+    #[cfg(feature = "secure-storage")]
+    fn set_api_key(&self, provider: &str) -> Result<()> {
+        let provider_lower = provider.to_lowercase();
+        if provider_lower != "openai" && provider_lower != "anthropic" {
+            return Err(Error::Config(format!(
+                "Keyring storage is only for cloud providers (openai, anthropic), got '{}'",
+                provider
+            )));
+        }
+
+        eprintln!(
+            "Enter API key for {} (input will be hidden):",
+            style(&provider_lower).bold()
+        );
+
+        let key = dialoguer::Password::new()
+            .with_prompt("API key")
+            .interact()
+            .map_err(|e| Error::Dialog(e.to_string()))?;
+
+        if key.trim().is_empty() {
+            return Err(Error::Config("API key cannot be empty".into()));
+        }
+
+        let entry = keyring::Entry::new("commitbee", &provider_lower)
+            .map_err(|e| Error::Keyring(e.to_string()))?;
+        entry
+            .set_password(&key)
+            .map_err(|e| Error::Keyring(e.to_string()))?;
+
+        eprintln!(
+            "{} API key stored for {}",
+            style("✓").green().bold(),
+            provider_lower
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "secure-storage")]
+    fn get_api_key(&self, provider: &str) -> Result<()> {
+        let provider_lower = provider.to_lowercase();
+        if provider_lower != "openai" && provider_lower != "anthropic" {
+            return Err(Error::Config(format!(
+                "Keyring storage is only for cloud providers (openai, anthropic), got '{}'",
+                provider
+            )));
+        }
+
+        let entry = keyring::Entry::new("commitbee", &provider_lower)
+            .map_err(|e| Error::Keyring(e.to_string()))?;
+
+        match entry.get_password() {
+            Ok(_) => {
+                eprintln!(
+                    "{} API key for {} is stored in keychain",
+                    style("✓").green().bold(),
+                    provider_lower
+                );
+            }
+            Err(keyring::Error::NoEntry) => {
+                eprintln!(
+                    "{} No API key found for {} in keychain",
+                    style("✗").red().bold(),
+                    provider_lower
+                );
+                eprintln!(
+                    "  Store one with: {}",
+                    style(format!("commitbee set-key {}", provider_lower)).yellow()
+                );
+            }
+            Err(e) => {
+                return Err(Error::Keyring(e.to_string()));
+            }
+        }
+
+        Ok(())
+    }
+
+    // ─── Output Helpers ───
 
     fn print_status(&self, msg: &str) {
         eprintln!("{} {}", style("→").cyan(), msg);

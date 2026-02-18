@@ -189,6 +189,17 @@ impl Config {
             };
         }
 
+        // Keyring fallback (if still no key and secure-storage feature is enabled)
+        #[cfg(feature = "secure-storage")]
+        if config.api_key.is_none() && config.provider != Provider::Ollama {
+            let provider_name = config.provider.to_string();
+            if let Ok(entry) = keyring::Entry::new("commitbee", &provider_name) {
+                if let Ok(key) = entry.get_password() {
+                    config.api_key = Some(key);
+                }
+            }
+        }
+
         // CLI overrides (highest priority)
         config.apply_cli(cli);
         config.validate()?;

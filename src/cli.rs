@@ -55,4 +55,16 @@ pub enum Commands {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Store API key in system keychain
+    #[cfg(feature = "secure-storage")]
+    SetKey {
+        /// Provider to store key for (openai, anthropic)
+        provider: String,
+    },
+    /// Check if API key exists in system keychain
+    #[cfg(feature = "secure-storage")]
+    GetKey {
+        /// Provider to check key for (openai, anthropic)
+        provider: String,
+    },
 }

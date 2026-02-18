@@ -89,6 +89,14 @@ pub enum Error {
 
     #[error("Dialog error: {0}")]
     Dialog(String),
+
+    #[cfg(feature = "secure-storage")]
+    #[error("Keyring error: {0}")]
+    #[diagnostic(
+        code(commitbee::keyring::error),
+        help("Check your system keychain configuration")
+    )]
+    Keyring(String),
 }
 
 impl From<dialoguer::Error> for Error {
