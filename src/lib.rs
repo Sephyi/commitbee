@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+#![forbid(unsafe_code)]
+
 //! CommitBee - AI-powered commit message generator
 //!
 //! This crate provides the core functionality for analyzing git changes
