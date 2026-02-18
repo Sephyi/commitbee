@@ -132,4 +132,23 @@ impl StagedChanges {
         files.sort_by_key(|f| f.category.priority());
         files
     }
+
+    /// Create a subset containing only files matching the given paths.
+    /// Recomputes DiffStats from the subset.
+    pub fn subset(&self, paths: &[PathBuf]) -> StagedChanges {
+        let files: Vec<FileChange> = self
+            .files
+            .iter()
+            .filter(|f| paths.contains(&f.path))
+            .cloned()
+            .collect();
+
+        let stats = DiffStats {
+            files_changed: files.len(),
+            insertions: files.iter().map(|f| f.additions).sum(),
+            deletions: files.iter().map(|f| f.deletions).sum(),
+        };
+
+        StagedChanges { files, stats }
+    }
 }

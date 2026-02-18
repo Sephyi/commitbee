@@ -31,9 +31,10 @@ DIFF:
 
 Write a JSON commit message describing the changes shown in the diff.
 The subject must be specific - describe WHAT was changed (e.g., "add system prompt to ollama provider", "update dependency versions").
+For the body: if the change is trivial (single rename, typo fix), use null. Otherwise write a short body (1-3 sentences) explaining WHY the change was made or what it enables.
 
 Output format:
-{{"type": "{commit_type}", "scope": {scope_json}, "subject": "<your description here>", "body": null}}"#,
+{{"type": "{commit_type}", "scope": {scope_json}, "subject": "<imperative verb + what changed>", "body": "<why this change was made, or null if trivial>"}}"#,
             summary = self.change_summary,
             files = self.file_breakdown.trim(),
             commit_type = self.suggested_type.as_str(),
