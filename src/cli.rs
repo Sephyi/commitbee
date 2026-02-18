@@ -42,6 +42,16 @@ pub struct Cli {
 }
 
 #[derive(clap::Subcommand, Debug)]
+pub enum HookAction {
+    /// Install prepare-commit-msg hook
+    Install,
+    /// Remove prepare-commit-msg hook
+    Uninstall,
+    /// Check if hook is installed
+    Status,
+}
+
+#[derive(clap::Subcommand, Debug)]
 pub enum Commands {
     /// Initialize config file
     Init,
@@ -54,6 +64,11 @@ pub enum Commands {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: clap_complete::Shell,
+    },
+    /// Manage prepare-commit-msg git hook
+    Hook {
+        #[command(subcommand)]
+        action: HookAction,
     },
     /// Store API key in system keychain
     #[cfg(feature = "secure-storage")]

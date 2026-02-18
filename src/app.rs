@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
-use crate::cli::{Cli, Commands};
+use crate::cli::{Cli, Commands, HookAction};
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::services::{
@@ -277,6 +277,7 @@ impl App {
                 clap_complete::generate(*shell, &mut cmd, "commitbee", &mut std::io::stdout());
                 Ok(())
             }
+            Commands::Hook { action } => self.handle_hook(action),
             #[cfg(feature = "secure-storage")]
             Commands::SetKey { provider } => self.set_api_key(provider),
             #[cfg(feature = "secure-storage")]
@@ -357,6 +358,187 @@ impl App {
 
         eprintln!();
         eprintln!("{} Diagnostics complete.", style("✓").green().bold());
+
+        Ok(())
+    }
+
+    // ─── Hook Commands ───
+
+    fn handle_hook(&self, action: &HookAction) -> Result<()> {
+        match action {
+            HookAction::Install => self.hook_install(),
+            HookAction::Uninstall => self.hook_uninstall(),
+            HookAction::Status => self.hook_status(),
+        }
+    }
+
+    fn hook_dir(&self) -> Result<PathBuf> {
+        // Verify we're in a git repo first
+        let _git = GitService::discover()?;
+
+        let output = std::process::Command::new("git")
+            .args(["rev-parse", "--git-dir"])
+            .output()?;
+
+        if !output.status.success() {
+            return Err(Error::Git("Cannot find .git directory".into()));
+        }
+
+        let git_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(PathBuf::from(git_dir).join("hooks"))
+    }
+
+    fn hook_path(&self) -> Result<PathBuf> {
+        Ok(self.hook_dir()?.join("prepare-commit-msg"))
+    }
+
+    fn hook_install(&self) -> Result<()> {
+        let hooks_dir = self.hook_dir()?;
+        let hook_path = hooks_dir.join("prepare-commit-msg");
+        let backup_path = hooks_dir.join("prepare-commit-msg.commitbee-backup");
+
+        // Create hooks directory if needed
+        std::fs::create_dir_all(&hooks_dir)?;
+
+        // Back up existing hook if present and not ours
+        if hook_path.exists() {
+            let content = std::fs::read_to_string(&hook_path).unwrap_or_default();
+            if content.contains("# commitbee hook") {
+                eprintln!(
+                    "{} Hook already installed at {}",
+                    style("✓").green().bold(),
+                    hook_path.display()
+                );
+                return Ok(());
+            }
+            std::fs::copy(&hook_path, &backup_path)?;
+            eprintln!(
+                "{} Backed up existing hook to {}",
+                style("info:").cyan(),
+                backup_path.display()
+            );
+        }
+
+        let hook_script = r#"#!/bin/sh
+# commitbee hook — auto-generated, do not edit
+# Generates commit messages using commitbee when committing interactively.
+# Skips merge, squash, amend, and message-provided commits.
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="$2"
+
+# Skip non-interactive commits (merge, squash, message, amend)
+case "$COMMIT_SOURCE" in
+    merge|squash|message|commit)
+        exit 0
+        ;;
+esac
+
+# Only run if commitbee is available
+if ! command -v commitbee >/dev/null 2>&1; then
+    exit 0
+fi
+
+# Generate commit message and write to file
+MSG=$(commitbee --yes --dry-run 2>/dev/null)
+if [ $? -eq 0 ] && [ -n "$MSG" ]; then
+    echo "$MSG" > "$COMMIT_MSG_FILE"
+fi
+"#;
+
+        // Write to temp file first, then rename (atomic)
+        let temp_path = hooks_dir.join(".prepare-commit-msg.tmp");
+        std::fs::write(&temp_path, hook_script)?;
+
+        // Set executable permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&temp_path)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&temp_path, perms)?;
+        }
+
+        std::fs::rename(&temp_path, &hook_path)?;
+
+        eprintln!(
+            "{} Hook installed at {}",
+            style("✓").green().bold(),
+            hook_path.display()
+        );
+        Ok(())
+    }
+
+    fn hook_uninstall(&self) -> Result<()> {
+        let hooks_dir = self.hook_dir()?;
+        let hook_path = hooks_dir.join("prepare-commit-msg");
+        let backup_path = hooks_dir.join("prepare-commit-msg.commitbee-backup");
+
+        if !hook_path.exists() {
+            eprintln!(
+                "{} No hook found at {}",
+                style("info:").cyan(),
+                hook_path.display()
+            );
+            return Ok(());
+        }
+
+        // Verify it's our hook before removing
+        let content = std::fs::read_to_string(&hook_path).unwrap_or_default();
+        if !content.contains("# commitbee hook") {
+            return Err(Error::Git(format!(
+                "Hook at {} was not installed by commitbee. Remove manually if intended.",
+                hook_path.display()
+            )));
+        }
+
+        std::fs::remove_file(&hook_path)?;
+
+        // Restore backup if exists
+        if backup_path.exists() {
+            std::fs::rename(&backup_path, &hook_path)?;
+            eprintln!(
+                "{} Restored previous hook from backup",
+                style("info:").cyan()
+            );
+        }
+
+        eprintln!(
+            "{} Hook removed from {}",
+            style("✓").green().bold(),
+            hook_path.display()
+        );
+        Ok(())
+    }
+
+    fn hook_status(&self) -> Result<()> {
+        let hook_path = self.hook_path()?;
+
+        if !hook_path.exists() {
+            eprintln!(
+                "{} No prepare-commit-msg hook installed",
+                style("✗").red().bold()
+            );
+            eprintln!(
+                "  Install with: {}",
+                style("commitbee hook install").yellow()
+            );
+            return Ok(());
+        }
+
+        let content = std::fs::read_to_string(&hook_path).unwrap_or_default();
+        if content.contains("# commitbee hook") {
+            eprintln!(
+                "{} CommitBee hook is installed at {}",
+                style("✓").green().bold(),
+                hook_path.display()
+            );
+        } else {
+            eprintln!(
+                "{} A prepare-commit-msg hook exists but was not installed by commitbee",
+                style("info:").cyan()
+            );
+        }
 
         Ok(())
     }
