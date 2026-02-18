@@ -1,7 +1,7 @@
 <!--
 SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 
-SPDX-License-Identifier: GPL-3.0-only
+SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -->
 
 # CommitBee — Product Requirements Document

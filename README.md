@@ -1,7 +1,7 @@
 <!--
 SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 
-SPDX-License-Identifier: GPL-3.0-only
+SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -->
 
 # 🐝 CommitBee
@@ -248,7 +248,9 @@ See [`PRD.md`](PRD.md) for the full product requirements document.
 
 ## 🤝 Contributing
 
-Contributions are welcome! The project uses:
+Contributions are welcome! By contributing, you agree to the [Contributor License Agreement](CLA.md) — you'll be asked to sign it when you open your first pull request.
+
+The project uses:
 
 - **Rust edition 2024** (MSRV 1.85)
 - **Conventional commits** for all commit messages
@@ -272,7 +274,7 @@ If you find CommitBee useful, consider [sponsoring my work](https://github.com/s
 
 ## 📄 License
 
-This project is licensed under [GPL-3.0-only](LICENSES/GPL-3.0-only.txt).
+This project is licensed under [PolyForm-Noncommercial-1.0.0](LICENSES/PolyForm-Noncommercial-1.0.0.txt).
 
 REUSE compliant — every file carries SPDX headers.
 

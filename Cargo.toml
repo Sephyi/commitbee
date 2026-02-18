@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 [package]
 name = "commitbee"
@@ -8,7 +8,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 description = "AI-powered commit message generator"
-license = "GPL-3.0-only"
+license = "PolyForm-Noncommercial-1.0.0"
 
 [dependencies]
 # CLI

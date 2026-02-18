@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 //
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 // miette's Diagnostic derive generates code that triggers this false positive
 #![allow(unused_assignments)]

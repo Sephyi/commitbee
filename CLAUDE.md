@@ -1,7 +1,7 @@
 <!--
 SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 
-SPDX-License-Identifier: GPL-3.0-only
+SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -->
 
 # CommitBee
@@ -115,14 +115,14 @@ src/
 ### Toolchain
 
 - Rust edition 2024, MSRV 1.85
-- License: GPL-3.0-only (REUSE compliant)
+- License: PolyForm-Noncommercial-1.0.0 (REUSE compliant)
 - Dev deps: `tempfile`, `assert_cmd`, `predicates`, `wiremock`, `insta`, `proptest`
 
 ### REUSE / SPDX Headers
 
 - All files use `reuse annotate` format: blank comment separator between SPDX lines
 - `reuse lint` — verify compliance
-- `reuse annotate --copyright "Sephyi <me@sephy.io>" --license GPL-3.0-only --year 2026 <file>` — add header
+- `reuse annotate --copyright "Sephyi <me@sephy.io>" --license PolyForm-Noncommercial-1.0.0 --year 2026 <file>` — add header
 - REUSE.toml `[[annotations]]` — for files that can't have inline headers (Cargo.lock, tests/snapshots/**)
 
 ### Running Tests
