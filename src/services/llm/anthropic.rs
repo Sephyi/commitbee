@@ -13,11 +13,12 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
-const BASE_URL: &str = "https://api.anthropic.com/v1";
+const DEFAULT_BASE_URL: &str = "https://api.anthropic.com/v1";
 const API_VERSION: &str = "2023-06-01";
 
 pub struct AnthropicProvider {
     client: Client,
+    base_url: String,
     model: String,
     api_key: String,
     temperature: f32,
@@ -59,9 +60,12 @@ RULES:
 2. The subject must be SPECIFIC - mention what was added/changed/fixed
 3. Output ONLY valid JSON
 4. Start subject with lowercase verb: add, fix, update, remove, refactor
+5. Include a body (1-3 sentences) for non-trivial changes explaining WHY the change was made. Use null only for trivial changes like typo fixes or renames.
 
-BAD: "describe what changed" or "update code"
-GOOD: "add rate limiting to api endpoints" or "fix null check in user service""#;
+BAD subject: "describe what changed" or "update code"
+GOOD subject: "add rate limiting to api endpoints" or "fix null check in user service"
+GOOD body: "The previous implementation used byte indexing which panics on multi-byte characters. Switch to char_indices for safe truncation."
+BAD body: "Updated the code to fix the bug" (too vague)"#;
 
 impl AnthropicProvider {
     pub fn new(config: &Config) -> Self {
@@ -72,6 +76,12 @@ impl AnthropicProvider {
 
         Self {
             client,
+            base_url: config
+                .anthropic_base_url
+                .clone()
+                .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
+                .trim_end_matches('/')
+                .to_string(),
             model: config.model.clone(),
             api_key: config.api_key.clone().unwrap_or_default(),
             temperature: config.temperature,
@@ -97,7 +107,7 @@ impl AnthropicProvider {
         token_tx: mpsc::Sender<String>,
         cancel: CancellationToken,
     ) -> Result<String> {
-        let url = format!("{BASE_URL}/messages");
+        let url = format!("{}/messages", self.base_url);
 
         let response = self
             .client
