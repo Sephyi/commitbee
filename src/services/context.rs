@@ -32,7 +32,11 @@ impl ContextBuilder {
         config: &Config,
     ) -> PromptContext {
         let commit_type = Self::infer_commit_type(changes, symbols);
-        let scope = Self::infer_scope(changes);
+        let scope = if config.format.include_scope {
+            Self::infer_scope(changes)
+        } else {
+            None
+        };
 
         // Build components with budget management
         let change_summary = Self::summarize_changes(changes);
@@ -69,7 +73,7 @@ impl ContextBuilder {
         }
     }
 
-    fn infer_commit_type(changes: &StagedChanges, symbols: &[CodeSymbol]) -> CommitType {
+    pub fn infer_commit_type(changes: &StagedChanges, symbols: &[CodeSymbol]) -> CommitType {
         let categories: Vec<_> = changes.files.iter().map(|f| f.category).collect();
 
         // All docs -> docs
@@ -130,7 +134,7 @@ impl ContextBuilder {
         CommitType::Feat
     }
 
-    fn infer_scope(changes: &StagedChanges) -> Option<String> {
+    pub fn infer_scope(changes: &StagedChanges) -> Option<String> {
         let scopes: Vec<_> = changes
             .files
             .iter()
