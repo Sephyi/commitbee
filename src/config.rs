@@ -224,6 +224,53 @@ impl Config {
                 format!("{:?}", self.provider).to_uppercase()
             )));
         }
+
+        if !(10..=10_000).contains(&self.max_diff_lines) {
+            return Err(Error::Config(format!(
+                "max_diff_lines must be 10–10000, got {}",
+                self.max_diff_lines
+            )));
+        }
+
+        if !(10..=1_000).contains(&self.max_file_lines) {
+            return Err(Error::Config(format!(
+                "max_file_lines must be 10–1000, got {}",
+                self.max_file_lines
+            )));
+        }
+
+        if !(1_000..=200_000).contains(&self.max_context_chars) {
+            return Err(Error::Config(format!(
+                "max_context_chars must be 1000–200000, got {}",
+                self.max_context_chars
+            )));
+        }
+
+        if !(1..=3600).contains(&self.timeout_secs) {
+            return Err(Error::Config(format!(
+                "timeout_secs must be 1–3600, got {}",
+                self.timeout_secs
+            )));
+        }
+
+        if !(0.0..=2.0).contains(&self.temperature) {
+            return Err(Error::Config(format!(
+                "temperature must be 0.0–2.0, got {}",
+                self.temperature
+            )));
+        }
+
+        if self.ollama_host.is_empty() {
+            return Err(Error::Config("ollama_host cannot be empty".into()));
+        }
+
+        if !self.ollama_host.starts_with("http://") && !self.ollama_host.starts_with("https://") {
+            return Err(Error::Config(format!(
+                "ollama_host must start with http:// or https://, got '{}'",
+                self.ollama_host
+            )));
+        }
+
         Ok(())
     }
 
