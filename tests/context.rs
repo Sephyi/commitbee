@@ -11,9 +11,7 @@ use commitbee::domain::{ChangeStatus, CodeSymbol, CommitType, FileCategory, Symb
 use commitbee::services::context::ContextBuilder;
 use helpers::{make_file_change, make_staged_changes};
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn default_config() -> Config {
     Config::default()
@@ -36,9 +34,7 @@ fn make_symbol(
     }
 }
 
-// ---------------------------------------------------------------------------
-// CommitType inference
-// ---------------------------------------------------------------------------
+// ─── CommitType inference ─────────────────────────────────────────────────────
 
 #[test]
 fn infer_type_all_docs() {
@@ -160,9 +156,7 @@ fn infer_type_small_change_is_fix() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Scope inference
-// ---------------------------------------------------------------------------
+// ─── Scope inference ─────────────────────────────────────────────────────────
 
 #[test]
 fn infer_scope_single_module() {
@@ -192,9 +186,7 @@ fn infer_scope_none_for_mixed_modules() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Prompt output
-// ---------------------------------------------------------------------------
+// ─── Prompt output ───────────────────────────────────────────────────────────
 
 #[test]
 fn prompt_includes_symbols_when_present() {
@@ -256,9 +248,7 @@ fn prompt_omits_symbols_when_empty() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Budget management
-// ---------------------------------------------------------------------------
+// ─── Budget management ───────────────────────────────────────────────────────
 
 #[test]
 fn prompt_respects_budget() {
@@ -286,9 +276,7 @@ fn prompt_respects_budget() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// FileCategory classification
-// ---------------------------------------------------------------------------
+// ─── FileCategory classification ─────────────────────────────────────────────
 
 #[test]
 fn file_category_source() {
@@ -367,9 +355,7 @@ fn file_category_build() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Additional CommitType inference
-// ---------------------------------------------------------------------------
+// ─── Additional CommitType inference ──────────────────────────────────────────
 
 #[test]
 fn infer_type_more_deletions_is_refactor() {
@@ -407,9 +393,7 @@ fn infer_type_default_fallback_is_feat() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Additional budget and truncation
-// ---------------------------------------------------------------------------
+// ─── Additional budget and truncation ─────────────────────────────────────────
 
 #[test]
 fn symbols_budget_truncation() {
@@ -465,9 +449,7 @@ fn skip_content_lock_files() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Additional scope inference
-// ---------------------------------------------------------------------------
+// ─── Additional scope inference ──────────────────────────────────────────────
 
 #[test]
 fn scope_from_packages_prefix() {
@@ -486,9 +468,7 @@ fn scope_from_packages_prefix() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Additional FileCategory classification
-// ---------------------------------------------------------------------------
+// ─── Additional FileCategory classification ──────────────────────────────────
 
 #[test]
 fn file_category_other() {
@@ -501,9 +481,7 @@ fn file_category_other() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Multi-file diff truncation
-// ---------------------------------------------------------------------------
+// ─── Multi-file diff truncation ──────────────────────────────────────────────
 
 #[test]
 fn diff_truncation_multiple_files() {

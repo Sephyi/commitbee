@@ -4,9 +4,7 @@
 
 use commitbee::config::{Config, Provider};
 
-// ---------------------------------------------------------------------------
-// Default values
-// ---------------------------------------------------------------------------
+// ─── Default values ──────────────────────────────────────────────────────────
 
 #[test]
 fn default_config_values() {
@@ -23,9 +21,7 @@ fn default_config_values() {
     assert!(config.format.lowercase_subject);
 }
 
-// ---------------------------------------------------------------------------
-// TOML deserialization
-// ---------------------------------------------------------------------------
+// ─── TOML deserialization ────────────────────────────────────────────────────
 
 #[test]
 fn load_from_valid_toml() {
@@ -74,9 +70,7 @@ fn empty_toml_uses_all_defaults() {
     assert_eq!(config.max_diff_lines, default.max_diff_lines);
 }
 
-// ---------------------------------------------------------------------------
-// Provider display
-// ---------------------------------------------------------------------------
+// ─── Provider display ────────────────────────────────────────────────────────
 
 #[test]
 fn provider_display_format() {
@@ -85,9 +79,7 @@ fn provider_display_format() {
     assert_eq!(format!("{}", Provider::Anthropic), "anthropic");
 }
 
-// ---------------------------------------------------------------------------
-// Format section defaults
-// ---------------------------------------------------------------------------
+// ─── Format section defaults ─────────────────────────────────────────────────
 
 #[test]
 fn format_section_defaults() {
@@ -99,9 +91,7 @@ fn format_section_defaults() {
     assert!(config.format.lowercase_subject);
 }
 
-// ---------------------------------------------------------------------------
-// Error handling
-// ---------------------------------------------------------------------------
+// ─── Error handling ──────────────────────────────────────────────────────────
 
 #[test]
 fn invalid_toml_returns_error() {
