@@ -16,7 +16,7 @@ clap = { version = "4.5", features = ["derive", "env"] }
 clap_complete = "4.5"
 
 # Async runtime
-tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "signal", "sync"] }
+tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "signal", "sync", "process"] }
 tokio-stream = "0.1"
 tokio-util = "0.7"
 

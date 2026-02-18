@@ -2,9 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::collections::HashMap;
+use std::io::IsTerminal;
+use std::path::PathBuf;
+
 use console::style;
 use dialoguer::Confirm;
-use std::io::IsTerminal;
 use tokio::signal;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -66,7 +69,7 @@ impl App {
         self.print_status("Analyzing staged changes...");
 
         let git = GitService::discover()?;
-        let changes = git.get_staged_changes(self.config.max_file_lines)?;
+        let changes = git.get_staged_changes(self.config.max_file_lines).await?;
 
         self.print_info(&format!(
             "{} files with changes detected (+{} -{})",
@@ -108,16 +111,29 @@ impl App {
             return Err(Error::Cancelled);
         }
 
-        // Step 3: Analyze code with tree-sitter
+        // Step 3: Pre-fetch file content and analyze with tree-sitter
         self.print_status("Extracting code symbols...");
 
         let mut analyzer = AnalyzerService::new()?;
 
-        let git_ref = &git;
+        // Pre-fetch all file content asynchronously, then pass as sync maps
+        let file_paths: Vec<PathBuf> = changes.files.iter().map(|f| f.path.clone()).collect();
+        let mut staged_map: HashMap<PathBuf, String> = HashMap::new();
+        let mut head_map: HashMap<PathBuf, String> = HashMap::new();
+
+        for path in &file_paths {
+            if let Some(content) = git.get_staged_content(path).await {
+                staged_map.insert(path.clone(), content);
+            }
+            if let Some(content) = git.get_head_content(path).await {
+                head_map.insert(path.clone(), content);
+            }
+        }
+
         let symbols = analyzer.extract_symbols(
             &changes.files,
-            &|path| git_ref.get_staged_content(path),
-            &|path| git_ref.get_head_content(path),
+            &|path| staged_map.get(path).cloned(),
+            &|path| head_map.get(path).cloned(),
         );
 
         debug!(count = symbols.len(), "symbols extracted");
@@ -221,7 +237,7 @@ impl App {
         }
 
         // Create commit
-        git.commit(&message)?;
+        git.commit(&message).await?;
 
         eprintln!("{} Committed!", style("✓").green().bold());
 

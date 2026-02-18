@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+use tokio::process::Command;
 
 use crate::domain::{ChangeStatus, DiffStats, FileCategory, FileChange, StagedChanges};
 use crate::error::{Error, Result};
@@ -25,7 +28,6 @@ impl GitService {
     }
 
     pub fn check_state(&self) -> Result<()> {
-        // Check for merge/rebase in progress
         let state = self.repo.state();
         if matches!(state, Some(gix::state::InProgress::Merge)) {
             return Err(Error::MergeInProgress);
@@ -33,24 +35,44 @@ impl GitService {
         Ok(())
     }
 
-    pub fn get_staged_changes(&self, max_file_lines: usize) -> Result<StagedChanges> {
-        self.check_state()?;
+    // ─── Async Git Helpers ───
 
-        // Use git diff --cached --name-status to get list of staged files
-        let output = std::process::Command::new("git")
-            .args(["diff", "--cached", "--name-status", "--no-renames"])
+    async fn run_git(&self, args: &[&str]) -> Result<String> {
+        let output = Command::new("git")
+            .args(args)
             .current_dir(&self.work_dir)
-            .output()?;
+            .output()
+            .await?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(Error::Git(stderr.to_string()));
         }
 
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
+    // ─── Staged Changes (Single-Pass Diff) ───
+
+    pub async fn get_staged_changes(&self, max_file_lines: usize) -> Result<StagedChanges> {
+        self.check_state()?;
+
+        // Two calls total (down from N+1): name-status + unified diff
+        let (status_output, diff_output) = tokio::try_join!(
+            self.run_git(&["diff", "--cached", "--name-status", "--no-renames"]),
+            self.run_git(&[
+                "diff",
+                "--cached",
+                "--no-ext-diff",
+                "--unified=3",
+                "--no-renames"
+            ]),
+        )?;
+
+        let file_diffs = Self::split_unified_diff(&diff_output);
+
         let mut files = Vec::new();
         let mut stats = DiffStats::default();
-
-        let status_output = String::from_utf8_lossy(&output.stdout);
 
         for line in status_output.lines() {
             if line.is_empty() {
@@ -74,11 +96,14 @@ impl GitService {
             let is_binary = Self::is_binary_path(&file_path);
 
             if is_binary {
-                continue; // Skip binary files
+                continue;
             }
 
-            // Get diff content
-            let diff = self.get_file_diff(&file_path, max_file_lines)?;
+            let diff = file_diffs
+                .get(parts[1])
+                .map(|d| Self::truncate_diff(d, max_file_lines))
+                .unwrap_or_default();
+
             let (additions, deletions) = Self::count_changes(&diff);
 
             files.push(FileChange {
@@ -103,33 +128,61 @@ impl GitService {
         Ok(StagedChanges { files, stats })
     }
 
-    fn get_file_diff(&self, path: &Path, max_lines: usize) -> Result<String> {
-        // Use git command for reliable diff output
-        // --no-ext-diff: don't use external diff tools
-        // --unified=3: standard 3 lines of context
-        let output = std::process::Command::new("git")
-            .args(["diff", "--cached", "--no-ext-diff", "--unified=3", "--"])
-            .arg(path)
-            .current_dir(&self.work_dir)
-            .output()?;
+    /// Split a unified diff into per-file sections keyed by file path.
+    fn split_unified_diff(diff: &str) -> HashMap<String, String> {
+        let mut result = HashMap::new();
+        let mut current_path: Option<String> = None;
+        let mut current_lines: Vec<&str> = Vec::new();
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::Git(stderr.to_string()));
+        for line in diff.lines() {
+            if line.starts_with("diff --git ") {
+                // Save previous file's accumulated diff
+                if let Some(path) = current_path.take() {
+                    result.insert(path, current_lines.join("\n"));
+                }
+                current_lines.clear();
+            }
+
+            // Extract path from +++ header (reliable for added/modified files)
+            if let Some(path) = line.strip_prefix("+++ b/") {
+                current_path = Some(path.to_string());
+            }
+            // For deleted files, +++ is /dev/null — use --- header instead
+            if line == "+++ /dev/null" {
+                if let Some(last_minus) =
+                    current_lines.iter().rev().find(|l| l.starts_with("--- a/"))
+                {
+                    if let Some(path) = last_minus.strip_prefix("--- a/") {
+                        current_path = Some(path.to_string());
+                    }
+                }
+            }
+
+            current_lines.push(line);
         }
 
-        let diff = String::from_utf8_lossy(&output.stdout);
-        let lines: Vec<&str> = diff.lines().take(max_lines).collect();
+        // Don't forget the last file
+        if let Some(path) = current_path {
+            result.insert(path, current_lines.join("\n"));
+        }
 
-        Ok(lines.join("\n"))
+        result
     }
 
+    fn truncate_diff(diff: &str, max_lines: usize) -> String {
+        let lines: Vec<&str> = diff.lines().take(max_lines).collect();
+        lines.join("\n")
+    }
+
+    // ─── File Content ───
+
     /// Get staged file content (from index)
-    pub fn get_staged_content(&self, path: &Path) -> Option<String> {
-        let output = std::process::Command::new("git")
+    pub async fn get_staged_content(&self, path: &Path) -> Option<String> {
+        let output: std::process::Output = Command::new("git")
             .args(["show", &format!(":0:{}", path.display())])
             .current_dir(&self.work_dir)
             .output()
+            .await
             .ok()?;
 
         if output.status.success() {
@@ -140,11 +193,12 @@ impl GitService {
     }
 
     /// Get HEAD file content
-    pub fn get_head_content(&self, path: &Path) -> Option<String> {
-        let output = std::process::Command::new("git")
+    pub async fn get_head_content(&self, path: &Path) -> Option<String> {
+        let output: std::process::Output = Command::new("git")
             .args(["show", &format!("HEAD:{}", path.display())])
             .current_dir(&self.work_dir)
             .output()
+            .await
             .ok()?;
 
         if output.status.success() {
@@ -153,6 +207,8 @@ impl GitService {
             None
         }
     }
+
+    // ─── Diff Parsing ───
 
     fn count_changes(diff: &str) -> (usize, usize) {
         let mut additions = 0;
@@ -199,11 +255,14 @@ impl GitService {
         )
     }
 
-    pub fn commit(&self, message: &str) -> Result<()> {
-        let output = std::process::Command::new("git")
+    // ─── Commit ───
+
+    pub async fn commit(&self, message: &str) -> Result<()> {
+        let output = Command::new("git")
             .args(["commit", "-m", message])
             .current_dir(&self.work_dir)
-            .output()?;
+            .output()
+            .await?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
