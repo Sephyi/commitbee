@@ -84,6 +84,18 @@ pub struct Config {
     #[serde(default = "default_max_context_chars")]
     pub max_context_chars: usize,
 
+    /// Request timeout in seconds (default 300)
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
+
+    /// LLM temperature (0.0-2.0, default 0.3)
+    #[serde(default = "default_temperature")]
+    pub temperature: f32,
+
+    /// Maximum tokens to generate (default 256)
+    #[serde(default = "default_num_predict")]
+    pub num_predict: u32,
+
     /// Commit message format options
     #[serde(default)]
     pub format: CommitFormat,
@@ -105,6 +117,15 @@ fn default_max_diff_lines() -> usize {
 fn default_max_file_lines() -> usize {
     100
 }
+fn default_timeout_secs() -> u64 {
+    300
+}
+fn default_temperature() -> f32 {
+    0.3
+}
+fn default_num_predict() -> u32 {
+    256
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -116,6 +137,9 @@ impl Default for Config {
             max_diff_lines: default_max_diff_lines(),
             max_file_lines: default_max_file_lines(),
             max_context_chars: default_max_context_chars(),
+            timeout_secs: default_timeout_secs(),
+            temperature: default_temperature(),
+            num_predict: default_num_predict(),
             format: CommitFormat::default(),
         }
     }

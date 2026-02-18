@@ -24,6 +24,15 @@ pub enum Error {
     #[error("Potential secrets detected: {patterns:?}. Use --allow-secrets to proceed.")]
     SecretsDetected { patterns: Vec<String> },
 
+    #[error("Cannot connect to Ollama at {host}. Is it running?")]
+    OllamaNotRunning { host: String },
+
+    #[error("Model '{model}' not found. Available: {}", available.join(", "))]
+    ModelNotFound {
+        model: String,
+        available: Vec<String>,
+    },
+
     #[error("Provider '{provider}' error: {message}")]
     Provider { provider: String, message: String },
 

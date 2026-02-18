@@ -135,6 +135,7 @@ impl App {
         ));
 
         let provider = llm::create_provider(&self.config)?;
+        provider.verify().await?;
 
         // Setup streaming output
         let (tx, mut rx) = mpsc::channel::<String>(64);

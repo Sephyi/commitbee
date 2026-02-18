@@ -16,6 +16,9 @@ fn default_config_values() {
     assert_eq!(config.max_diff_lines, 500);
     assert_eq!(config.max_file_lines, 100);
     assert_eq!(config.max_context_chars, 24000);
+    assert_eq!(config.timeout_secs, 300);
+    assert!((config.temperature - 0.3).abs() < f32::EPSILON);
+    assert_eq!(config.num_predict, 256);
     assert!(config.format.include_body);
     assert!(config.format.include_scope);
     assert!(config.format.lowercase_subject);

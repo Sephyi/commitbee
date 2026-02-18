@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::time::Duration;
+
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -15,6 +17,8 @@ pub struct OllamaProvider {
     client: Client,
     host: String,
     model: String,
+    temperature: f32,
+    num_predict: u32,
 }
 
 #[derive(Serialize)]
@@ -23,6 +27,13 @@ struct GenerateRequest {
     prompt: String,
     system: String,
     stream: bool,
+    options: OllamaOptions,
+}
+
+#[derive(Serialize)]
+struct OllamaOptions {
+    temperature: f32,
+    num_predict: u32,
 }
 
 const SYSTEM_PROMPT: &str = r#"You are a commit message generator. Analyze git diffs and output JSON commit messages.
@@ -42,14 +53,77 @@ struct GenerateResponse {
     done: bool,
 }
 
+#[derive(Deserialize)]
+struct TagsResponse {
+    models: Vec<ModelInfo>,
+}
+
+#[derive(Deserialize)]
+struct ModelInfo {
+    name: String,
+}
+
 impl OllamaProvider {
     pub fn new(config: &Config) -> Self {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(config.timeout_secs))
+            .build()
+            .unwrap_or_default();
+
         Self {
-            client: Client::new(),
+            client,
             // Sanitize: remove trailing slashes to avoid //api/generate
             host: config.ollama_host.trim_end_matches('/').to_string(),
             model: config.model.clone(),
+            temperature: config.temperature,
+            num_predict: config.num_predict,
         }
+    }
+
+    /// Check Ollama connectivity and return available model names
+    pub async fn health_check(&self) -> Result<Vec<String>> {
+        let url = format!("{}/api/tags", self.host);
+
+        let response = self.client.get(&url).send().await.map_err(|e| {
+            if e.is_connect() {
+                Error::OllamaNotRunning {
+                    host: self.host.clone(),
+                }
+            } else {
+                Error::Provider {
+                    provider: "ollama".into(),
+                    message: e.to_string(),
+                }
+            }
+        })?;
+
+        let tags: TagsResponse = response.json().await.map_err(|e| Error::Provider {
+            provider: "ollama".into(),
+            message: format!("failed to parse /api/tags response: {e}"),
+        })?;
+
+        Ok(tags.models.into_iter().map(|m| m.name).collect())
+    }
+
+    /// Verify that the configured model is available
+    pub async fn verify_model(&self) -> Result<()> {
+        let available = self.health_check().await?;
+
+        // Ollama model names may include `:latest` tag
+        let model_matches = available.iter().any(|name| {
+            name == &self.model
+                || name == &format!("{}:latest", self.model)
+                || name.strip_suffix(":latest") == Some(&self.model)
+        });
+
+        if !model_matches {
+            return Err(Error::ModelNotFound {
+                model: self.model.clone(),
+                available,
+            });
+        }
+
+        Ok(())
     }
 
     pub async fn generate(
@@ -68,12 +142,29 @@ impl OllamaProvider {
                 prompt: prompt.to_string(),
                 system: SYSTEM_PROMPT.to_string(),
                 stream: true,
+                options: OllamaOptions {
+                    temperature: self.temperature,
+                    num_predict: self.num_predict,
+                },
             })
             .send()
             .await
-            .map_err(|e| Error::Provider {
-                provider: "ollama".into(),
-                message: e.to_string(),
+            .map_err(|e| {
+                if e.is_connect() {
+                    Error::OllamaNotRunning {
+                        host: self.host.clone(),
+                    }
+                } else if e.is_timeout() {
+                    Error::Provider {
+                        provider: "ollama".into(),
+                        message: "request timed out".into(),
+                    }
+                } else {
+                    Error::Provider {
+                        provider: "ollama".into(),
+                        message: e.to_string(),
+                    }
+                }
             })?;
 
         if !response.status().is_success() {

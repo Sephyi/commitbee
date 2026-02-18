@@ -33,6 +33,13 @@ impl LlmBackend {
             Self::Ollama(p) => p.name(),
         }
     }
+
+    /// Verify provider connectivity and model availability
+    pub async fn verify(&self) -> Result<()> {
+        match self {
+            Self::Ollama(p) => p.verify_model().await,
+        }
+    }
 }
 
 pub fn create_provider(config: &Config) -> Result<LlmBackend> {
