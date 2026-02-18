@@ -154,7 +154,9 @@ impl App {
             return Err(Error::Cancelled);
         }
 
-        // Step 5: Generate commit message
+        // Step 5: Generate commit message(s)
+        let num_candidates = self.cli.generate;
+
         self.print_status(&format!(
             "Contacting {} ({})...",
             self.config.provider, self.config.model
@@ -164,46 +166,85 @@ impl App {
         debug!(provider = provider.name(), "verifying provider");
         provider.verify().await?;
 
-        // Setup streaming output
-        let (tx, mut rx) = mpsc::channel::<String>(64);
+        let mut candidates: Vec<String> = Vec::new();
 
-        // Print streaming tokens (cancellable)
-        let cancel_for_printer = self.cancel_token.clone();
-        let print_handle = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = cancel_for_printer.cancelled() => break,
-                    token = rx.recv() => {
-                        match token {
-                            Some(t) => eprint!("{}", t),
-                            None => break,
+        for i in 0..num_candidates {
+            if self.cancel_token.is_cancelled() {
+                return Err(Error::Cancelled);
+            }
+
+            if num_candidates > 1 {
+                eprintln!(
+                    "{} Generating candidate {}/{}...",
+                    style("info:").cyan(),
+                    i + 1,
+                    num_candidates
+                );
+            } else {
+                eprintln!("{} Generating...\n", style("info:").cyan());
+            }
+
+            let (tx, mut rx) = mpsc::channel::<String>(64);
+
+            // Only stream output for single generation
+            let show_stream = num_candidates == 1;
+            let cancel_for_printer = self.cancel_token.clone();
+            let print_handle = tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        _ = cancel_for_printer.cancelled() => break,
+                        token = rx.recv() => {
+                            match token {
+                                Some(t) if show_stream => eprint!("{}", t),
+                                Some(_) => {} // Suppress streaming for multi-gen
+                                None => break,
+                            }
                         }
                     }
                 }
+            });
+
+            let raw_message = provider
+                .generate(&prompt, tx, self.cancel_token.clone())
+                .await?;
+
+            let _ = print_handle.await;
+
+            if num_candidates == 1 {
+                eprintln!(); // Newline after streaming
             }
-        });
 
-        eprintln!("{} Generating...\n", style("info:").cyan());
+            if raw_message.trim().is_empty() {
+                warn!(candidate = i + 1, "empty response from LLM, skipping");
+                continue;
+            }
 
-        let raw_message = provider
-            .generate(&prompt, tx, self.cancel_token.clone())
-            .await?;
+            debug!(
+                raw_len = raw_message.len(),
+                candidate = i + 1,
+                "sanitizing LLM response"
+            );
+            match CommitSanitizer::sanitize(&raw_message, &self.config.format) {
+                Ok(msg) => candidates.push(msg),
+                Err(e) => {
+                    warn!(candidate = i + 1, error = %e, "failed to sanitize candidate");
+                }
+            }
+        }
 
-        // Wait for printer to finish
-        let _ = print_handle.await;
-
-        eprintln!(); // Newline after streaming
-
-        if raw_message.trim().is_empty() {
+        if candidates.is_empty() {
             return Err(Error::Provider {
                 provider: provider.name().into(),
-                message: "Empty response received".into(),
+                message: "No valid commit messages generated".into(),
             });
         }
 
-        // Step 6: Sanitize and validate the commit message
-        debug!(raw_len = raw_message.len(), "sanitizing LLM response");
-        let message = CommitSanitizer::sanitize(&raw_message, &self.config.format)?;
+        // Step 6: Select message
+        let message = if candidates.len() == 1 {
+            candidates.into_iter().next().unwrap()
+        } else {
+            self.select_candidate(&candidates)?
+        };
 
         // Step 7: Confirm and commit
         if self.cli.dry_run {
@@ -211,7 +252,6 @@ impl App {
             return Ok(());
         }
 
-        // TTY detection for git hook compatibility
         let is_interactive = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
 
         if !self.cli.yes {
@@ -222,9 +262,12 @@ impl App {
                 return Ok(());
             }
 
-            eprintln!("\n{}", style("Generated commit message:").bold());
-            eprintln!("{}", style(&message).green());
-            eprintln!();
+            // For single candidate (already shown via streaming), just confirm
+            if num_candidates == 1 {
+                eprintln!("\n{}", style("Generated commit message:").bold());
+                eprintln!("{}", style(&message).green());
+                eprintln!();
+            }
 
             let confirm = Confirm::new()
                 .with_prompt("Create commit with this message?")
@@ -236,7 +279,6 @@ impl App {
             }
         }
 
-        // Create commit
         git.commit(&message).await?;
 
         eprintln!("{} Committed!", style("✓").green().bold());
@@ -360,6 +402,50 @@ impl App {
         eprintln!("{} Diagnostics complete.", style("✓").green().bold());
 
         Ok(())
+    }
+
+    // ─── Candidate Selection ───
+
+    fn select_candidate(&self, candidates: &[String]) -> Result<String> {
+        if self.cli.yes {
+            return Ok(candidates[0].clone());
+        }
+
+        let is_interactive = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
+
+        if !is_interactive || self.cli.dry_run {
+            // Non-interactive: print all candidates
+            for (i, msg) in candidates.iter().enumerate() {
+                eprintln!("\n{}", style(format!("--- Candidate {} ---", i + 1)).dim());
+                println!("{}", msg);
+            }
+            return Ok(candidates[0].clone());
+        }
+
+        // Interactive: show summary of each and let user pick
+        eprintln!();
+        let items: Vec<String> = candidates
+            .iter()
+            .enumerate()
+            .map(|(i, msg)| {
+                let first_line = msg.lines().next().unwrap_or("(empty)");
+                format!("[{}] {}", i + 1, first_line)
+            })
+            .collect();
+
+        let selection = dialoguer::Select::new()
+            .with_prompt("Pick a commit message")
+            .items(&items)
+            .default(0)
+            .interact()
+            .map_err(|e| Error::Dialog(e.to_string()))?;
+
+        let chosen = &candidates[selection];
+        eprintln!("\n{}", style("Selected:").bold());
+        eprintln!("{}", style(chosen).green());
+        eprintln!();
+
+        Ok(chosen.clone())
     }
 
     // ─── Hook Commands ───

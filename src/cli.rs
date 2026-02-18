@@ -29,6 +29,10 @@ pub struct Cli {
     #[arg(long)]
     pub allow_secrets: bool,
 
+    /// Generate N candidate messages (default 1, max 5)
+    #[arg(short = 'n', long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=5))]
+    pub generate: u8,
+
     /// Show the prompt sent to LLM
     #[arg(long)]
     pub show_prompt: bool,
