@@ -8,3 +8,4 @@ pub mod git;
 pub mod llm;
 pub mod safety;
 pub mod sanitizer;
+pub mod splitter;
