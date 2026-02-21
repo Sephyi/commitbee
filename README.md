@@ -15,9 +15,6 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 CommitBee is a Rust-native CLI tool that uses **tree-sitter semantic analysis** and LLMs to generate high-quality [conventional commit](https://www.conventionalcommits.org/) messages. Unlike every other tool in this space, CommitBee doesn't just pipe raw `git diff` output to an LLM — it parses both the staged and HEAD versions of your files, maps diff hunks to symbol spans (functions, classes, methods), and provides structured semantic context. This produces fundamentally better commit messages, especially for complex multi-file changes.
 
-> [!IMPORTANT]
-> This project is in early development. If you're not planning to actively contribute toward the first stable release, I'd recommend waiting until a release is published before adopting it. The first release will signal that the project is ready for general use.
-
 ## ✨ What Makes CommitBee Different
 
 | Feature                              | CommitBee | Others          |
