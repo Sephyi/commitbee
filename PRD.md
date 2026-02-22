@@ -11,7 +11,7 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 **Status**: Active
 **Author**: Sephyi + Claude
 
-**Revision 2.3**: Version alignment (2026-02-22) — v0.2.0 shipped containing all Phase 1 (stability) and Phase 2 (polish/providers) features. Roadmap renumbered: Phase 3 (differentiation) is now v0.3.0, Phase 4 (market leadership) is now v0.4.0+.
+**Revision 2.5**: PRD structural cleanup (2026-02-22) — Fixed FR placement inconsistencies: FR-039 definition moved from Section 4.3 to Section 4.2 (shipped in v0.2.0); FR-040 placed only in Phase 2 roadmap (ships with v0.3.0, not v0.2.0); FR-024 (P1 number in P3 context) merged back into FR-058 to preserve decade numbering convention.
 
 **Revision 2.4**: Post-v0.2.0 spec anchoring (2026-02-22) — Conventional Commits 1.0.0 spec compliance: `!` suffix on breaking changes, `BREAKING CHANGE:` footer (emitted regardless of `include_body`), commit type list synced with `CommitType::ALL` via compile-time test, symbol deduplication in context builder (prevents misleading LLM when function bodies change but definition lines don't move). Test count: 133.
 
@@ -374,13 +374,16 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **CLI**: `--no-split` disables the feature. `--yes` and non-TTY mode skip split suggestion (default to single commit).
 - **Acceptance**: Tested with 11 dedicated integration tests covering single module, multi-module, all-tests, all-docs, same-type collapse, test attachment, and sort order.
 
-#### FR-024: Commit History Style Learning (Experimental, Future)
+#### FR-039: Config Validation ✅ (shipped in v0.2.0)
 
-- **What**: Analyze existing commit history in the repository to learn the project's commit style, then align generated messages accordingly. This includes scope naming conventions, type usage patterns, subject phrasing style, and body conventions.
-- **Status**: Planned (experimental — may diverge from strict Conventional Commits compliance)
-- **Priority**: P3 (future exploration)
-- **Rationale**: GitHub Copilot does this implicitly. Making it explicit and configurable would be a differentiator. However, blindly mimicking a repository's history could produce non-compliant messages if the history is inconsistent.
-- **Acceptance**: Feature-gated behind `--experimental-history` or a config flag. Samples last N commits, extracts patterns, injects as additional context in the LLM prompt. Does not override conventional commits structure — only influences scope naming and subject phrasing style.
+- **What**: Invalid config values only fail at runtime.
+- **Acceptance**:
+  - `commitbee config check` validates configuration
+  - `ollama_host` parsed as URL during config load
+  - `max_diff_lines` bounded (10-10000)
+  - Provider enum validated at config time, not runtime
+  - Ollama health check (`/api/tags`) available as `commitbee doctor`
+  - Config file permission warning if world-readable and contains keys
 
 ### 4.3 P2 — Next (v0.3.0: Differentiation)
 
@@ -447,18 +450,16 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **What**: No visual feedback during tree-sitter analysis or LLM model loading.
 - **Acceptance**: Spinner during "Analyzing code..." and "Generating message..." phases using `indicatif`. Suppressed in non-TTY mode. Respects `NO_COLOR`.
 
-#### FR-039: Config Validation
+#### FR-040: Conventional Commits 1.0.0 Spec Anchoring ✅ (implemented post-v0.2.0)
 
-- **What**: Invalid config values only fail at runtime.
+- **What**: Full compliance with the Conventional Commits 1.0.0 specification for breaking changes and type list integrity.
 - **Acceptance**:
-  - `commitbee config check` validates configuration
-  - `ollama_host` parsed as URL during config load
-  - `max_diff_lines` bounded (10-10000)
-  - Provider enum validated at config time, not runtime
-  - Ollama health check (`/api/tags`) available as `commitbee doctor`
-  - Config file permission warning if world-readable and contains keys
-
-**Note**: FR-039 should be prioritized early in v0.3.0 development, as config validation underpins reliable behavior for all other P1 features.
+  - Breaking changes emit `!` suffix on the commit first line (e.g., `feat!: remove v1 API`)
+  - `BREAKING CHANGE:` footer always emitted for breaking changes regardless of `include_body` config (it is machine-readable metadata, not prose)
+  - Footer wrapped at 72 chars with continuation lines indented two spaces (git-trailer compatible)
+  - Single shared `SYSTEM_PROMPT` constant in `llm/mod.rs` used by all providers; commit type list kept in sync with `CommitType::ALL` via compile-time test
+  - Sanitizer normalizes string literal `"null"` → non-breaking (defensive handling for model template quirk)
+  - Symbol deduplication in context builder: functions modified in-place no longer appear as both Added and Removed, preventing misleading LLM context
 
 ### 4.4 P3 — Future (v0.4.0+: Market Leadership)
 
@@ -510,10 +511,12 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
   all-languages = ["lang-java", "lang-cpp", "lang-ruby", "lang-csharp", ...]
   ```
 
-#### FR-058: Learning from Commit History
+#### FR-058: Commit History Style Learning (Experimental)
 
-- **What**: Analyze existing commit history to match the project's commit style.
-- **Rationale**: GitHub Copilot does this. Would allow commitbee to adapt to any project's conventions.
+- **What**: Analyze existing commit history in the repository to learn the project's commit style, then align generated messages accordingly. This includes scope naming conventions, type usage patterns, subject phrasing style, and body conventions.
+- **Status**: Planned (experimental — may diverge from strict Conventional Commits compliance)
+- **Rationale**: GitHub Copilot does this implicitly. Making it explicit and configurable would be a differentiator. However, blindly mimicking a repository's history could produce non-compliant messages if the history is inconsistent.
+- **Acceptance**: Feature-gated behind `--experimental-history` or a config flag. Samples last N commits, extracts patterns, injects as additional context in the LLM prompt. Does not override conventional commits structure — only influences scope naming and subject phrasing style.
 
 ## 5. Security Requirements
 
@@ -883,15 +886,15 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-020: Async git operations ✅
 - FR-021: Single-pass diff parsing ✅
 - FR-022: Integration test suite ✅ (133 tests)
-- Conventional Commits 1.0.0 spec anchoring: `!` suffix for breaking changes, `BREAKING CHANGE:` footer (emitted regardless of `include_body`), commit type list synced with `CommitType::ALL` via compile-time test ✅
 - FR-023: Commit splitting ✅
-- FR-039: Config validation & doctor command ✅
+- FR-039: Config validation & doctor command ✅ (shipped in v0.2.0)
 - TR-005: CI pipeline ✅
 
 ### Phase 2: Differentiation (v0.3.0)
 
 **Goal**: Features that set commitbee apart from competitors.
 
+- FR-040: Conventional Commits 1.0.0 spec anchoring ✅ (already implemented)
 - FR-030: Custom prompt templates
 - FR-031: Exclude files
 - FR-032: Multi-language commit messages
@@ -916,7 +919,7 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-055: Version bumping
 - FR-056: GitHub Action
 - FR-057: Additional language support (feature-gated)
-- FR-058: Learning from commit history (see also FR-024 for experimental approach)
+- FR-058: Commit history style learning (experimental)
 
 ## 12. Success Metrics
 
