@@ -1,0 +1,7 @@
+---
+source: tests/sanitizer.rs
+expression: result
+---
+feat!: drop v1 API
+
+BREAKING CHANGE: v1 endpoints removed

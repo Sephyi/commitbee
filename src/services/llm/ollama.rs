@@ -13,6 +13,8 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
+use super::SYSTEM_PROMPT;
+
 pub struct OllamaProvider {
     client: Client,
     host: String,
@@ -35,20 +37,6 @@ struct OllamaOptions {
     temperature: f32,
     num_predict: u32,
 }
-
-const SYSTEM_PROMPT: &str = r#"You are a commit message generator. Analyze git diffs and output JSON commit messages.
-
-RULES:
-1. Read the diff carefully - describe the ACTUAL changes you see
-2. The subject must be SPECIFIC - mention what was added/changed/fixed
-3. Output ONLY valid JSON
-4. Start subject with lowercase verb: add, fix, update, remove, refactor
-5. Include a body (1-3 sentences) for non-trivial changes explaining WHY the change was made. Use null only for trivial changes like typo fixes or renames.
-
-BAD subject: "describe what changed" or "update code"
-GOOD subject: "add rate limiting to api endpoints" or "fix null check in user service"
-GOOD body: "The previous implementation used byte indexing which panics on multi-byte characters. Switch to char_indices for safe truncation."
-BAD body: "Updated the code to fix the bug" (too vague)"#;
 
 #[derive(Deserialize)]
 struct GenerateResponse {

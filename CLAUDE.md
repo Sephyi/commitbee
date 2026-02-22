@@ -27,9 +27,9 @@ cargo build --release
 1. **Full file parsing** - Parse staged/HEAD blobs, map diff hunks to symbol spans
 2. **Token budget** - 24K char limit (~6K tokens), prioritizes diff over symbols
 3. **TTY detection** - Safe for git hooks (graceful non-interactive fallback)
-4. **Commit sanitizer** - Validates LLM output, supports JSON + plain text
-5. **Structured JSON output** - Prompt requests JSON for reliable parsing
-6. **System prompt** - Ollama API gets a dedicated system prompt to guide smaller models
+4. **Commit sanitizer** - Validates LLM output, supports JSON + plain text; emits `BREAKING CHANGE:` footer and `!` suffix for breaking changes (footer emitted regardless of `include_body` — it is machine-readable metadata)
+5. **Structured JSON output** - Prompt requests JSON for reliable parsing; schema includes `breaking_change: Option<String>` field
+6. **System prompt** - Single `pub(crate) const SYSTEM_PROMPT` in `llm/mod.rs`, shared by all providers; includes commit type list (synced with `CommitType::ALL`), project-agnostic breaking change threshold (only when existing users or dependents must change their code/config/scripts to stay compatible — not for new features, bug fixes, or internal refactors), and 72-char subject limit
 7. **Simplified user prompt** - Concise format optimized for <4B parameter models
 8. **Commit splitting** - Detects multi-concern changes, suggests splitting into separate commits
 9. **Body line wrapping** - Sanitizer wraps body text at 72 characters
@@ -100,10 +100,10 @@ src/
     ├── analyzer.rs      # AnalyzerService (tree-sitter)
     ├── context.rs       # ContextBuilder (token budget)
     ├── safety.rs        # Secret scanning, conflict detection
-    ├── sanitizer.rs     # CommitSanitizer (JSON + plain text)
+    ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
     ├── splitter.rs      # CommitSplitter (multi-commit detection)
     └── llm/
-        ├── mod.rs       # LlmProvider trait + enum dispatch
+        ├── mod.rs       # LlmProvider trait + enum dispatch + shared SYSTEM_PROMPT
         ├── ollama.rs    # OllamaProvider (streaming NDJSON)
         ├── openai.rs    # OpenAiProvider (SSE streaming)
         └── anthropic.rs # AnthropicProvider (SSE streaming)
@@ -112,6 +112,7 @@ src/
 ## References
 
 - **PRD & Roadmap**: `PRD.md`
+- **Conventional Commits spec anchoring**: `.claude/plans/PLAN_CONVENTIONAL_COMMITS_SPEC.md`
 - **v0.3.0 enhancement plan**: `.claude/plans/PLAN_V030_ENHANCEMENTS.md`
 - **Implementation plan (v1, outdated)**: `.claude/plans/PLAN_COMMITBEE_V1.md` — superseded by PRD v2.1
 
@@ -133,7 +134,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (118 tests)
+cargo test                    # All tests (133 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -195,6 +196,15 @@ git add some-file.rs
 
 - **No streaming during split generation**: When commit splitting generates per-group messages, LLM output is not streamed to the terminal (tokens are consumed silently). Single-commit generation streams normally. Low priority — split generation is fast since each sub-prompt is smaller.
 - **Thinking model output**: Models with thinking enabled (e.g. `qwen3:4b` default) prepend `<think>...</think>` blocks that can break sanitizer parsing. The `hopephoto/Qwen3-4B-Instruct-2507_q8` variant does not exhibit this. Fix needed: strip thinking blocks in sanitizer pre-processing and/or pass `think: false` in Ollama API options.
+
+### Post-Implementation Documentation TODOs
+
+After `PLAN_CONVENTIONAL_COMMITS_SPEC` is implemented, update:
+
+- **PRD.md PE-001**: Change "Includes 2-3 few-shot examples" → the new system prompt uses a schema template (no shot examples). Update the PE-001 description accordingly.
+- **PRD.md Phase 2 roadmap**: Add "Conventional Commits 1.0.0 spec anchoring (`!` suffix, `BREAKING CHANGE:` footer, spec-compliant type list sync)" to the v0.3.0 feature list.
+- **README.md roadmap**: Pre-existing version mismatch — README shows v0.3.0 as "Polish & Providers ✅ Complete" but PRD says v0.2.0 shipped both Phase 1 and Phase 2, and v0.3.0 is the upcoming Differentiation release. Reconcile before the v0.3.0 release.
+- **README.md Running Tests**: Update `118 tests` count.
 
 ### Markdown Conventions
 

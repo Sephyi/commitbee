@@ -1,0 +1,8 @@
+---
+source: tests/sanitizer.rs
+expression: result
+---
+feat(api)!: remove deprecated endpoint
+
+BREAKING CHANGE: GET /api/v1/users removed, use GET /api/v2/users
+  instead

@@ -1,0 +1,7 @@
+---
+source: tests/sanitizer.rs
+expression: result
+---
+feat!: remove deprecated endpoint
+
+BREAKING CHANGE: v1 endpoint removed

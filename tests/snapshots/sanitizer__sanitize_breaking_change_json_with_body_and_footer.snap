@@ -1,0 +1,10 @@
+---
+source: tests/sanitizer.rs
+expression: result
+---
+chore(config)!: rename timeout key
+
+Aligns the config schema with the 2.0 release standard.
+
+BREAKING CHANGE: config key 'timeout' renamed to 'timeout_secs', update
+  your commitbee.toml
