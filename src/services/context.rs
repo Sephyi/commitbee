@@ -51,8 +51,27 @@ impl ContextBuilder {
         let diff_budget = remaining.saturating_sub(remaining / 5).max(MIN_DIFF_BUDGET);
         let symbol_budget = remaining.saturating_sub(diff_budget);
 
-        let symbols_added = Self::format_symbols_with_budget(symbols, true, symbol_budget / 2);
-        let symbols_removed = Self::format_symbols_with_budget(symbols, false, symbol_budget / 2);
+        // Deduplicate: a symbol that appears in both added and removed with the same
+        // kind+name+file was modified in-place (its definition line didn't move but its
+        // content changed). Showing it as both Added and Removed misleads the LLM into
+        // treating content changes as symbol creations/deletions. Drop both sides.
+        let symbols_deduped: Vec<CodeSymbol> = symbols
+            .iter()
+            .filter(|s| {
+                !symbols.iter().any(|other| {
+                    other.is_added != s.is_added
+                        && other.kind == s.kind
+                        && other.name == s.name
+                        && other.file == s.file
+                })
+            })
+            .cloned()
+            .collect();
+
+        let symbols_added =
+            Self::format_symbols_with_budget(&symbols_deduped, true, symbol_budget / 2);
+        let symbols_removed =
+            Self::format_symbols_with_budget(&symbols_deduped, false, symbol_budget / 2);
 
         // Diff gets remaining budget
         let actual_diff_budget = max_context
