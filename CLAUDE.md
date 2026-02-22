@@ -194,6 +194,7 @@ git add some-file.rs
 ### Known Issues
 
 - **No streaming during split generation**: When commit splitting generates per-group messages, LLM output is not streamed to the terminal (tokens are consumed silently). Single-commit generation streams normally. Low priority — split generation is fast since each sub-prompt is smaller.
+- **Thinking model output**: Models with thinking enabled (e.g. `qwen3:4b` default) prepend `<think>...</think>` blocks that can break sanitizer parsing. The `hopephoto/Qwen3-4B-Instruct-2507_q8` variant does not exhibit this. Fix needed: strip thinking blocks in sanitizer pre-processing and/or pass `think: false` in Ollama API options.
 
 ### Markdown Conventions
 

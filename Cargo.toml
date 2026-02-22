@@ -11,7 +11,13 @@ description = "AI-powered commit message generator using tree-sitter semantic an
 license = "PolyForm-Noncommercial-1.0.0"
 repository = "https://github.com/Sephyi/commitbee"
 readme = "README.md"
-keywords = ["git", "commit-message", "conventional-commits", "tree-sitter", "llm"]
+keywords = [
+  "git",
+  "commit-message",
+  "conventional-commits",
+  "tree-sitter",
+  "llm",
+]
 categories = ["development-tools", "command-line-utilities"]
 exclude = [".github/", "tests/snapshots/"]
 
@@ -21,7 +27,13 @@ clap = { version = "4.5", features = ["derive", "env"] }
 clap_complete = "4.5"
 
 # Async runtime
-tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "signal", "sync", "process"] }
+tokio = { version = "1.43", features = [
+  "rt-multi-thread",
+  "macros",
+  "signal",
+  "sync",
+  "process",
+] }
 tokio-stream = "0.1"
 tokio-util = "0.7"
 

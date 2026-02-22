@@ -6,10 +6,12 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 2.2
-**Date**: 2026-02-18
-**Status**: Draft — pending approval
-**Author**: Sephyi + Claude investigation team
+**Version**: 2.3
+**Date**: 2026-02-22
+**Status**: Active
+**Author**: Sephyi + Claude
+
+**Revision 2.3**: Version alignment (2026-02-22) — v0.2.0 shipped containing all Phase 1 (stability) and Phase 2 (polish/providers) features. Roadmap renumbered: Phase 3 (differentiation) is now v0.3.0, Phase 4 (market leadership) is now v0.4.0+.
 
 **Revision 2.2**: Implementation status update + commit splitting (2026-02-18) — added FR-023 (commit splitting), FR-024 (commit history style learning, experimental), updated competitive matrix and roadmap to reflect v0.3.0 features already implemented (OpenAI, Anthropic, hooks, multi-generate, completions, figment config, miette, tracing, single-pass diff, async git, keyring, 118 tests). Updated architecture with `splitter.rs`.
 
@@ -32,8 +34,8 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 
 ### Compatibility Policy
 
-- **v0.2.0** is a stability release: config format preserved, no breaking CLI changes.
-- **v0.3.0+** may introduce breaking changes (new config system via figment, CLI subcommand restructuring). Migration documentation will accompany any breaking release.
+- **v0.2.0** shipped with all Phase 1 (stability) and Phase 2 (polish/providers) features. Config format preserved, no breaking CLI changes.
+- **v0.3.0** (next release) is the differentiation release. May introduce breaking changes. Migration documentation will accompany any breaking release.
 
 ## 2. Competitive Landscape
 
@@ -204,7 +206,7 @@ pub struct App {
 
 ## 4. Feature Requirements
 
-### 4.1 P0 — Critical (v0.2.0: Stability & Correctness)
+### 4.1 P0 — Shipped (v0.2.0: Stability & Correctness)
 
 These are bugs, panics, and missing foundations that must be fixed before any new features.
 
@@ -249,7 +251,7 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **What**: `VALID_TYPES: &[&str]` in sanitizer and `CommitType` enum can desync.
 - **Acceptance**: `CommitType` provides `const ALL: &[&str]` used by both the sanitizer and any validation logic. No separate string list.
 
-### 4.2 P1 — High Priority (v0.3.0: Polish & Providers)
+### 4.2 P1 — Shipped (v0.2.0: Polish & Providers)
 
 #### FR-010: Rich Diagnostic Errors (miette)
 
@@ -376,7 +378,7 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **Rationale**: GitHub Copilot does this implicitly. Making it explicit and configurable would be a differentiator. However, blindly mimicking a repository's history could produce non-compliant messages if the history is inconsistent.
 - **Acceptance**: Feature-gated behind `--experimental-history` or a config flag. Samples last N commits, extracts patterns, injects as additional context in the LLM prompt. Does not override conventional commits structure — only influences scope naming and subject phrasing style.
 
-### 4.3 P2 — Medium Priority (v0.4.0: Differentiation)
+### 4.3 P2 — Next (v0.3.0: Differentiation)
 
 #### FR-030: Custom Prompt Templates
 
@@ -454,7 +456,7 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 
 **Note**: FR-039 should be prioritized early in v0.3.0 development, as config validation underpins reliable behavior for all other P1 features.
 
-### 4.4 P3 — Future (v1.0+: Market Leadership)
+### 4.4 P3 — Future (v0.4.0+: Market Leadership)
 
 #### FR-050: MCP Server Mode
 
@@ -853,24 +855,17 @@ opt-level = "z"  # or "s" — benchmark both
 
 ## 11. Phased Roadmap
 
-### Phase 1: Stability (v0.2.0)
+### Phase 1: Shipped (v0.2.0)
 
-**Goal**: Fix all critical bugs, add tests, clean up dependencies.
+**Goal**: Stability, correctness, rich providers, developer experience. All features below shipped in v0.2.0.
 
-- FR-001: Fix UTF-8 panics
-- FR-002: Include symbols in prompt (with fallback ladder)
-- FR-003: Unit test suite (including golden semantic fixtures)
-- FR-004: Remove unused dependencies
-- FR-005: Fix dead code
-- FR-006: Reduce tokio features
-- FR-007: CommitType single source of truth
-- TR-005: CI pipeline
-
-### Phase 2: Polish (v0.3.0)
-
-**Goal**: Rich errors, cloud providers, git hooks, developer experience.
-
-- FR-039: Config validation & doctor command ✅
+- FR-001: Fix UTF-8 panics ✅
+- FR-002: Include symbols in prompt (with fallback ladder) ✅
+- FR-003: Unit test suite (118 tests) ✅
+- FR-004: Remove unused dependencies ✅
+- FR-005: Fix dead code ✅
+- FR-006: Reduce tokio features ✅
+- FR-007: CommitType single source of truth ✅
 - FR-010: miette diagnostics ✅
 - FR-011: OpenAI-compatible provider (with streaming) ✅
 - FR-012: Anthropic provider (with streaming) ✅
@@ -885,8 +880,10 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-021: Single-pass diff parsing ✅
 - FR-022: Integration test suite ✅ (118 tests)
 - FR-023: Commit splitting ✅
+- FR-039: Config validation & doctor command ✅
+- TR-005: CI pipeline ✅
 
-### Phase 3: Differentiation (v0.4.0)
+### Phase 2: Differentiation (v0.3.0)
 
 **Goal**: Features that set commitbee apart from competitors.
 
@@ -902,7 +899,7 @@ opt-level = "z"  # or "s" — benchmark both
 - TR-006: Evaluation harness
 - TR-007: Fuzzing targets
 
-### Phase 4: Market Leadership (v1.0+)
+### Phase 3: Market Leadership (v0.4.0+)
 
 **Goal**: Features that make commitbee the definitive tool in the category.
 
@@ -965,9 +962,3 @@ This PRD was informed by:
 1. **Codebase analysis** — Line-by-line review of all 2,422 lines across 17 source files
 2. **Competitor analysis** — 30+ tools across TypeScript, Rust, Python, Go reviewed
 3. **Best practices research** — State-of-the-art Rust CLI patterns, LLM prompt engineering, tree-sitter techniques, security practices, testing strategies, distribution approaches
-
-Full research reports:
-
-- `/tmp/commitbee-codebase-analysis.md`
-- `/tmp/commitbee-competitor-analysis.md`
-- `/tmp/commitbee-best-practices.md`
