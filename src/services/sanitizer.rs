@@ -19,6 +19,7 @@ pub struct StructuredCommit {
     pub scope: Option<String>,
     pub subject: String,
     pub body: Option<String>,
+    pub breaking_change: Option<String>, // null or omitted = non-breaking
 }
 
 static SCOPE_REGEX: LazyLock<Regex> =
@@ -92,6 +93,30 @@ impl CommitSanitizer {
         } else {
             s.to_string()
         }
+    }
+
+    /// Format a breaking change description as a git-trailer-safe footer.
+    ///
+    /// Output:
+    ///   `BREAKING CHANGE: <first segment of description>`
+    ///   `  <continuation lines, indented two spaces>`
+    ///
+    /// `str::len()` is `const fn` since Rust 1.39 — `FIRST_LINE_BUDGET` is a
+    /// valid compile-time constant on MSRV 1.85.
+    fn format_breaking_footer(desc: &str) -> String {
+        const PREFIX: &str = "BREAKING CHANGE: ";
+        const FIRST_LINE_BUDGET: usize = 72 - PREFIX.len(); // 55
+
+        let wrapped = Self::wrap_body(desc.trim(), FIRST_LINE_BUDGET);
+        let mut lines = wrapped.lines();
+        let first = lines.next().unwrap_or_default();
+        let mut footer = format!("{}{}", PREFIX, first);
+        for line in lines {
+            footer.push('\n');
+            footer.push_str("  ");
+            footer.push_str(line);
+        }
+        footer
     }
 
     /// Parse and validate commit message from LLM output
@@ -176,6 +201,17 @@ impl CommitSanitizer {
             None
         };
 
+        // Normalize breaking_change: empty/whitespace-only/literal-"null" → None (5a)
+        let breaking_change: Option<String> = s
+            .breaking_change
+            .as_deref()
+            .filter(|bc| {
+                let t = bc.trim();
+                !t.is_empty() && !t.eq_ignore_ascii_case("null")
+            })
+            .map(|bc| bc.trim().to_string());
+        let is_breaking = breaking_change.is_some();
+
         // Format subject: optionally lowercase first char, no period
         let subject = {
             let trimmed = s.subject.trim().trim_end_matches('.');
@@ -190,10 +226,11 @@ impl CommitSanitizer {
             }
         };
 
-        // Build first line
+        // Build first line with optional ! for breaking changes (5b)
+        let bang = if is_breaking { "!" } else { "" };
         let first_line = match scope {
-            Some(ref sc) => format!("{}({}): {}", commit_type, sc, subject),
-            None => format!("{}: {}", commit_type, subject),
+            Some(ref sc) => format!("{}({}){}: {}", commit_type, sc, bang, subject),
+            None => format!("{}{}: {}", commit_type, bang, subject),
         };
 
         // Truncate if too long
@@ -203,17 +240,24 @@ impl CommitSanitizer {
             first_line
         };
 
-        // Add body if present and enabled
-        let message = if format.include_body {
+        // Body gated by include_body; footer always emitted when breaking (D4, 5d)
+        let body_section: Option<String> = if format.include_body {
             match &s.body {
-                Some(body) if !body.trim().is_empty() => {
-                    let wrapped = Self::wrap_body(body.trim(), 72);
-                    format!("{}\n\n{}", first_line, wrapped)
-                }
-                _ => first_line,
+                Some(body) if !body.trim().is_empty() => Some(Self::wrap_body(body.trim(), 72)),
+                _ => None,
             }
         } else {
-            first_line
+            None
+        };
+
+        let footer_section: Option<String> =
+            breaking_change.as_deref().map(Self::format_breaking_footer);
+
+        let message = match (body_section, footer_section) {
+            (Some(body), Some(footer)) => format!("{}\n\n{}\n\n{}", first_line, body, footer),
+            (Some(body), None) => format!("{}\n\n{}", first_line, body),
+            (None, Some(footer)) => format!("{}\n\n{}", first_line, footer),
+            (None, None) => first_line,
         };
 
         Ok(message)
@@ -274,7 +318,9 @@ impl CommitSanitizer {
 
         // Check for type prefix
         let has_valid_type = CommitType::ALL.iter().any(|t| {
-            first_line.starts_with(&format!("{}:", t)) || first_line.starts_with(&format!("{}(", t))
+            first_line.starts_with(&format!("{}:", t))        // feat: subject
+                || first_line.starts_with(&format!("{}(", t)) // feat(scope): or feat(scope)!:
+                || first_line.starts_with(&format!("{}!", t)) // feat!: subject
         });
 
         if !has_valid_type {

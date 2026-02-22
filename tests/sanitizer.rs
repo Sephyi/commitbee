@@ -338,3 +338,160 @@ fn sanitize_json_body_preserves_paragraphs() {
     assert!(lines.contains(&"First paragraph."));
     assert!(lines.contains(&"Second paragraph."));
 }
+
+// ─── Breaking changes ────────────────────────────────────────────────────────
+
+#[test]
+fn sanitize_breaking_change_json_no_scope() {
+    let raw = r#"{"type": "feat", "scope": null, "subject": "drop v1 API", "body": null, "breaking_change": "v1 endpoints removed, migrate to /v2"}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result);
+    // feat!: drop v1 API
+    //
+    // BREAKING CHANGE: v1 endpoints removed, migrate to /v2
+}
+
+#[test]
+fn sanitize_breaking_change_json_with_scope() {
+    let raw = r#"{"type": "feat", "scope": "api", "subject": "remove deprecated endpoint", "body": null, "breaking_change": "GET /api/v1/users removed, use GET /api/v2/users instead"}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result);
+    // feat(api)!: remove deprecated endpoint
+    //
+    // BREAKING CHANGE: GET /api/v1/users removed, use GET /api/v2/users instead
+}
+
+#[test]
+fn sanitize_breaking_change_json_with_body_and_footer() {
+    let raw = r#"{"type": "chore", "scope": "config", "subject": "rename timeout key", "body": "Aligns the config schema with the 2.0 release standard.", "breaking_change": "config key 'timeout' renamed to 'timeout_secs', update your commitbee.toml"}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result);
+    // chore(config)!: rename timeout key
+    //
+    // Aligns the config schema with the 2.0 release standard.
+    //
+    // BREAKING CHANGE: config key 'timeout' renamed to 'timeout_secs', update your commitbee.toml
+}
+
+#[test]
+fn sanitize_breaking_change_null_is_non_breaking() {
+    let raw = r#"{"type": "feat", "scope": "cli", "subject": "add flag", "body": null, "breaking_change": null}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat(cli): add flag");
+}
+
+#[test]
+fn sanitize_breaking_change_empty_string_is_non_breaking() {
+    let raw = r#"{"type": "feat", "scope": "cli", "subject": "add flag", "body": null, "breaking_change": ""}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat(cli): add flag");
+}
+
+#[test]
+fn sanitize_breaking_change_whitespace_only_is_non_breaking() {
+    let raw = r#"{"type": "feat", "scope": "cli", "subject": "add flag", "body": null, "breaking_change": "   "}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat(cli): add flag");
+}
+
+#[test]
+fn sanitize_breaking_change_string_null_is_non_breaking() {
+    // Models sometimes write the string "null" instead of JSON null when following a template.
+    // The sanitizer must treat this as non-breaking to prevent spurious feat! and BREAKING CHANGE:.
+    let raw = r#"{"type": "feat", "scope": "cli", "subject": "add flag", "body": null, "breaking_change": "null"}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat(cli): add flag");
+}
+
+#[test]
+fn sanitize_breaking_change_missing_field_is_non_breaking() {
+    let raw = r#"{"type": "feat", "scope": "cli", "subject": "add flag", "body": null}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+    insta::assert_snapshot!(result, @"feat(cli): add flag");
+}
+
+#[test]
+fn sanitize_plain_text_bang_no_scope_passes_validation() {
+    let raw = "feat!: remove legacy authentication middleware";
+    let result = CommitSanitizer::sanitize(raw, &default_format());
+    assert!(result.is_ok(), "expected Ok for feat!: plain text");
+    assert_eq!(
+        result.unwrap(),
+        "feat!: remove legacy authentication middleware"
+    );
+}
+
+#[test]
+fn sanitize_plain_text_scope_and_bang_passes_validation() {
+    let raw = "feat(api)!: remove deprecated endpoint";
+    let result = CommitSanitizer::sanitize(raw, &default_format());
+    assert!(result.is_ok(), "expected Ok for feat(scope)!: plain text");
+    assert_eq!(result.unwrap(), "feat(api)!: remove deprecated endpoint");
+}
+
+#[test]
+fn sanitize_breaking_change_emitted_when_include_body_false() {
+    let raw = r#"{"type": "feat", "scope": null, "subject": "drop v1 API", "body": null, "breaking_change": "v1 endpoints removed"}"#;
+    let format = CommitFormat {
+        include_body: false,
+        ..CommitFormat::default()
+    };
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    insta::assert_snapshot!(result);
+    // feat!: drop v1 API
+    //
+    // BREAKING CHANGE: v1 endpoints removed
+}
+
+#[test]
+fn sanitize_breaking_change_include_scope_false() {
+    let raw = r#"{"type": "feat", "scope": "api", "subject": "remove deprecated endpoint", "body": null, "breaking_change": "v1 endpoint removed"}"#;
+    let format = CommitFormat {
+        include_scope: false,
+        ..CommitFormat::default()
+    };
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    insta::assert_snapshot!(result);
+    // feat!: remove deprecated endpoint
+    //
+    // BREAKING CHANGE: v1 endpoint removed
+}
+
+#[test]
+fn sanitize_breaking_change_invalid_type_returns_error() {
+    let raw = r#"{"type": "feat", "scope": null, "subject": "drop v1 API", "body": null, "breaking_change": true}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format());
+    assert!(
+        result.is_err(),
+        "invalid typed breaking_change must not produce a valid commit"
+    );
+}
+
+#[test]
+fn sanitize_breaking_footer_continuation_lines_indented() {
+    let raw = r#"{"type": "feat", "scope": null, "subject": "drop v1 API", "body": null, "breaking_change": "this description is intentionally long so the footer must wrap onto a continuation line for parser compatibility"}"#;
+    let result = CommitSanitizer::sanitize(raw, &default_format()).unwrap();
+
+    let mut iter = result
+        .lines()
+        .skip_while(|line| !line.starts_with("BREAKING CHANGE:"));
+
+    assert!(
+        iter.next().is_some(),
+        "BREAKING CHANGE: header line must exist"
+    );
+
+    let continuation_lines: Vec<&str> = iter.collect();
+    assert!(
+        !continuation_lines.is_empty(),
+        "footer must have continuation lines"
+    );
+    for (i, line) in continuation_lines.iter().enumerate() {
+        assert!(
+            line.starts_with("  "),
+            "continuation line {} must start with two spaces: '{}'",
+            i + 1,
+            line
+        );
+    }
+}
