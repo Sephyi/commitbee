@@ -226,10 +226,10 @@ src/
     ├── analyzer.rs      # AnalyzerService (tree-sitter)
     ├── context.rs       # ContextBuilder (token budget)
     ├── safety.rs        # Secret scanning, conflict detection
-    ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, body wrapping)
+    ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
     ├── splitter.rs      # CommitSplitter (multi-commit detection)
     └── llm/
-        ├── mod.rs       # LlmProvider trait + enum dispatch
+        ├── mod.rs       # LlmProvider trait + enum dispatch + shared SYSTEM_PROMPT
         ├── ollama.rs    # OllamaProvider (streaming NDJSON)
         ├── openai.rs    # OpenAiProvider (SSE streaming)
         └── anthropic.rs # AnthropicProvider (SSE streaming)
@@ -238,7 +238,7 @@ src/
 ## 🧪 Testing
 
 ```bash
-cargo test                    # All tests (118 tests)
+cargo test                    # All tests (133 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test splitter    # CommitSplitter tests
 cargo test --test safety      # Secret scanner tests
@@ -254,11 +254,11 @@ The test suite includes snapshot tests ([insta](https://insta.rs/)), property-ba
 | Phase                       | Version    | Status           |
 | --------------------------- | ---------- | ---------------- |
 | 🔧 Stability & Correctness  | `v0.2.0`   | ✅ Complete       |
-| ✨ Polish & Providers       | `v0.3.0`   | ✅ Complete       |
-| 🚀 Differentiation          | `v0.4.0`   | 📋 Planned       |
-| 👑 Market Leadership        | `v1.0+`    | 🔮 Future        |
+| ✨ Polish & Providers       | `v0.2.0`   | ✅ Complete       |
+| 🚀 Differentiation          | `v0.3.0`   | 📋 Planned       |
+| 👑 Market Leadership        | `v0.4.0+`  | 🔮 Future        |
 
-### v0.3.0 highlights (complete)
+### v0.2.0 highlights (complete)
 
 - **Cloud providers** — OpenAI-compatible and Anthropic streaming support
 - **Commit splitting** — Automatic detection and splitting of multi-concern staged changes

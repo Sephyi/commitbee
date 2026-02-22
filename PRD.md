@@ -13,6 +13,10 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 **Revision 2.3**: Version alignment (2026-02-22) — v0.2.0 shipped containing all Phase 1 (stability) and Phase 2 (polish/providers) features. Roadmap renumbered: Phase 3 (differentiation) is now v0.3.0, Phase 4 (market leadership) is now v0.4.0+.
 
+**Revision 2.4**: Post-v0.2.0 spec anchoring (2026-02-22) — Conventional Commits 1.0.0 spec compliance: `!` suffix on breaking changes, `BREAKING CHANGE:` footer (emitted regardless of `include_body`), commit type list synced with `CommitType::ALL` via compile-time test, symbol deduplication in context builder (prevents misleading LLM when function bodies change but definition lines don't move). Test count: 133.
+
+**Revision 2.3**: Version alignment (2026-02-22) — v0.2.0 shipped containing all Phase 1 (stability) and Phase 2 (polish/providers) features. Roadmap renumbered: Phase 3 (differentiation) is now v0.3.0, Phase 4 (market leadership) is now v0.4.0+.
+
 **Revision 2.2**: Implementation status update + commit splitting (2026-02-18) — added FR-023 (commit splitting), FR-024 (commit history style learning, experimental), updated competitive matrix and roadmap to reflect v0.3.0 features already implemented (OpenAI, Anthropic, hooks, multi-generate, completions, figment config, miette, tracing, single-pass diff, async git, keyring, 118 tests). Updated architecture with `splitter.rs`.
 
 **Revision 2.1**: Enhancement review integration (2026-02-17) — incorporated evaluation harness, symbol extraction fallback ladder, cancellation contract, streaming trait abstraction, golden test fixtures, output format contracts, hook edge cases, JSON retry logic, and 12 additional refinements from verification review.
@@ -66,7 +70,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Git hook integration                                           | Universal                     | **Implemented**   |
 | Shell completions                                              | Expected for CLI tools        | **Implemented**   |
 | Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | **Implemented**   |
-| Unit/integration tests                                         | Non-negotiable for quality    | **118 tests**     |
+| Unit/integration tests                                         | Non-negotiable for quality    | **133 tests**     |
 | Commit splitting (multi-concern detection)                     | No competitor has this        | **Implemented**   |
 | Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | Missing           |
 
@@ -815,10 +819,10 @@ opt-level = "z"  # or "s" — benchmark both
 ### PE-001: System Prompt
 
 - Defines persona, rules, and output format
-- Includes 2-3 few-shot examples of good commit messages
+- Uses a JSON schema template with nullable fields; no few-shot examples (optimized for <4B parameter models)
 - Explicitly states what NOT to do (no conversational tone, no file-by-file listing, no business language)
-- Requests JSON output with explicit schema
-- Adapted for model size: simpler for < 4B params, richer for > 7B
+- Requests JSON output with explicit schema; includes breaking change guidance (only set when existing users or dependents must change their code, config, or scripts)
+- Single shared constant (`pub(crate) SYSTEM_PROMPT` in `llm/mod.rs`) used by all providers; commit type list kept in sync with `CommitType::ALL` via compile-time test
 
 ### PE-002: User Prompt
 
@@ -861,7 +865,7 @@ opt-level = "z"  # or "s" — benchmark both
 
 - FR-001: Fix UTF-8 panics ✅
 - FR-002: Include symbols in prompt (with fallback ladder) ✅
-- FR-003: Unit test suite (118 tests) ✅
+- FR-003: Unit test suite (133 tests) ✅
 - FR-004: Remove unused dependencies ✅
 - FR-005: Fix dead code ✅
 - FR-006: Reduce tokio features ✅
@@ -878,7 +882,8 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-019: Secure API key storage ✅ (feature-gated)
 - FR-020: Async git operations ✅
 - FR-021: Single-pass diff parsing ✅
-- FR-022: Integration test suite ✅ (118 tests)
+- FR-022: Integration test suite ✅ (133 tests)
+- Conventional Commits 1.0.0 spec anchoring: `!` suffix for breaking changes, `BREAKING CHANGE:` footer (emitted regardless of `include_body`), commit type list synced with `CommitType::ALL` via compile-time test ✅
 - FR-023: Commit splitting ✅
 - FR-039: Config validation & doctor command ✅
 - TR-005: CI pipeline ✅
