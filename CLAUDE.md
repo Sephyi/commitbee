@@ -19,6 +19,7 @@ cargo build --release
 
 - **Hybrid Git**: gix for repo discovery, git CLI for diffs (documented choice)
 - **Tree-sitter**: Full file parsing with hunk mapping (not just +/- lines)
+- **Parallelism**: rayon for CPU-bound tree-sitter parsing, tokio JoinSet for concurrent git content fetching
 - **LLM**: Ollama primary (qwen3:4b), OpenAI/Anthropic secondary
 - **Streaming**: Line-buffered JSON parsing with CancellationToken
 
@@ -96,8 +97,8 @@ src/
 │   └── commit.rs        # CommitType
 └── services/
     ├── mod.rs
-    ├── git.rs           # GitService (gix + git CLI)
-    ├── analyzer.rs      # AnalyzerService (tree-sitter)
+    ├── git.rs           # GitService (gix + git CLI, concurrent content fetching)
+    ├── analyzer.rs      # AnalyzerService (tree-sitter, parallel via rayon)
     ├── context.rs       # ContextBuilder (token budget)
     ├── safety.rs        # Secret scanning, conflict detection
     ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
@@ -115,14 +116,39 @@ src/
 - **Conventional Commits spec anchoring**: `.claude/plans/PLAN_CONVENTIONAL_COMMITS_SPEC.md`
 - **v0.3.0 enhancement plan**: `.claude/plans/PLAN_V030_ENHANCEMENTS.md`
 - **Implementation plan (v1, outdated)**: `.claude/plans/PLAN_COMMITBEE_V1.md` — superseded by PRD v2.1
+- **Skills ecosystem design**: `.claude/plans/2026-02-22-skills-ecosystem-design.md`
+
+## Project Skills
+
+| Skill | Invocation | Purpose |
+| --- | --- | --- |
+| `ci-check` | `/ci-check [fast\|full\|test <name>]` | Run fmt + clippy + tests + audit |
+| `reuse-annotate` | `/reuse-annotate <file>` | Add SPDX headers to new files |
+
+## Project Agents
+
+| Agent | File | Purpose |
+| --- | --- | --- |
+| `rust-security-reviewer` | `.claude/agents/rust-security-reviewer.md` | Read-only security audit (8-category) |
+| `cargo-dep-auditor` | `.claude/agents/cargo-dep-auditor.md` | Check deps for outdated versions, yanked crates, advisories |
+| `api-compat-reviewer` | `.claude/agents/api-compat-reviewer.md` | Check public API changes for breaking callers/impls |
+| `llm-prompt-quality-reviewer` | `.claude/agents/llm-prompt-quality-reviewer.md` | Audit SYSTEM_PROMPT, schemas, CommitType sync, spec compliance |
+
+## Project Hooks
+
+| Hook | Trigger | Action |
+| --- | --- | --- |
+| `rust-fmt.sh` | PostToolUse Edit/Write | `rustfmt <file>` on `.rs` files |
+| `block-generated-files.sh` | PreToolUse Edit/Write | Block manual edits to `Cargo.lock` |
+| `superpowers-check.sh` | SessionStart | Warn if superpowers plugin missing |
 
 ## Development Notes
 
 ### Toolchain
 
-- Rust edition 2024, MSRV 1.85
+- Rust edition 2024, MSRV 1.94
 - License: PolyForm-Noncommercial-1.0.0 (REUSE compliant)
-- Dev deps: `tempfile`, `assert_cmd`, `predicates`, `wiremock`, `insta`, `proptest`
+- Dev deps: `tempfile`, `assert_cmd`, `predicates`, `wiremock`, `insta`, `proptest`, `toml`
 
 ### REUSE / SPDX Headers
 
@@ -134,7 +160,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (133 tests)
+cargo test                    # All tests (169 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -144,6 +170,15 @@ cargo test -- --nocapture     # Show println output
 ```
 
 **Important:** `cargo test sanitizer` matches test *names* across all binaries. Use `cargo test --test <name>` to select a specific integration test file.
+
+### Test Conventions
+
+- Async tests: `#[tokio::test]` (not `#[test]` with `.block_on()`)
+- Snapshots: after changing output, run `cargo insta review` to accept/reject
+- Snapshot env: `UPDATE_EXPECT=1 cargo test` for bulk snapshot update
+- Wiremock: NDJSON streaming mocks use `respond_with(ResponseTemplate::new(200).set_body_raw(...))` with `\n`-delimited JSON
+- Git fixtures: `tempfile::TempDir` + `git init` via `std::process::Command`, not real repos
+- Proptest: `PROPTEST_CASES=1000` for thorough local runs before push
 
 ### Building
 
@@ -181,6 +216,15 @@ git add some-file.rs
 ./target/release/commitbee --yes
 ```
 
+### Dependency Management
+
+When adding or updating crates:
+1. Verify latest stable version via `cargo search <crate> --limit 1` before adding to `Cargo.toml`
+2. If a pre-release version is detected or would be added: **STOP and ask the user** — report the pre-release version found, the latest stable version (if any exists), and whether no stable release is available yet. Do not add a pre-release version without explicit user approval.
+3. Prefer `x.y` (minor-compatible) over `=x.y.z` (exact pin) unless a bug requires it
+4. Run `cargo audit` before and after adding new dependencies
+5. Use `cargo-dep-auditor` agent for full pre-release dependency review
+
 ### Gotchas
 
 - `gix` API: use `repo.workdir()` not `repo.work_dir()` (deprecated)
@@ -189,7 +233,8 @@ git add some-file.rs
 - Parallel subagents running `cargo fmt` may create unstaged changes — commit formatting separately
 - Secret pattern `sk-[a-zA-Z0-9]{48}` requires exactly 48 chars after `sk-` in test data
 - `tokio::process::Command` output needs explicit `std::process::Output` type annotation when using `.ok()?`
-- Tree-sitter is CPU-bound/sync — pre-fetch file content into HashMaps async, then pass as sync closures
+- Tree-sitter is CPU-bound/sync — pre-fetch file content into HashMaps async, then pass `&HashMap<PathBuf, String>` to `extract_symbols()` which uses rayon for parallel parsing
+- `rayon::par_iter()` requires data to be `Sync`; `tree_sitter::Parser` is neither `Send` nor `Sync` — create a new `Parser` per file inside the rayon closure
 - `#[cfg(feature = "secure-storage")]` gates both the error variant and CLI commands for keyring
 
 ### Known Issues
@@ -199,14 +244,5 @@ git add some-file.rs
 
 ### Post-Implementation Documentation TODOs
 
-After `PLAN_CONVENTIONAL_COMMITS_SPEC` is implemented, update:
-
-- **PRD.md PE-001**: Change "Includes 2-3 few-shot examples" → the new system prompt uses a schema template (no shot examples). Update the PE-001 description accordingly.
-- **PRD.md Phase 2 roadmap**: Add "Conventional Commits 1.0.0 spec anchoring (`!` suffix, `BREAKING CHANGE:` footer, spec-compliant type list sync)" to the v0.3.0 feature list.
 - **README.md roadmap**: Pre-existing version mismatch — README shows v0.3.0 as "Polish & Providers ✅ Complete" but PRD says v0.2.0 shipped both Phase 1 and Phase 2, and v0.3.0 is the upcoming Differentiation release. Reconcile before the v0.3.0 release.
-- **README.md Running Tests**: Update `118 tests` count.
-
-### Markdown Conventions
-
-- No `---` horizontal rules before `#` or `##` headers (they provide their own visual separation)
-- Tables must use properly aligned columns with `| --- |` separator rows
+- **README.md Running Tests**: Updated to 169 (was 133 in README, now fixed).

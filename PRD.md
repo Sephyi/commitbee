@@ -6,10 +6,14 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 2.3
-**Date**: 2026-02-22
+**Version**: 2.7
+**Date**: 2026-03-08
 **Status**: Active
 **Author**: Sephyi + Claude
+
+**Revision 2.7**: Splitter precision + subject quality + metadata breaking (2026-03-08) — FR-023 enhanced: targeted caller detection (E1), post-clustering sub-split for >6-file groups (E2), focus instruction for >5-file groups (E3), scored support file assignment with known pairs (H6), group rationale in per-group prompts (H2). FR-034 now fully implemented: metadata-aware breaking detection for MSRV/engines.node/requires-python (G1), symbol tri-state with ModifiedSignature (H5). FR-041 expanded to 6 rules: added subject specificity validator (F3). PE-001: negative examples (BAD/GOOD pairs). PE-002: primary change detection (F1), metadata breaking signals, modified symbols section. Performance: Arc\<String\> for diffs, String::with_capacity. Test count: 169.
+
+**Revision 2.6**: Message quality overhaul (2026-03-08) — Added FR-041 (post-generation validation), updated FR-034 (type heuristics partially implemented: evidence flags, API replacement inference, mechanical/style detection), updated FR-023 (splitter: diff-shape fingerprinting, symbol dependency merging, category separation, expanded GENERIC_DIRS to 22 entries, 16 tests), updated FR-040 (cross-project file categorization: 30+ source languages, 40+ config files, expanded CI/build detection, lock file skip list). Updated PE-001 (anti-hallucination rules, anti-copy rule, micro few-shot examples) and PE-002 (evidence flags, subject budget, CONSTRAINTS section, natural language labels). Test count: 168.
 
 **Revision 2.5**: PRD structural cleanup (2026-02-22) — Fixed FR placement inconsistencies: FR-039 definition moved from Section 4.3 to Section 4.2 (shipped in v0.2.0); FR-040 placed only in Phase 2 roadmap (ships with v0.3.0, not v0.2.0); FR-024 (P1 number in P3 context) merged back into FR-058 to preserve decade numbering convention.
 
@@ -70,7 +74,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Git hook integration                                           | Universal                     | **Implemented**   |
 | Shell completions                                              | Expected for CLI tools        | **Implemented**   |
 | Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | **Implemented**   |
-| Unit/integration tests                                         | Non-negotiable for quality    | **133 tests**     |
+| Unit/integration tests                                         | Non-negotiable for quality    | **169 tests**     |
 | Commit splitting (multi-concern detection)                     | No competitor has this        | **Implemented**   |
 | Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | Missing           |
 
@@ -87,8 +91,8 @@ The existing domain/services separation is solid. The pipeline (CLI -> Git -> An
 | Symbols extracted but never included in LLM prompt            | Tree-sitter analysis is wasted computation      | Include in prompt with fallback ladder                      |
 | `App::generate_commit()` is a 160-line untestable monolith    | Cannot unit test any step of the pipeline       | Decompose into testable methods                             |
 | No dependency injection                                       | Services hard-wired, can't mock for tests       | Trait abstractions for GitService, LlmProvider              |
-| Synchronous `std::process::Command` in async runtime          | Blocks tokio event loop on large repos          | Use `tokio::process::Command` or `spawn_blocking`           |
-| N+1 git process spawns (1 + N per file)                       | 50 files = 51 process spawns                    | Single `git diff --cached` parsed per-file                  |
+| ~~Synchronous `std::process::Command` in async runtime~~      | ~~Blocks tokio event loop on large repos~~      | ✅ Resolved (FR-020: `tokio::process::Command`)             |
+| ~~N+1 git process spawns (1 + N per file)~~                   | ~~50 files = 51 process spawns~~                | ✅ Resolved (FR-021: single diff + concurrent `JoinSet`)    |
 | UTF-8 panic in sanitizer (byte-index slicing)                 | Runtime crash on emoji/CJK in commit messages   | Use `str::chars()` for safe truncation                      |
 
 #### Symbol Extraction Fallback Ladder
@@ -144,10 +148,10 @@ commitbee
 │   │   └── commit.rs        # CommitType (single source of truth for types)
 │   └── services/
 │       ├── git.rs           # GitService trait + impl (async, single-diff)
-│       ├── analyzer.rs      # AnalyzerService (reusable parser, cancellation)
+│       ├── analyzer.rs      # AnalyzerService (parallel parsing via rayon)
 │       ├── context.rs       # ContextBuilder (fixed budget math, fallback ladder)
 │       ├── safety.rs        # Secret scanning (expanded patterns)
-│       ├── sanitizer.rs     # CommitSanitizer (UTF-8 safe, body wrapping)
+│       ├── sanitizer.rs     # CommitSanitizer (UTF-8 safe, body wrapping) + CommitValidator (post-gen validation)
 │       ├── splitter.rs      # CommitSplitter (multi-commit detection + grouping)
 │       └── llm/
 │           ├── mod.rs       # LlmProvider trait (native async, enum dispatch)
@@ -174,13 +178,12 @@ commitbee
 pub trait GitOperations: Send + Sync {
     async fn get_staged_changes(&self) -> Result<StagedChanges>;
     async fn get_file_diff(&self, path: &Path) -> Result<String>;
-    async fn get_staged_content(&self, path: &Path) -> Result<String>;
-    async fn get_head_content(&self, path: &Path) -> Result<Option<String>>;
+    async fn fetch_file_contents(&self, paths: &[PathBuf]) -> (HashMap<PathBuf, String>, HashMap<PathBuf, String>);
     async fn commit(&self, message: &str) -> Result<()>;
 }
 
 pub trait CodeAnalyzer: Send + Sync {
-    fn extract_symbols(&self, change: &FileChange) -> Vec<CodeSymbol>;
+    fn extract_symbols(&self, changes: &[FileChange], staged: &HashMap<PathBuf, String>, head: &HashMap<PathBuf, String>) -> Vec<CodeSymbol>;
 }
 
 // LlmProvider with native async (no async_trait)
@@ -363,16 +366,22 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 #### FR-023: Commit Splitting (Multi-Concern Detection)
 
 - **What**: Detect when staged changes contain logically independent changes that should be separate commits. Offer to split automatically with per-group LLM message generation.
-- **Status**: **Implemented** (v0.2.0)
+- **Status**: **Implemented** (v0.2.0, enhanced post-v0.2.0)
 - **How it works**:
-  1. **Module detection**: Group source files by parent directory (e.g., `src/services/llm/*.rs` → "llm"). Fall back to file stem when parent is generic (`src`, `services`, `lib`).
-  2. **Support file attachment**: Test/doc/config files attach to the largest source group, except test files whose stem matches a source module name (attached to that group).
-  3. **Type+scope inference per group**: Each group gets its own `infer_commit_type()` and `infer_scope()`.
-  4. **Collapse check**: If all groups have the same type and scope, suggest a single commit instead of splitting.
-  5. **Split execution**: Unstage all → stage group files → commit → repeat for each group.
+  1. **Diff-shape fingerprinting**: Groups files by structural similarity of their diffs (not just path proximity). Mechanical changes cluster together regardless of directory.
+  2. **Symbol dependency merging**: Groups connected by targeted caller detection are merged — only when a file's diff adds a line that directly calls a new function from another group (`+` lines containing `sym_name(`), not loose text matches that caused cascading merges from imports.
+  3. **Category separation**: Docs and config files get their own groups rather than being dumped on the largest source group.
+  4. **Module detection**: Group source files by parent directory (e.g., `src/services/llm/*.rs` → "llm"). Fall back to file stem when parent is generic (22 generic dirs: `src`, `lib`, `services`, `domain`, `utils`, `helpers`, `internal`, `core`, `pkg`, `cmd`, `app`, `api`, `modules`, `components`, `common`, `shared`, `middleware`, `handlers`, `controllers`, `models`, `views`, `routes`).
+  5. **Post-clustering sub-split**: Groups with >6 files spanning multiple modules are automatically sub-split by module to prevent mega-groups.
+  6. **Scored support file assignment**: Support files (docs, config, tests) assigned via affinity scoring — known pairs (Cargo.toml+Lock, package.json+lock), stem overlap, standalone if weak affinity. Replaces blind "attach to largest group" logic.
+  7. **Type+scope inference per group**: Each group gets its own `infer_commit_type()` and `infer_scope()`.
+  8. **Group rationale**: Each per-group prompt includes `GROUP_REASON:` explaining why files were grouped (e.g., "mechanical refactor across 7 files").
+  9. **Focus instruction**: Groups with >5 files get an explicit instruction to focus the subject on the single most significant change.
+  10. **Collapse check**: If all groups have the same type and scope, suggest a single commit instead of splitting.
+  11. **Split execution**: Unstage all → stage group files → commit → repeat for each group.
 - **Safety**: Refuses to split when any staged file also has unstaged modifications (data loss risk).
 - **CLI**: `--no-split` disables the feature. `--yes` and non-TTY mode skip split suggestion (default to single commit).
-- **Acceptance**: Tested with 11 dedicated integration tests covering single module, multi-module, all-tests, all-docs, same-type collapse, test attachment, and sort order.
+- **Acceptance**: Tested with 16 dedicated integration tests covering single module, multi-module, all-tests, all-docs, same-type collapse, test attachment, sort order, diff-shape clustering, symbol dependency merging, and category separation.
 
 #### FR-039: Config Validation ✅ (shipped in v0.2.0)
 
@@ -411,17 +420,22 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **What**: `--clipboard` flag copies generated message to clipboard instead of committing.
 - **Acceptance**: Uses system clipboard (pbcopy on macOS, xclip/xsel on Linux, clip on Windows). Works in combination with `--dry-run`.
 
-#### FR-034: Improved Commit Type Heuristics
+#### FR-034: Improved Commit Type Heuristics ✅ (implemented post-v0.2.0)
 
-- **What**: Current heuristics have questionable defaults (small change = fix, more deletions = refactor).
-- **Acceptance**:
-  - Test-only changes -> `test`
-  - Doc-only changes -> `docs`
-  - CI file changes -> `ci`
-  - New files with substantial code -> `feat`
-  - Small targeted changes to existing code -> let LLM decide (don't assume `fix`)
-  - More deletions than additions -> let LLM decide (don't assume `refactor`)
-  - Default fallback is `Unknown` (let LLM determine), not `Feat`
+- **What**: Deterministic commit type inference with evidence-based gating and metadata-aware breaking detection.
+- **Status**: **Implemented** (post-v0.2.0)
+- **How it works**:
+  - Test-only changes → `test` ✅
+  - Doc-only changes → `docs` ✅
+  - CI file changes → `ci` ✅
+  - New files with substantial code → `feat` ✅
+  - Evidence-based `fix` gating: `fix` type requires `has_bug_evidence` (bug-fix comments in diff); without evidence, falls back to `refactor` ✅
+  - API replacement detection: when new public APIs added AND old public APIs removed → `refactor` (not `feat`) ✅
+  - Mechanical/formatting transform detection: style-only or mechanical changes → `style`/`refactor` (never `feat`/`fix`) ✅
+  - Dependency-only detection: all changes in dependency/config files → `chore` ✅
+  - Metadata-aware breaking detection: scans diffs for `rust-version` changes (MSRV), `engines.node` tightening, `requires-python` tightening, removed `pub use`/`pub mod`/`export` statements ✅
+  - Symbol tri-state classification: `AddedOnly`, `RemovedOnly`, `ModifiedSignature` — same-name add+remove pairs recognized as signature changes, public modified symbols contribute to breaking risk ✅
+  - Default fallback is `Unknown` (let LLM determine), not `Feat` ✅
 
 #### FR-035: Rename Detection
 
@@ -460,6 +474,25 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
   - Single shared `SYSTEM_PROMPT` constant in `llm/mod.rs` used by all providers; commit type list kept in sync with `CommitType::ALL` via compile-time test
   - Sanitizer normalizes string literal `"null"` → non-breaking (defensive handling for model template quirk)
   - Symbol deduplication in context builder: functions modified in-place no longer appear as both Added and Removed, preventing misleading LLM context
+  - Cross-project file categorization: 30+ source language extensions (Rust, TS, JS, Python, Go, C, C++, C#, Ruby, Swift, Scala, Elixir, PHP, R, Lua, Zig, Nim, Dart, Vue, Svelte, OCaml, Haskell, Clojure, Erlang, Perl, shell), 40+ config file patterns (biome.json, deno.json, .eslintrc, .prettierrc, ruff.toml, Pipfile, Gemfile, pom.xml, build.gradle, mix.exs, pubspec.yaml, renovate.json, dependabot.yml, etc.), dotfile auto-detection (`.something.json/yaml/toml` → Config), expanded CI/build detection (GitLab CI, CircleCI, Jenkinsfile, Travis, Azure Pipelines, Netlify, Vercel, CMake, Procfile)
+  - Expanded scope inference: additional source dirs (`app/`, `internal/`, `cmd/`, `api/`, `modules/`), monorepo dirs (`packages/`, `services/`, `plugins/`, `workspaces/`), generic next-component exclusion (`index`)
+  - Expanded lock file skip list: `Pipfile.lock`, `uv.lock`, `pubspec.lock`, `flake.lock`, `shrinkwrap.yaml`, `mix.lock` (in addition to existing `Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `composer.lock`, `Gemfile.lock`, `poetry.lock`, `go.sum`)
+
+#### FR-041: Post-Generation Validation ✅ (implemented post-v0.2.0)
+
+- **What**: Evidence-based validation of LLM output against deterministic code analysis signals, with one corrective retry on violation.
+- **Status**: **Implemented** (post-v0.2.0)
+- **How it works**:
+  1. **Evidence flags**: Five deterministic signals computed from code analysis before LLM generation: `is_mechanical` (formatting/whitespace-only), `has_bug_evidence` (bug-fix comments in diff), `public_api_removed_count` (removed public functions/structs/traits), `has_new_public_api` (new public symbols added), `is_dependency_only` (all changes in dependency/config files).
+  2. **CommitValidator**: After LLM generates a structured commit, validates it against evidence flags with 6 rules:
+     - `fix` type requires `has_bug_evidence` (otherwise → `refactor`)
+     - `breaking_change` must be set when public APIs removed
+     - `breaking_change` must not copy internal field names (anti-hallucination)
+     - Mechanical transforms cannot be `feat` or `fix` (→ `style`/`refactor`)
+     - Dependency-only changes must be `chore`
+     - Subject specificity: generic verb+noun combinations (e.g., "update code", "improve things") trigger retry with instruction to name specific APIs/modules changed
+  3. **Corrective retry**: On violation, appends a `CORRECTIONS` section to the prompt listing each violation with fix instructions, and re-prompts the LLM once. Never retries more than once.
+- **Acceptance**: Tested with 8 dedicated unit tests covering each validation rule, valid commit acceptance, and corrections formatting.
 
 ### 4.4 P3 — Future (v0.4.0+: Market Leadership)
 
@@ -571,7 +604,7 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 
 ### PR-003: Tree-sitter Parsing
 
-- Reuse parser instance across files (set language per file, don't create new parser)
+- Parallel parsing via rayon (one `Parser` instance per file per thread — `Parser` is not `Send`/`Sync`)
 - File size limit: skip tree-sitter for files > 100KB
 - Cancellation support via `parser.set_cancellation_flag()`
 - Lazy language grammar loading (don't load Python grammar if no Python files staged)
@@ -766,8 +799,8 @@ proptest! {
 - `cargo audit` (dependency vulnerabilities)
 - `cargo deny check` (license compliance)
 - Run on: push to `development`, all PRs
-- Matrix: stable Rust + MSRV (1.85)
-- **Edition 2024**: Rust edition 2024 requires MSRV 1.85. CI matrix explicitly tests both stable and 1.85 to verify compatibility.
+- Matrix: stable Rust + MSRV (1.94)
+- **Edition 2024**: Rust edition 2024 requires MSRV 1.85; let chains (Rust 1.94) raise the effective MSRV to 1.94. CI matrix explicitly tests both stable and 1.94 to verify compatibility.
 
 ### TR-006: Evaluation Harness (`commitbee eval`)
 
@@ -822,16 +855,27 @@ opt-level = "z"  # or "s" — benchmark both
 ### PE-001: System Prompt
 
 - Defines persona, rules, and output format
-- Uses a JSON schema template with nullable fields; no few-shot examples (optimized for <4B parameter models)
+- Uses a JSON schema template with nullable fields and 2 micro few-shot examples (API replacement, style-only change) optimized for <4B parameter models
+- Negative examples (BAD/GOOD pairs): flags vague subjects ("update code and improve things") and multi-concern subjects ("refactor code for better performance and add validation") alongside positive examples
 - Explicitly states what NOT to do (no conversational tone, no file-by-file listing, no business language)
+- Anti-hallucination rules: "Never copy labels, field names, or evidence tags from the prompt into your output"
+- API replacement rule: "If public APIs are both added and removed, this is an API replacement (refactor), not a new feature"
 - Requests JSON output with explicit schema; includes breaking change guidance (only set when existing users or dependents must change their code, config, or scripts)
 - Single shared constant (`pub(crate) SYSTEM_PROMPT` in `llm/mod.rs`) used by all providers; commit type list kept in sync with `CommitType::ALL` via compile-time test
 
 ### PE-002: User Prompt
 
 - Includes: file list with change status, semantic symbols (functions/classes changed), truncated diff
-- Symbols section: "Modified `fn get_staged_changes` in `GitService`" (not raw AST nodes)
+- Symbols section with tri-state: "Added", "Removed", and "Modified (signature changed)" categories — modified public symbols contribute to breaking risk
 - Suggested type and scope from heuristics (as hints, not requirements)
+- **Evidence flags**: Natural language labels (not snake_case identifiers) to prevent small models from copying internal names. Questions like "Is this a mechanical/formatting change? yes/no" instead of `mechanical_transform: true`
+- **Subject budget**: Computes remaining characters for subject after `type(scope): ` prefix, tells model the exact limit (e.g., "under 55 chars")
+- **Primary change detection**: `PRIMARY_CHANGE:` line anchors subject to the most significant change, ranked: new public API > removed public API > largest file by lines changed
+- **CONSTRAINTS section**: Dynamically generated rules based on evidence (e.g., "No bug-fix comments found — do not use type fix" when `has_bug_evidence=false`), includes metadata breaking constraints when detected
+- **PUBLIC API REMOVED warning**: When public symbols are removed, a dedicated warning section lists them and instructs the model to describe removals in `breaking_change` field
+- **Metadata breaking signals**: When MSRV, engines.node, or requires-python changes detected, a dedicated warning section lists them
+- **Group rationale**: Per-group prompts include `GROUP_REASON:` explaining why files were grouped together
+- **Focus instruction**: Groups with >5 files get explicit instruction to focus subject on the single most significant change
 - Clear structure with headers for each section
 
 ### PE-003: Multi-Stage for Large Diffs
@@ -868,7 +912,7 @@ opt-level = "z"  # or "s" — benchmark both
 
 - FR-001: Fix UTF-8 panics ✅
 - FR-002: Include symbols in prompt (with fallback ladder) ✅
-- FR-003: Unit test suite (133 tests) ✅
+- FR-003: Unit test suite (169 tests) ✅
 - FR-004: Remove unused dependencies ✅
 - FR-005: Fix dead code ✅
 - FR-006: Reduce tokio features ✅
@@ -885,7 +929,7 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-019: Secure API key storage ✅ (feature-gated)
 - FR-020: Async git operations ✅
 - FR-021: Single-pass diff parsing ✅
-- FR-022: Integration test suite ✅ (133 tests)
+- FR-022: Integration test suite ✅ (169 tests)
 - FR-023: Commit splitting ✅
 - FR-039: Config validation & doctor command ✅ (shipped in v0.2.0)
 - TR-005: CI pipeline ✅
@@ -894,12 +938,13 @@ opt-level = "z"  # or "s" — benchmark both
 
 **Goal**: Features that set commitbee apart from competitors.
 
-- FR-040: Conventional Commits 1.0.0 spec anchoring ✅ (already implemented)
+- FR-040: Conventional Commits 1.0.0 spec anchoring ✅ (already implemented, enhanced with cross-project support)
+- FR-041: Post-generation validation ✅ (already implemented)
+- FR-034: Improved commit type heuristics ✅ (fully implemented — evidence flags, API replacement, mechanical detection, metadata breaking, symbol tri-state)
 - FR-030: Custom prompt templates
 - FR-031: Exclude files
 - FR-032: Multi-language commit messages
 - FR-033: Copy to clipboard
-- FR-034: Improved commit type heuristics
 - FR-035: Rename detection
 - FR-036: Tree-sitter query patterns
 - FR-037: Expanded secret scanning
@@ -932,7 +977,7 @@ opt-level = "z"  # or "s" — benchmark both
 | Binary size (default features)        | < 15MB                              | CI artifact size tracking                                    |
 | Commit message quality                | > 80% "good enough" on first try    | Manual evaluation on sample repos + `commitbee eval` harness |
 | Secret leak rate                      | 0 (no secrets sent to cloud LLMs)   | Integration tests with known secret patterns                 |
-| MSRV                                  | Rust 1.85 (edition 2024)            | CI matrix build (stable + 1.85)                              |
+| MSRV                                  | Rust 1.94 (edition 2024)            | CI matrix build (stable + 1.94)                              |
 
 ## 13. Non-Goals (Explicit Scope Exclusions)
 

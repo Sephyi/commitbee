@@ -8,7 +8,7 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 [![CI](https://github.com/sephyi/commitbee/actions/workflows/ci.yml/badge.svg?branch=development)](https://github.com/sephyi/commitbee/actions/workflows/ci.yml)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm--Noncommercial-blue)](LICENSES/PolyForm-Noncommercial-1.0.0.txt)
-[![MSRV: 1.85](https://img.shields.io/badge/MSRV-1.85-orange)](https://blog.rust-lang.org/)
+[![MSRV: 1.94](https://img.shields.io/badge/MSRV-1.94-orange)](https://blog.rust-lang.org/)
 [![REUSE](https://api.reuse.software/badge/github.com/sephyi/commitbee)](https://api.reuse.software/info/github.com/sephyi/commitbee)
 
 **The commit message generator that actually understands your code.**
@@ -67,7 +67,7 @@ The binary will be at `./target/release/commitbee`.
 
 ### Requirements
 
-- **Rust** 1.85+ (edition 2024)
+- **Rust** 1.94+ (edition 2024)
 - **Ollama** running locally (default provider) — [Install Ollama](https://ollama.ai)
 - A model pulled in Ollama (recommended: `qwen3:4b`)
 
@@ -176,7 +176,7 @@ CommitBee's pipeline goes beyond simple diff forwarding:
 ```
 
 1. **Git Service** — Discovers the repo, reads staged changes and diffs
-2. **Tree-sitter Analyzer** — Parses both staged and HEAD file versions, maps diff hunks to symbol spans (functions, structs, methods)
+2. **Tree-sitter Analyzer** — Parses both staged and HEAD file versions in parallel (via rayon), maps diff hunks to symbol spans (functions, structs, methods)
 3. **Commit Splitter** — Groups files by module, detects multi-concern changes, offers to split into separate commits
 4. **Context Builder** — Assembles a budget-aware prompt with file breakdown, semantic symbols, inferred commit type/scope, and truncated diff
 5. **Safety Scanner** — Checks for secrets and merge conflicts before anything leaves your machine
@@ -238,7 +238,7 @@ src/
 ## 🧪 Testing
 
 ```bash
-cargo test                    # All tests (133 tests)
+cargo test                    # All tests (169 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test splitter    # CommitSplitter tests
 cargo test --test safety      # Secret scanner tests
@@ -280,7 +280,7 @@ Contributions are welcome! By contributing, you agree to the [Contributor Licens
 
 The project uses:
 
-- **Rust edition 2024** (MSRV 1.85)
+- **Rust edition 2024** (MSRV 1.94)
 - **Conventional commits** for all commit messages
 - **REUSE/SPDX** for license compliance
 
