@@ -4,9 +4,9 @@
 
 [package]
 name = "commitbee"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.94"
 description = "AI-powered commit message generator using tree-sitter semantic analysis and local LLMs"
 license = "PolyForm-Noncommercial-1.0.0"
 repository = "https://github.com/Sephyi/commitbee"
@@ -27,7 +27,7 @@ clap = { version = "4.5", features = ["derive", "env"] }
 clap_complete = "4.5"
 
 # Async runtime
-tokio = { version = "1.43", features = [
+tokio = { version = "1.50", features = [
   "rt-multi-thread",
   "macros",
   "signal",
@@ -37,10 +37,12 @@ tokio = { version = "1.43", features = [
 tokio-stream = "0.1"
 tokio-util = "0.7"
 
+# Parallelism (CPU-bound work: tree-sitter parsing)
+rayon = "1.11"
+
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.9"
 
 # Config & paths
 directories = "6.0"
@@ -50,7 +52,7 @@ figment = { version = "0.10", features = ["toml", "env"] }
 reqwest = { version = "0.13", features = ["json", "stream"] }
 
 # Git (pure Rust) - minimal features
-gix = { version = "0.78", default-features = false, features = ["revision"] }
+gix = { version = "0.80", default-features = false, features = ["revision"] }
 
 # Code analysis
 tree-sitter = "0.26"
@@ -89,7 +91,8 @@ strip = true
 codegen-units = 1
 
 [dev-dependencies]
-tempfile = "3.25"
+toml = "1.0"
+tempfile = "3.26"
 assert_cmd = "2.0"
 predicates = "3.1"
 wiremock = "0.6"
