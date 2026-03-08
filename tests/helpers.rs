@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use commitbee::domain::{ChangeStatus, DiffStats, FileCategory, FileChange, StagedChanges};
 
@@ -18,7 +19,7 @@ pub fn make_file_change(
     FileChange {
         path: PathBuf::from(path),
         status,
-        diff: diff.to_string(),
+        diff: Arc::new(diff.to_string()),
         additions,
         deletions,
         category: FileCategory::from_path(&PathBuf::from(path)),

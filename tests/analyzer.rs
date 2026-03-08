@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use commitbee::domain::{ChangeStatus, FileCategory, FileChange, SymbolKind};
 use commitbee::services::analyzer::{AnalyzerService, DiffHunk};
@@ -13,7 +15,7 @@ fn make_file_change(path: &str, diff: &str, additions: usize, deletions: usize) 
     FileChange {
         path: PathBuf::from(path),
         status: ChangeStatus::Added,
-        diff: diff.to_string(),
+        diff: Arc::new(diff.to_string()),
         additions,
         deletions,
         category: FileCategory::from_path(&PathBuf::from(path)),
@@ -159,11 +161,11 @@ fn extract_symbols_rust_function() {
 
     let staged = "pub fn my_function() {\n    println!(\"hello\");\n}\n";
 
-    let staged_content = |_: &Path| -> Option<String> { Some(staged.to_string()) };
-    let head_content = |_: &Path| -> Option<String> { None };
+    let staged_map = HashMap::from([(PathBuf::from("src/new_module.rs"), staged.to_string())]);
+    let head_map = HashMap::new();
 
-    let mut analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_content, &head_content);
+    let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     assert!(
         !symbols.is_empty(),
@@ -187,11 +189,11 @@ fn extract_symbols_rust_struct() {
 
     let staged = "pub struct MyConfig {\n    pub name: String,\n    pub value: i32,\n}\n";
 
-    let staged_content = |_: &Path| -> Option<String> { Some(staged.to_string()) };
-    let head_content = |_: &Path| -> Option<String> { None };
+    let staged_map = HashMap::from([(PathBuf::from("src/config_types.rs"), staged.to_string())]);
+    let head_map = HashMap::new();
 
-    let mut analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_content, &head_content);
+    let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     assert!(
         !symbols.is_empty(),
@@ -213,12 +215,14 @@ fn extract_symbols_no_grammar() {
     let diff = "@@ -0,0 +1,2 @@\n+some data\n+more data\n";
     let change = make_file_change("data/file.xyz", diff, 2, 0);
 
-    let staged_content =
-        |_: &Path| -> Option<String> { Some("some data\nmore data\n".to_string()) };
-    let head_content = |_: &Path| -> Option<String> { None };
+    let staged_map = HashMap::from([(
+        PathBuf::from("data/file.xyz"),
+        "some data\nmore data\n".to_string(),
+    )]);
+    let head_map = HashMap::new();
 
-    let mut analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_content, &head_content);
+    let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     assert!(
         symbols.is_empty(),
@@ -233,11 +237,14 @@ fn extract_symbols_binary_skipped() {
     let mut change = make_file_change("src/binary_mod.rs", diff, 1, 0);
     change.is_binary = true;
 
-    let staged_content = |_: &Path| -> Option<String> { Some("pub fn hidden() {}\n".to_string()) };
-    let head_content = |_: &Path| -> Option<String> { None };
+    let staged_map = HashMap::from([(
+        PathBuf::from("src/binary_mod.rs"),
+        "pub fn hidden() {}\n".to_string(),
+    )]);
+    let head_map = HashMap::new();
 
-    let mut analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_content, &head_content);
+    let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     assert!(
         symbols.is_empty(),

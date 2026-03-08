@@ -5,7 +5,7 @@
 mod helpers;
 
 use commitbee::config::CommitFormat;
-use commitbee::services::sanitizer::CommitSanitizer;
+use commitbee::services::sanitizer::{CommitSanitizer, CommitValidator, StructuredCommit};
 use proptest::prelude::*;
 
 fn default_format() -> CommitFormat {
@@ -494,4 +494,112 @@ fn sanitize_breaking_footer_continuation_lines_indented() {
             line
         );
     }
+}
+
+// ─── CommitValidator tests ──────────────────────────────────────────────────
+
+fn make_commit(commit_type: &str, breaking_change: Option<&str>) -> StructuredCommit {
+    StructuredCommit {
+        commit_type: commit_type.to_string(),
+        scope: None,
+        subject: "test subject".to_string(),
+        body: None,
+        breaking_change: breaking_change.map(|s| s.to_string()),
+    }
+}
+
+#[test]
+fn validator_rejects_fix_without_bug_evidence() {
+    let commit = make_commit("fix", None);
+    let violations = CommitValidator::validate(&commit, false, false, 0, false);
+    assert!(
+        violations.iter().any(|v| v.contains("refactor")),
+        "should reject fix type when no bug evidence: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_accepts_fix_with_bug_evidence() {
+    let commit = make_commit("fix", None);
+    let violations = CommitValidator::validate(&commit, true, false, 0, false);
+    assert!(
+        violations.is_empty(),
+        "should accept fix type when bug evidence exists: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_rejects_missing_breaking_change() {
+    let commit = make_commit("refactor", None);
+    let violations = CommitValidator::validate(&commit, false, false, 2, false);
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.contains("breaking_change is null")),
+        "should reject missing breaking_change when public API removed: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_rejects_copied_field_names() {
+    let commit = make_commit("refactor", Some("public_api_removed"));
+    let violations = CommitValidator::validate(&commit, false, false, 2, false);
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.contains("internal label names")),
+        "should reject breaking_change that copies field names: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_rejects_mechanical_feat() {
+    let commit = make_commit("feat", None);
+    let violations = CommitValidator::validate(&commit, false, true, 0, false);
+    assert!(
+        violations.iter().any(|v| v.contains("mechanical")),
+        "should reject feat for mechanical transform: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_rejects_non_chore_for_deps() {
+    let commit = make_commit("feat", None);
+    let violations = CommitValidator::validate(&commit, false, false, 0, true);
+    assert!(
+        violations.iter().any(|v| v.contains("chore")),
+        "should reject non-chore for dependency-only changes: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_accepts_valid_commit() {
+    let commit = make_commit(
+        "refactor",
+        Some("removed `old_method()`, use `new_method()` instead"),
+    );
+    let violations = CommitValidator::validate(&commit, false, false, 1, false);
+    assert!(
+        violations.is_empty(),
+        "should accept valid commit: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_corrections_format() {
+    let violations = vec![
+        "Type is wrong.".to_string(),
+        "Breaking change missing.".to_string(),
+    ];
+    let corrections = CommitValidator::format_corrections(&violations);
+    assert!(corrections.contains("CORRECTIONS"));
+    assert!(corrections.contains("Type is wrong."));
+    assert!(corrections.contains("Breaking change missing."));
 }

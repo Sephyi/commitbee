@@ -139,8 +139,8 @@ fn infer_type_majority_new_files_is_feat() {
 }
 
 #[test]
-fn infer_type_small_change_is_fix() {
-    // <20 insertions and <20 deletions, no special symbols or categories
+fn infer_type_small_balanced_change_is_style() {
+    // <20 insertions and <20 deletions, balanced, no symbols -> style
     let changes = make_staged_changes(vec![make_file_change(
         "src/lib.rs",
         ChangeStatus::Modified,
@@ -151,8 +151,26 @@ fn infer_type_small_change_is_fix() {
     let ctx = ContextBuilder::build(&changes, &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
-        CommitType::Fix,
-        "small change (<20 insertions and deletions) should infer Fix"
+        CommitType::Style,
+        "small balanced change with no symbols should infer Style"
+    );
+}
+
+#[test]
+fn infer_type_small_unbalanced_change_is_refactor() {
+    // <20 insertions and <20 deletions, unbalanced (more dels), no symbols -> refactor
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-removed line\n-another\n+replacement;",
+        1,
+        10,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(
+        ctx.suggested_type,
+        CommitType::Refactor,
+        "small unbalanced change with no symbols should infer Refactor"
     );
 }
 
@@ -478,6 +496,381 @@ fn file_category_other() {
         got,
         FileCategory::Other,
         "unknown extension .xyz should be classified as Other"
+    );
+}
+
+// ─── Evidence flags ─────────────────────────────────────────────────────────
+
+#[test]
+fn evidence_mechanical_transform_balanced_no_symbols() {
+    // Small balanced change, no symbols → mechanical
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-    old_indent\n+old_indent",
+        5,
+        5,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.is_mechanical,
+        "balanced small change with no symbols should be mechanical"
+    );
+}
+
+#[test]
+fn evidence_not_mechanical_with_symbols() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+pub fn new_func() {}",
+        5,
+        3,
+    )]);
+    let symbols = vec![make_symbol(
+        "new_func",
+        SymbolKind::Function,
+        "src/lib.rs",
+        true,
+        true,
+    )];
+    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    assert!(
+        !ctx.is_mechanical,
+        "change with new symbols should not be mechanical"
+    );
+}
+
+#[test]
+fn evidence_not_mechanical_large_change() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "",
+        50,
+        50,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        !ctx.is_mechanical,
+        "large change (100 lines total) should not be mechanical"
+    );
+}
+
+#[test]
+fn evidence_bug_evidence_from_fix_comment() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+// fix: handle edge case where input is empty\n+if input.is_empty() { return; }",
+        2,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.has_bug_evidence,
+        "diff with '// fix' comment should have bug evidence"
+    );
+}
+
+#[test]
+fn evidence_no_bug_evidence_for_refactor() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-    if let Some(x) = foo() {\n-        bar();\n-    }\n+    if let Some(x) = foo() { bar(); }",
+        1,
+        3,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        !ctx.has_bug_evidence,
+        "refactor without fix/bug comments should not have bug evidence"
+    );
+}
+
+#[test]
+fn evidence_dependency_only() {
+    let changes = make_staged_changes(vec![
+        make_file_change("Cargo.toml", ChangeStatus::Modified, "", 3, 1),
+        make_file_change(".github/workflows/ci.yml", ChangeStatus::Modified, "", 2, 1),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.is_dependency_only,
+        "all config/build files should be dependency_only"
+    );
+}
+
+#[test]
+fn evidence_not_dependency_only_with_source() {
+    let changes = make_staged_changes(vec![
+        make_file_change("Cargo.toml", ChangeStatus::Modified, "", 3, 1),
+        make_file_change("src/lib.rs", ChangeStatus::Modified, "", 5, 2),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        !ctx.is_dependency_only,
+        "mix of config and source should not be dependency_only"
+    );
+}
+
+#[test]
+fn evidence_public_api_removed_count() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-pub fn old_api() {}\n-pub fn another_old() {}",
+        0,
+        10,
+    )]);
+    let symbols = vec![
+        make_symbol("old_api", SymbolKind::Function, "src/lib.rs", true, false),
+        make_symbol(
+            "another_old",
+            SymbolKind::Function,
+            "src/lib.rs",
+            true,
+            false,
+        ),
+    ];
+    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    assert_eq!(
+        ctx.public_api_removed_count, 2,
+        "should count 2 removed public symbols"
+    );
+}
+
+#[test]
+fn prompt_contains_evidence_section() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-old\n+new",
+        1,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("EVIDENCE:"),
+        "prompt should contain EVIDENCE section"
+    );
+    assert!(
+        prompt.contains("mechanical/formatting change?"),
+        "prompt should contain mechanical transform question"
+    );
+    assert!(
+        prompt.contains("bug-fix comments?"),
+        "prompt should contain bug-fix question"
+    );
+}
+
+#[test]
+fn prompt_contains_constraints_when_no_bug_evidence() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-old\n+new",
+        1,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("CONSTRAINTS (must follow):"),
+        "prompt should contain CONSTRAINTS section when bug_evidence=no"
+    );
+    assert!(
+        prompt.contains("No bug-fix comments found"),
+        "prompt should mention no bug-fix constraint"
+    );
+}
+
+// ─── API replacement type inference ─────────────────────────────────────────
+
+#[test]
+fn api_replacement_infers_refactor() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/services/context.rs",
+        ChangeStatus::Modified,
+        "+pub fn new_builder()\n-pub fn old_builder()",
+        20,
+        15,
+    )]);
+    let symbols = vec![
+        make_symbol(
+            "new_builder",
+            SymbolKind::Function,
+            "src/services/context.rs",
+            true,
+            true,
+        ),
+        make_symbol(
+            "old_builder",
+            SymbolKind::Function,
+            "src/services/context.rs",
+            true,
+            false,
+        ),
+    ];
+    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols);
+    assert_eq!(
+        commit_type,
+        CommitType::Refactor,
+        "adding new public API while removing old public API should be refactor, not feat"
+    );
+}
+
+#[test]
+fn api_addition_without_removal_infers_feat() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/services/context.rs",
+        ChangeStatus::Modified,
+        "+pub fn new_feature()",
+        20,
+        0,
+    )]);
+    let symbols = vec![make_symbol(
+        "new_feature",
+        SymbolKind::Function,
+        "src/services/context.rs",
+        true,
+        true,
+    )];
+    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols);
+    assert_eq!(
+        commit_type,
+        CommitType::Feat,
+        "adding new public API without removing old ones should be feat"
+    );
+}
+
+// ─── Prompt content tests ───────────────────────────────────────────────────
+
+#[test]
+fn prompt_includes_subject_budget() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-old\n+new",
+        1,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let prompt = ctx.to_prompt();
+    // Should contain "under XX chars" for subject budget
+    assert!(
+        prompt.contains("under ") && prompt.contains(" chars"),
+        "prompt should contain subject character budget"
+    );
+}
+
+#[test]
+fn prompt_breaking_constraint_includes_description_guidance() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-pub fn old()\n+fn new()",
+        1,
+        1,
+    )]);
+    let symbols = vec![make_symbol(
+        "old",
+        SymbolKind::Function,
+        "src/lib.rs",
+        true,
+        false,
+    )];
+    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("describe what was removed"),
+        "breaking change constraint should guide the model to describe the removal"
+    );
+}
+
+#[test]
+fn prompt_evidence_uses_natural_language() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-old\n+new",
+        1,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let prompt = ctx.to_prompt();
+    // Should NOT contain snake_case internal identifiers
+    assert!(
+        !prompt.contains("mechanical_transform:"),
+        "prompt should not use snake_case field names (mechanical_transform)"
+    );
+    assert!(
+        !prompt.contains("bug_evidence:"),
+        "prompt should not use snake_case field names (bug_evidence)"
+    );
+    assert!(
+        !prompt.contains("- public_api_removed:"),
+        "prompt should not use snake_case field names (public_api_removed)"
+    );
+}
+
+// ─── Cross-project file categorization ──────────────────────────────────────
+
+#[test]
+fn file_category_csharp_is_source() {
+    assert_eq!(
+        FileCategory::from_path(std::path::Path::new("src/Models/User.cs")),
+        FileCategory::Source
+    );
+}
+
+#[test]
+fn file_category_ruby_is_source() {
+    assert_eq!(
+        FileCategory::from_path(std::path::Path::new("app/models/user.rb")),
+        FileCategory::Source
+    );
+}
+
+#[test]
+fn file_category_biome_is_config() {
+    assert_eq!(
+        FileCategory::from_path(std::path::Path::new("biome.json")),
+        FileCategory::Config
+    );
+}
+
+#[test]
+fn file_category_dotfile_config() {
+    assert_eq!(
+        FileCategory::from_path(std::path::Path::new(".rustfmt.toml")),
+        FileCategory::Config
+    );
+}
+
+#[test]
+fn file_category_jenkins_is_build() {
+    assert_eq!(
+        FileCategory::from_path(std::path::Path::new("Jenkinsfile")),
+        FileCategory::Build
+    );
+}
+
+#[test]
+fn file_category_containerfile_is_build() {
+    assert_eq!(
+        FileCategory::from_path(std::path::Path::new("Containerfile")),
+        FileCategory::Build
+    );
+    assert_eq!(
+        FileCategory::from_path(std::path::Path::new("podman-compose.yml")),
+        FileCategory::Build
+    );
+    assert_eq!(
+        FileCategory::from_path(std::path::Path::new("compose.yaml")),
+        FileCategory::Build
     );
 }
 

@@ -237,6 +237,212 @@ fn groups_sorted_by_change_size() {
     }
 }
 
+// ─── Diff-shape grouping tests ──────────────────────────────────────────────
+
+#[test]
+fn same_shape_changes_grouped_together() {
+    // Three files with identical let-chain refactors (balanced adds/removes, indent-only)
+    let indent_diff = "@@ -10,5 +10,4 @@\n-        if let Some(x) = foo() {\n-            if bar {\n-                do_thing();\n-            }\n-        }\n+        if let Some(x) = foo()\n+            && bar\n+        {\n+            do_thing();\n";
+    let changes = make_staged_changes(vec![
+        make_file_change("src/config.rs", ChangeStatus::Modified, indent_diff, 4, 5),
+        make_file_change(
+            "src/services/sanitizer.rs",
+            ChangeStatus::Modified,
+            indent_diff,
+            4,
+            5,
+        ),
+        make_file_change(
+            "src/services/splitter.rs",
+            ChangeStatus::Modified,
+            indent_diff,
+            4,
+            5,
+        ),
+    ]);
+
+    let result = CommitSplitter::analyze(&changes, &[]);
+    // All three files have the same diff shape → should be one group → single commit
+    assert!(
+        matches!(result, SplitSuggestion::SingleCommit),
+        "Files with identical diff shapes should be grouped together"
+    );
+}
+
+#[test]
+fn different_shape_changes_split() {
+    // One file with a big feature addition, another with a small let-chain refactor
+    let feature_diff = "@@ -0,0 +1,20 @@\n+pub fn new_function() {\n+    let x = 1;\n+    let y = 2;\n+    println!(\"{}\", x + y);\n+}\n";
+    let refactor_diff = "@@ -10,3 +10,2 @@\n-        if let Some(x) = foo() {\n-            bar();\n-        }\n+        if let Some(x) = foo() { bar(); }\n";
+
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/analyzer.rs",
+            ChangeStatus::Modified,
+            feature_diff,
+            20,
+            0,
+        ),
+        make_file_change(
+            "src/services/sanitizer.rs",
+            ChangeStatus::Modified,
+            refactor_diff,
+            2,
+            3,
+        ),
+    ]);
+
+    let symbols = vec![make_symbol(
+        "new_function",
+        SymbolKind::Function,
+        "src/services/analyzer.rs",
+        true,
+        true,
+    )];
+
+    let result = CommitSplitter::analyze(&changes, &symbols);
+    assert!(
+        matches!(result, SplitSuggestion::SuggestSplit(_)),
+        "Files with different diff shapes should be split"
+    );
+}
+
+// ─── Support file separation tests ──────────────────────────────────────────
+
+#[test]
+fn docs_separated_from_source() {
+    // Source files + doc files should produce separate groups
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/analyzer.rs",
+            ChangeStatus::Modified,
+            "@@ -1,3 +1,5 @@\n+use rayon;\n+use std::collections::HashMap;\n",
+            20,
+            5,
+        ),
+        make_file_change("README.md", ChangeStatus::Modified, "", 5, 2),
+        make_file_change("CLAUDE.md", ChangeStatus::Modified, "", 10, 3),
+    ]);
+
+    let symbols = vec![make_symbol(
+        "new_fn",
+        SymbolKind::Function,
+        "src/services/analyzer.rs",
+        true,
+        true,
+    )];
+
+    let result = CommitSplitter::analyze(&changes, &symbols);
+    match result {
+        SplitSuggestion::SuggestSplit(groups) => {
+            // Docs should NOT be in the same group as source files
+            let source_group = groups
+                .iter()
+                .find(|g| {
+                    g.files
+                        .iter()
+                        .any(|f| f.to_string_lossy().contains("analyzer"))
+                })
+                .expect("should have source group");
+
+            assert!(
+                !source_group
+                    .files
+                    .iter()
+                    .any(|f| f.to_string_lossy().ends_with(".md")),
+                "Doc files should be in their own group, not dumped on source group"
+            );
+        }
+        SplitSuggestion::SingleCommit => {
+            panic!("Expected split between source and docs");
+        }
+    }
+}
+
+#[test]
+fn config_separated_from_source() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/analyzer.rs",
+            ChangeStatus::Modified,
+            "@@ -1,3 +1,5 @@\n+use rayon;\n",
+            10,
+            2,
+        ),
+        make_file_change(
+            "Cargo.toml",
+            ChangeStatus::Modified,
+            "@@ -30,1 +30,2 @@\n+rayon = \"1.11\"\n",
+            3,
+            1,
+        ),
+    ]);
+
+    let symbols = vec![make_symbol(
+        "new_fn",
+        SymbolKind::Function,
+        "src/services/analyzer.rs",
+        true,
+        true,
+    )];
+
+    let result = CommitSplitter::analyze(&changes, &symbols);
+    match result {
+        SplitSuggestion::SuggestSplit(groups) => {
+            assert_eq!(groups.len(), 2, "Should have source and config groups");
+        }
+        SplitSuggestion::SingleCommit => {
+            panic!("Expected split between source and config");
+        }
+    }
+}
+
+// ─── Symbol dependency merging tests ────────────────────────────────────────
+
+#[test]
+fn symbol_dependency_merges_groups() {
+    // analyzer.rs adds extract_for_file, app.rs references it in its diff
+    let analyzer_diff = "@@ -1,3 +1,5 @@\n+fn extract_for_file() {}\n+use rayon;\n";
+    let app_diff =
+        "@@ -10,5 +10,3 @@\n-let result = old_method();\n+let result = extract_for_file();\n";
+
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/analyzer.rs",
+            ChangeStatus::Modified,
+            analyzer_diff,
+            20,
+            5,
+        ),
+        make_file_change("src/app.rs", ChangeStatus::Modified, app_diff, 3, 5),
+    ]);
+
+    let symbols = vec![
+        make_symbol(
+            "extract_for_file",
+            SymbolKind::Function,
+            "src/services/analyzer.rs",
+            false,
+            true,
+        ),
+        make_symbol(
+            "old_method",
+            SymbolKind::Function,
+            "src/services/analyzer.rs",
+            false,
+            false,
+        ),
+    ];
+
+    let result = CommitSplitter::analyze(&changes, &symbols);
+    // app.rs mentions "extract_for_file" which is a symbol from analyzer.rs
+    // → should be merged into same group → single commit
+    assert!(
+        matches!(result, SplitSuggestion::SingleCommit),
+        "Files connected by symbol dependencies should be merged"
+    );
+}
+
 // ─── Module detection tests ──────────────────────────────────────────────────
 
 #[test]
