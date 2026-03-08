@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-use std::collections::HashMap;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 
@@ -15,14 +14,15 @@ use tracing::{debug, warn};
 
 use crate::cli::{Cli, Commands, HookAction};
 use crate::config::Config;
-use crate::domain::{ChangeStatus, CodeSymbol, StagedChanges};
+use crate::domain::PromptContext;
+use crate::domain::{ChangeStatus, CodeSymbol, CommitType, FileCategory, StagedChanges};
 use crate::error::{Error, Result};
 use crate::services::{
     analyzer::AnalyzerService,
     context::ContextBuilder,
     git::GitService,
     llm, safety,
-    sanitizer::CommitSanitizer,
+    sanitizer::{CommitSanitizer, CommitValidator},
     splitter::{CommitSplitter, SplitSuggestion},
 };
 
@@ -119,27 +119,14 @@ impl App {
         // Step 3: Pre-fetch file content and analyze with tree-sitter
         self.print_status("Extracting code symbols...");
 
-        let mut analyzer = AnalyzerService::new()?;
+        let analyzer = AnalyzerService::new()?;
 
-        // Pre-fetch all file content asynchronously, then pass as sync maps
+        // Fetch all file content concurrently (async I/O via tokio JoinSet)
         let file_paths: Vec<PathBuf> = changes.files.iter().map(|f| f.path.clone()).collect();
-        let mut staged_map: HashMap<PathBuf, String> = HashMap::new();
-        let mut head_map: HashMap<PathBuf, String> = HashMap::new();
+        let (staged_map, head_map) = git.fetch_file_contents(&file_paths).await;
 
-        for path in &file_paths {
-            if let Some(content) = git.get_staged_content(path).await {
-                staged_map.insert(path.clone(), content);
-            }
-            if let Some(content) = git.get_head_content(path).await {
-                head_map.insert(path.clone(), content);
-            }
-        }
-
-        let symbols = analyzer.extract_symbols(
-            &changes.files,
-            &|path| staged_map.get(path).cloned(),
-            &|path| head_map.get(path).cloned(),
-        );
+        // Parse symbols in parallel across CPU cores (rayon)
+        let symbols = analyzer.extract_symbols(&changes.files, &staged_map, &head_map);
 
         debug!(count = symbols.len(), "symbols extracted");
 
@@ -252,7 +239,14 @@ impl App {
                 candidate = i + 1,
                 "sanitizing LLM response"
             );
-            match CommitSanitizer::sanitize(&raw_message, &self.config.format) {
+
+            // Validate against evidence and retry once if violations found
+            let raw_to_sanitize = self
+                .validate_and_retry(&raw_message, &context, &provider, &prompt)
+                .await
+                .unwrap_or(raw_message);
+
+            match CommitSanitizer::sanitize(&raw_to_sanitize, &self.config.format) {
                 Ok(msg) => candidates.push(msg),
                 Err(e) => {
                     warn!(candidate = i + 1, error = %e, "failed to sanitize candidate");
@@ -483,7 +477,11 @@ impl App {
                 .cloned()
                 .collect();
 
-            let context = ContextBuilder::build(&sub_changes, &sub_symbols, &self.config);
+            let mut context = ContextBuilder::build(&sub_changes, &sub_symbols, &self.config);
+            context.group_rationale = Some(Self::infer_group_rationale(
+                &sub_changes,
+                &group.commit_type,
+            ));
             let prompt = context.to_prompt();
 
             if self.cli.show_prompt {
@@ -529,7 +527,13 @@ impl App {
                 group = i + 1,
                 "sanitizing split group response"
             );
-            let message = CommitSanitizer::sanitize(&raw_message, &self.config.format)?;
+
+            let raw_to_sanitize = self
+                .validate_and_retry(&raw_message, &context, &provider, &prompt)
+                .await
+                .unwrap_or(raw_message);
+
+            let message = CommitSanitizer::sanitize(&raw_to_sanitize, &self.config.format)?;
             commit_messages.push((message, group.files.clone()));
         }
 
@@ -576,6 +580,55 @@ impl App {
         );
 
         Ok(())
+    }
+
+    /// Generate a short rationale describing why files were grouped together.
+    fn infer_group_rationale(changes: &StagedChanges, commit_type: &CommitType) -> String {
+        let file_count = changes.files.len();
+        let categories: Vec<_> = changes.files.iter().map(|f| f.category).collect();
+
+        // All same category?
+        if categories.iter().all(|c| *c == categories[0]) {
+            let cat = match categories[0] {
+                FileCategory::Docs => "documentation",
+                FileCategory::Test => "test",
+                FileCategory::Config => "configuration",
+                FileCategory::Build => "build/CI",
+                FileCategory::Source => "source",
+                FileCategory::Other => "miscellaneous",
+            };
+            return format!(
+                "{} {} changes across {} files",
+                commit_type.as_str(),
+                cat,
+                file_count
+            );
+        }
+
+        // Mixed categories
+        let source_count = categories
+            .iter()
+            .filter(|c| **c == FileCategory::Source)
+            .count();
+        let test_count = categories
+            .iter()
+            .filter(|c| **c == FileCategory::Test)
+            .count();
+
+        if source_count > 0 && test_count > 0 {
+            format!(
+                "{} changes in {} source + {} test files",
+                commit_type.as_str(),
+                source_count,
+                test_count
+            )
+        } else {
+            format!(
+                "{} changes across {} files",
+                commit_type.as_str(),
+                file_count
+            )
+        }
     }
 
     fn display_split_suggestion(
@@ -951,6 +1004,58 @@ fi
         }
 
         Ok(())
+    }
+
+    // ─── Post-Generation Validation ───
+
+    /// Validate raw LLM output against evidence flags. If violations exist,
+    /// re-prompt once with corrections appended. Returns the corrected raw
+    /// output, or None if no retry was needed or the retry also failed.
+    async fn validate_and_retry(
+        &self,
+        raw: &str,
+        context: &PromptContext,
+        provider: &llm::LlmBackend,
+        original_prompt: &str,
+    ) -> Option<String> {
+        let structured = CommitSanitizer::parse_structured(raw)?;
+
+        let violations = CommitValidator::validate(
+            &structured,
+            context.has_bug_evidence,
+            context.is_mechanical,
+            context.public_api_removed_count,
+            context.is_dependency_only,
+        );
+
+        if violations.is_empty() {
+            return None; // No violations, use original
+        }
+
+        debug!(
+            violations = violations.len(),
+            "evidence violations detected, retrying with corrections"
+        );
+
+        let corrections = CommitValidator::format_corrections(&violations);
+        let retry_prompt = format!("{}\n{}", original_prompt, corrections);
+
+        let (tx, mut rx) = mpsc::channel::<String>(64);
+        let cancel = self.cancel_token.clone();
+        let drain_handle = tokio::spawn(async move { while rx.recv().await.is_some() {} });
+
+        match provider.generate(&retry_prompt, tx, cancel).await {
+            Ok(retry_raw) if !retry_raw.trim().is_empty() => {
+                let _ = drain_handle.await;
+                debug!("retry succeeded, using corrected output");
+                Some(retry_raw)
+            }
+            _ => {
+                let _ = drain_handle.await;
+                warn!("retry failed or empty, using original output");
+                None
+            }
+        }
     }
 
     // ─── Output Helpers ───
