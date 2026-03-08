@@ -216,10 +216,10 @@ impl OllamaProvider {
         }
 
         // Handle any remaining content in buffer
-        if !line_buffer.is_empty() {
-            if let Ok(resp) = serde_json::from_str::<GenerateResponse>(&line_buffer) {
-                full_response.push_str(&resp.response);
-            }
+        if !line_buffer.is_empty()
+            && let Ok(resp) = serde_json::from_str::<GenerateResponse>(&line_buffer)
+        {
+            full_response.push_str(&resp.response);
         }
 
         Ok(full_response.trim().to_string())

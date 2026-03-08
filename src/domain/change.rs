@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChangeStatus {
@@ -49,11 +50,43 @@ impl FileCategory {
         // Build/CI detection
         if path.starts_with(".github/")
             || path_str.contains("/.github/")
+            || path.starts_with(".gitlab-ci")
+            || path.starts_with(".circleci/")
+            || path_str.contains("/.circleci/")
             || matches!(
                 name,
-                "Dockerfile" | "docker-compose.yml" | "Makefile" | "justfile" | ".dockerignore"
+                "Dockerfile"
+                    | "Containerfile"
+                    | "docker-compose.yml"
+                    | "docker-compose.yaml"
+                    | "podman-compose.yml"
+                    | "podman-compose.yaml"
+                    | "compose.yml"
+                    | "compose.yaml"
+                    | "Makefile"
+                    | "justfile"
+                    | ".dockerignore"
+                    | ".containerignore"
+                    | "Jenkinsfile"
+                    | "Procfile"
+                    | "CMakeLists.txt"
+                    | "Makefile.am"
+                    | "configure.ac"
+                    | ".travis.yml"
+                    | "azure-pipelines.yml"
+                    | "netlify.toml"
+                    | "vercel.json"
+                    | "fly.toml"
+                    | "render.yaml"
+                    | "railway.toml"
+                    | "Earthfile"
+                    | "Tiltfile"
+                    | "skaffold.yaml"
+                    | "helmfile.yaml"
+                    | "Vagrantfile"
             )
             || ext == "dockerfile"
+            || ext == "containerfile"
         {
             return Self::Build;
         }
@@ -72,14 +105,56 @@ impl FileCategory {
                 | "go.mod"
                 | "go.sum"
                 | "bun.lockb"
+                | "biome.json"
+                | "biome.jsonc"
+                | "deno.json"
+                | "deno.jsonc"
+                | ".eslintrc"
+                | ".eslintrc.json"
+                | ".eslintrc.js"
+                | ".prettierrc"
+                | ".prettierrc.json"
+                | "ruff.toml"
+                | ".ruff.toml"
+                | "setup.py"
+                | "setup.cfg"
+                | "tox.ini"
+                | "Pipfile"
+                | "Pipfile.lock"
+                | "uv.lock"
+                | "Gemfile"
+                | "Gemfile.lock"
+                | "Rakefile"
+                | "pom.xml"
+                | "build.gradle"
+                | "build.gradle.kts"
+                | "settings.gradle"
+                | "settings.gradle.kts"
+                | "mix.exs"
+                | "pubspec.yaml"
+                | "pubspec.lock"
+                | "REUSE.toml"
+                | ".editorconfig"
+                | "flake.nix"
+                | "flake.lock"
+                | "renovate.json"
+                | "dependabot.yml"
         ) {
+            return Self::Config;
+        }
+
+        // Dotfiles with config extensions
+        if name.starts_with('.') && matches!(ext, "json" | "yaml" | "yml" | "toml" | "ini" | "cfg")
+        {
             return Self::Config;
         }
 
         // By extension - source code
         match ext {
             "rs" | "ts" | "js" | "py" | "go" | "tsx" | "jsx" | "java" | "kt" | "c" | "cpp"
-            | "h" | "hpp" => Self::Source,
+            | "h" | "hpp" | "cs" | "rb" | "swift" | "scala" | "ex" | "exs" | "php" | "r"
+            | "lua" | "zig" | "nim" | "dart" | "vue" | "svelte" | "ml" | "mli" | "hs" | "clj"
+            | "cljs" | "erl" | "hrl" | "pl" | "pm" | "sh" | "bash" | "zsh" => Self::Source,
             _ => Self::Other,
         }
     }
@@ -100,7 +175,7 @@ impl FileCategory {
 pub struct FileChange {
     pub path: PathBuf,
     pub status: ChangeStatus,
-    pub diff: String,
+    pub diff: Arc<String>,
     pub additions: usize,
     pub deletions: usize,
     pub category: FileCategory,

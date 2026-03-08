@@ -171,10 +171,10 @@ impl Config {
         }
 
         // User-level config
-        if let Some(path) = Self::config_path() {
-            if path.exists() {
-                figment = figment.merge(Toml::file(&path));
-            }
+        if let Some(path) = Self::config_path()
+            && path.exists()
+        {
+            figment = figment.merge(Toml::file(&path));
         }
 
         // Environment variables (COMMITBEE_MODEL, COMMITBEE_PROVIDER, etc.)

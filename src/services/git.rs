@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use tokio::process::Command;
 
@@ -109,7 +110,7 @@ impl GitService {
             files.push(FileChange {
                 path: file_path,
                 status,
-                diff,
+                diff: Arc::new(diff),
                 additions,
                 deletions,
                 category,
@@ -148,14 +149,12 @@ impl GitService {
                 current_path = Some(path.to_string());
             }
             // For deleted files, +++ is /dev/null — use --- header instead
-            if line == "+++ /dev/null" {
-                if let Some(last_minus) =
+            if line == "+++ /dev/null"
+                && let Some(last_minus) =
                     current_lines.iter().rev().find(|l| l.starts_with("--- a/"))
-                {
-                    if let Some(path) = last_minus.strip_prefix("--- a/") {
-                        current_path = Some(path.to_string());
-                    }
-                }
+                && let Some(path) = last_minus.strip_prefix("--- a/")
+            {
+                current_path = Some(path.to_string());
             }
 
             current_lines.push(line);
@@ -176,27 +175,47 @@ impl GitService {
 
     // ─── File Content ───
 
-    /// Get staged file content (from index)
-    pub async fn get_staged_content(&self, path: &Path) -> Option<String> {
-        let output: std::process::Output = Command::new("git")
-            .args(["show", &format!(":0:{}", path.display())])
-            .current_dir(&self.work_dir)
-            .output()
-            .await
-            .ok()?;
+    /// Fetch staged and HEAD content for multiple files concurrently.
+    /// Spawns all git-show processes in parallel instead of sequentially.
+    pub async fn fetch_file_contents(
+        &self,
+        paths: &[PathBuf],
+    ) -> (HashMap<PathBuf, String>, HashMap<PathBuf, String>) {
+        let mut set = tokio::task::JoinSet::new();
 
-        if output.status.success() {
-            String::from_utf8(output.stdout).ok()
-        } else {
-            None
+        for path in paths {
+            let work_dir = self.work_dir.clone();
+            let path = path.clone();
+            set.spawn(async move {
+                let staged =
+                    Self::fetch_git_show(&work_dir, &format!(":0:{}", path.display())).await;
+                let head =
+                    Self::fetch_git_show(&work_dir, &format!("HEAD:{}", path.display())).await;
+                (path, staged, head)
+            });
         }
+
+        let mut staged_map = HashMap::new();
+        let mut head_map = HashMap::new();
+
+        while let Some(result) = set.join_next().await {
+            if let Ok((path, staged, head)) = result {
+                if let Some(content) = staged {
+                    staged_map.insert(path.clone(), content);
+                }
+                if let Some(content) = head {
+                    head_map.insert(path, content);
+                }
+            }
+        }
+
+        (staged_map, head_map)
     }
 
-    /// Get HEAD file content
-    pub async fn get_head_content(&self, path: &Path) -> Option<String> {
+    async fn fetch_git_show(work_dir: &Path, ref_path: &str) -> Option<String> {
         let output: std::process::Output = Command::new("git")
-            .args(["show", &format!("HEAD:{}", path.display())])
-            .current_dir(&self.work_dir)
+            .args(["show", ref_path])
+            .current_dir(work_dir)
             .output()
             .await
             .ok()?;

@@ -179,11 +179,11 @@ impl AnthropicProvider {
                         if let Ok(event) = serde_json::from_str::<StreamEvent>(data) {
                             match event.event_type.as_str() {
                                 "content_block_delta" => {
-                                    if let Some(delta) = &event.delta {
-                                        if let Some(text) = &delta.text {
-                                            let _ = token_tx.send(text.clone()).await;
-                                            full_response.push_str(text);
-                                        }
+                                    if let Some(delta) = &event.delta
+                                        && let Some(text) = &delta.text
+                                    {
+                                        let _ = token_tx.send(text.clone()).await;
+                                        full_response.push_str(text);
                                     }
                                 }
                                 "message_stop" => {

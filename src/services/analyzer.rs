@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
+use rayon::prelude::*;
 use regex::Regex;
-use std::path::Path;
 use tree_sitter::{Language, Parser};
 
 use crate::domain::{CodeSymbol, FileChange, SymbolKind};
@@ -81,59 +83,49 @@ impl AnalyzerService {
         Ok(Self)
     }
 
-    /// Extract symbols from file changes using full file content + hunk mapping
+    /// Extract symbols from file changes using full file content + hunk mapping.
+    /// Uses rayon to parse files in parallel across CPU cores.
     pub fn extract_symbols(
-        &mut self,
+        &self,
         changes: &[FileChange],
-        staged_content: &dyn Fn(&Path) -> Option<String>,
-        head_content: &dyn Fn(&Path) -> Option<String>,
+        staged_content: &HashMap<PathBuf, String>,
+        head_content: &HashMap<PathBuf, String>,
     ) -> Vec<CodeSymbol> {
-        let mut symbols = Vec::new();
+        changes
+            .par_iter()
+            .filter(|change| !change.is_binary)
+            .flat_map(|change| {
+                let ext = change
+                    .path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("");
 
-        for change in changes {
-            if change.is_binary {
-                continue;
-            }
+                let language: Option<Language> = match ext {
+                    "rs" => Some(tree_sitter_rust::LANGUAGE.into()),
+                    "ts" | "tsx" => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
+                    "py" => Some(tree_sitter_python::LANGUAGE.into()),
+                    "go" => Some(tree_sitter_go::LANGUAGE.into()),
+                    "js" | "jsx" => Some(tree_sitter_javascript::LANGUAGE.into()),
+                    _ => None,
+                };
 
-            let ext = change
-                .path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-
-            let hunks = DiffHunk::parse_from_diff(&change.diff);
-
-            // Get the appropriate language for parsing
-            let language: Option<Language> = match ext {
-                "rs" => Some(tree_sitter_rust::LANGUAGE.into()),
-                "ts" | "tsx" => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
-                "py" => Some(tree_sitter_python::LANGUAGE.into()),
-                "go" => Some(tree_sitter_go::LANGUAGE.into()),
-                "js" | "jsx" => Some(tree_sitter_javascript::LANGUAGE.into()),
-                _ => None,
-            };
-
-            if let Some(lang) = language {
-                let file_symbols = Self::extract_for_file_static(
-                    lang,
-                    change,
-                    &hunks,
-                    staged_content,
-                    head_content,
-                );
-                symbols.extend(file_symbols);
-            }
-        }
-
-        symbols
+                language
+                    .map(|lang| {
+                        let hunks = DiffHunk::parse_from_diff(&change.diff);
+                        Self::extract_for_file(lang, change, &hunks, staged_content, head_content)
+                    })
+                    .unwrap_or_default()
+            })
+            .collect()
     }
 
-    fn extract_for_file_static(
+    fn extract_for_file(
         language: Language,
         change: &FileChange,
         hunks: &[DiffHunk],
-        staged_content: &dyn Fn(&Path) -> Option<String>,
-        head_content: &dyn Fn(&Path) -> Option<String>,
+        staged_content: &HashMap<PathBuf, String>,
+        head_content: &HashMap<PathBuf, String>,
     ) -> Vec<CodeSymbol> {
         let mut parser = Parser::new();
         if parser.set_language(&language).is_err() {
@@ -143,11 +135,11 @@ impl AnalyzerService {
         let mut symbols = Vec::new();
 
         // Parse staged (new) file content
-        if let Some(content) = staged_content(&change.path) {
+        if let Some(content) = staged_content.get(&change.path) {
             let changed = Self::extract_changed_symbols_static(
                 &mut parser,
                 &change.path,
-                &content,
+                content,
                 hunks,
                 true,
             );
@@ -155,11 +147,11 @@ impl AnalyzerService {
         }
 
         // Parse HEAD (old) file content
-        if let Some(content) = head_content(&change.path) {
+        if let Some(content) = head_content.get(&change.path) {
             let changed = Self::extract_changed_symbols_static(
                 &mut parser,
                 &change.path,
-                &content,
+                content,
                 hunks,
                 false,
             );
