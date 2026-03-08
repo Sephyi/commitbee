@@ -288,14 +288,14 @@ impl CommitSanitizer {
         }
 
         // Apply lowercase to subject if enabled (for plain text, lowercase after the colon)
-        if format.lowercase_subject {
-            if let Some(colon_pos) = cleaned.find(": ") {
-                let (prefix, rest) = cleaned.split_at(colon_pos + 2);
-                let mut chars = rest.chars();
-                if let Some(first) = chars.next() {
-                    let lowered: String = first.to_lowercase().chain(chars).collect();
-                    cleaned = format!("{}{}", prefix, lowered);
-                }
+        if format.lowercase_subject
+            && let Some(colon_pos) = cleaned.find(": ")
+        {
+            let (prefix, rest) = cleaned.split_at(colon_pos + 2);
+            let mut chars = rest.chars();
+            if let Some(first) = chars.next() {
+                let lowered: String = first.to_lowercase().chain(chars).collect();
+                cleaned = format!("{}{}", prefix, lowered);
             }
         }
 
@@ -331,5 +331,145 @@ impl CommitSanitizer {
         }
 
         Ok(())
+    }
+
+    /// Try to parse raw LLM output as structured JSON without sanitizing.
+    /// Used by the post-generation validator to inspect the LLM's raw intent.
+    pub fn parse_structured(raw: &str) -> Option<StructuredCommit> {
+        Self::try_parse_json(raw).ok()
+    }
+}
+
+/// Post-generation evidence-based validation.
+///
+/// Checks if a structured commit message is consistent with the evidence flags
+/// computed from code analysis. Returns a list of violations that can be used
+/// to construct a corrective re-prompt.
+pub struct CommitValidator;
+
+impl CommitValidator {
+    /// Validate a structured commit against evidence flags.
+    /// Returns violations as human-readable correction instructions.
+    pub fn validate(
+        commit: &StructuredCommit,
+        has_bug_evidence: bool,
+        is_mechanical: bool,
+        public_api_removed_count: usize,
+        is_dependency_only: bool,
+    ) -> Vec<String> {
+        let mut violations = Vec::new();
+        let commit_type = commit.commit_type.to_lowercase();
+
+        // Rule 1: type=fix requires bug evidence
+        if commit_type == "fix" && !has_bug_evidence {
+            violations.push(
+                "Type is \"fix\" but no bug-fix comments were found in the diff. \
+                 Use \"refactor\" instead."
+                    .to_string(),
+            );
+        }
+
+        // Rule 2: breaking_change must be set when public API removed
+        if commit.breaking_change.is_none() && public_api_removed_count > 0 {
+            violations.push(
+                "Public APIs were removed but breaking_change is null. \
+                 Describe what was removed in plain English."
+                    .to_string(),
+            );
+        }
+
+        // Rule 3: breaking_change must not copy internal field names
+        if let Some(ref bc) = commit.breaking_change {
+            let lower = bc.to_lowercase();
+            if lower.contains("public_api_removed")
+                || lower.contains("bug_evidence")
+                || lower.contains("mechanical_transform")
+                || lower.contains("dependency_only")
+            {
+                violations.push(
+                    "The breaking_change field contains internal label names. \
+                     Describe the actual API change in plain English."
+                        .to_string(),
+                );
+            }
+        }
+
+        // Rule 4: mechanical transform cannot be feat or fix
+        if is_mechanical && matches!(commit_type.as_str(), "feat" | "fix") {
+            violations.push(
+                "Change is a mechanical/formatting transform but type is \"feat\"/\"fix\". \
+                 Use \"style\" or \"refactor\"."
+                    .to_string(),
+            );
+        }
+
+        // Rule 5: dependency-only should be chore
+        if is_dependency_only && commit_type != "chore" {
+            violations.push(
+                "All changes are in dependency/config files but type is not \"chore\".".to_string(),
+            );
+        }
+
+        // Rule 6: subject too generic (vague verb + vague noun)
+        if Self::is_generic_subject(&commit.subject) {
+            violations.push(
+                "Subject is too generic — name the specific API, function, or module changed. \
+                 Avoid vague verbs like \"update\", \"improve\", \"change\"."
+                    .to_string(),
+            );
+        }
+
+        violations
+    }
+
+    /// Check if a subject is too generic (vague verb + vague noun without specifics).
+    ///
+    /// Flags subjects like "update code", "improve things", "change functionality"
+    /// but allows "update dependency versions", "improve error messages in validator".
+    fn is_generic_subject(subject: &str) -> bool {
+        const GENERIC_VERBS: &[&str] = &["update", "improve", "change", "modify", "enhance"];
+        const GENERIC_NOUNS: &[&str] = &[
+            "code",
+            "things",
+            "stuff",
+            "functionality",
+            "logic",
+            "implementation",
+            "behavior",
+            "performance",
+            "handling",
+            "processing",
+        ];
+
+        let words: Vec<&str> = subject.split_whitespace().collect();
+        if words.len() > 4 {
+            // Longer subjects are usually specific enough
+            return false;
+        }
+
+        let lower: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
+
+        // Check if starts with generic verb and contains a generic noun
+        if let Some(first) = lower.first()
+            && GENERIC_VERBS.contains(&first.as_str())
+        {
+            return lower[1..]
+                .iter()
+                .any(|w| GENERIC_NOUNS.contains(&w.as_str()));
+        }
+
+        false
+    }
+
+    /// Format violations as a CORRECTIONS section for a retry prompt.
+    pub fn format_corrections(violations: &[String]) -> String {
+        let mut section =
+            String::from("\nCORRECTIONS (your previous output had these errors — fix them):\n");
+        for v in violations {
+            section.push_str("- ");
+            section.push_str(v);
+            section.push('\n');
+        }
+        section
     }
 }
