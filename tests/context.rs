@@ -394,7 +394,7 @@ fn infer_type_more_deletions_is_refactor() {
 }
 
 #[test]
-fn infer_type_default_fallback_is_feat() {
+fn infer_type_default_fallback_is_refactor() {
     // 30 insertions, 30 deletions (not small, not deletion-heavy, not special category)
     let changes = make_staged_changes(vec![make_file_change(
         "src/services/module.rs",
@@ -406,8 +406,8 @@ fn infer_type_default_fallback_is_feat() {
     let ctx = ContextBuilder::build(&changes, &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
-        CommitType::Feat,
-        "large non-special change should fallback to Feat"
+        CommitType::Refactor,
+        "large non-special change should fallback to Refactor (safer than Feat)"
     );
 }
 

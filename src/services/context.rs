@@ -168,6 +168,11 @@ impl ContextBuilder {
             return CommitType::Build;
         }
 
+        // Explicit bug evidence -> fix
+        if Self::detect_bug_evidence(changes) {
+            return CommitType::Fix;
+        }
+
         // New public functions/structs -> feat (unless it's an API replacement)
         let has_new_public_symbols = symbols.iter().any(|s| {
             s.is_added
@@ -226,7 +231,7 @@ impl ContextBuilder {
             return CommitType::Refactor;
         }
 
-        CommitType::Feat
+        CommitType::Refactor
     }
 
     pub fn infer_scope(changes: &StagedChanges) -> Option<String> {

@@ -89,13 +89,11 @@ SUGGESTED TYPE: {commit_type}{scope}
 DIFF:
 {diff}
 {constraints}{breaking}{metadata_breaking}{focus}
-Write a JSON commit message describing the changes shown in the diff.
-The subject must be specific and under {subject_budget} chars — describe WHAT was changed (e.g., "add system prompt to ollama provider", "update dependency versions").
-For the body: if the change is trivial (single rename, typo fix), use null. Otherwise write a short body (1-3 sentences) explaining WHY the change was made or what it enables.
-For breaking_change: only set this if existing users or dependents must change their code, config, or scripts to keep working — e.g., a public function/endpoint removed or renamed, a required parameter or field added, a config key changed. New optional features, bug fixes, and internal refactors are NOT breaking. Default to null.
+Subject must be under {subject_budget} chars and name at least one concrete entity (function, struct, variable) from the diff.
+Body: 1-3 sentences on WHY, or null if trivial. breaking_change: only if existing users must change code/config to stay compatible, else null.
 
-Output format:
-{{"type": "<type>", "scope": {scope_json}, "subject": "<imperative verb + what changed>", "body": "<why this change was made, or null if trivial>", "breaking_change": null}}"#,
+Respond with ONLY this JSON:
+{{"type": "<type>", "scope": {scope_json}, "subject": "<imperative verb + what changed>", "body": null, "breaking_change": null}}"#,
             summary = self.change_summary,
             files = self.file_breakdown.trim(),
             commit_type = self.suggested_type.as_str(),

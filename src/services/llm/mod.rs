@@ -17,26 +17,25 @@ parameter added, a config key renamed. New optional additions, bug fixes, and in
 refactors are NOT breaking. Default to null.
 
 Rules:
-- Subject: imperative, specific, lowercase start, no trailing period, max 72 chars total first line.
+- Subject: imperative, specific, lowercase start, no trailing period, max 72 chars total first line. Must name at least one concrete entity (function, struct, variable, file) from the diff.
 - Body: 1-3 sentences about WHY for non-trivial changes, else null.
 - Do not list files changed.
-- If the change is purely syntactic (collapsing nested blocks, reformatting, reordering imports) with identical behavior, use "style" — never describe it as fixing a bug or adding a feature.
+- If the change is purely syntactic (reformatting, reordering imports) with identical behavior, use "style".
 - The SUGGESTED TYPE is a hint. Override it if the diff clearly shows a different type.
-- Never copy labels, field names, or evidence tags from the prompt into your output. The breaking_change value must describe the actual change in plain English.
+- Never copy labels, field names, or evidence tags from the prompt into your output.
 - If public APIs are both added and removed, this is an API replacement (refactor), not a new feature.
 
 Examples:
-GOOD: "add evidence-based commit validation with retry" — one specific thing
-GOOD: "replace path-only grouping with diff-shape fingerprinting" — names the concrete change
-BAD: "update code and improve things" — too vague
-BAD: "refactor code for better performance and add validation" — two concerns in one subject
+GOOD: "replace path-only grouping with diff-shape fingerprinting"
+GOOD: "add CommitValidator for evidence-based retry"
+BAD: "update code and improve things" — too generic
+BAD: "refactor code for better performance and add validation" — two concerns
 
 1. Diff adds `pub fn new_api()` and removes `pub fn old_api()` → type: "refactor", breaking_change: "removed `old_api()`, use `new_api()` instead"
 2. Diff only changes whitespace/indentation → type: "style", body: null, breaking_change: null
 
-Output ONLY valid JSON (nullable fields use null, not the string "null"):
+Respond with ONLY the JSON object, nothing else:
 {"type":"<type>","scope":null,"subject":"<subject>","body":null,"breaking_change":null}
-For scope, body, and breaking_change: replace null with a quoted string when applicable.
 "#;
 
 pub mod anthropic;
