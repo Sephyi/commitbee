@@ -603,3 +603,141 @@ fn validator_corrections_format() {
     assert!(corrections.contains("Type is wrong."));
     assert!(corrections.contains("Breaking change missing."));
 }
+
+#[test]
+fn sanitize_with_preceding_thought_block() {
+    let raw = r#"<thought>
+The core change is the addition of the CommitValidator struct to enforce subject specificity and evidence-based rules.
+</thought>
+{
+  "type": "feat",
+  "scope": "sanitizer",
+  "subject": "add CommitValidator for evidence-based validation",
+  "body": "Implements deterministic validation rules against code analysis signals.",
+  "breaking_change": null
+}"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert!(
+        result.starts_with("feat(sanitizer): add CommitValidator for evidence-based validation")
+    );
+}
+
+#[test]
+fn sanitize_plain_text_with_thought_block() {
+    let raw = r#"<thought>
+The core change is renaming the function.
+</thought>
+refactor: rename process to process_all"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert_eq!(result, "refactor: rename process to process_all");
+}
+
+#[test]
+fn sanitize_with_thought_block_containing_braces() {
+    let raw = r#"<thought>
+I should generate a JSON like this: { "foo": "bar" }
+</thought>
+{
+  "type": "refactor",
+  "scope": "splitter",
+  "subject": "upgrade clustering to hybrid Jaccard similarity",
+  "body": null,
+  "breaking_change": null
+}"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert_eq!(
+        result,
+        "refactor(splitter): upgrade clustering to hybrid Jaccard similarity"
+    );
+}
+
+#[test]
+fn sanitize_with_unclosed_thought_block() {
+    // LLM might forget to close tag but still output the message
+    let raw = r#"<thought>
+I will refactor the splitter to use Jaccard similarity.
+
+refactor(splitter): upgrade clustering to hybrid Jaccard similarity"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert_eq!(
+        result,
+        "refactor(splitter): upgrade clustering to hybrid Jaccard similarity"
+    );
+}
+
+#[test]
+fn sanitize_with_noise_containing_braces_before_json() {
+    let raw = r#"<thought>...</thought>
+The diff spans several files and adds a new field { "foo": 1 } to the config.
+{
+  "type": "refactor",
+  "scope": "sanitizer",
+  "subject": "harden JSON extraction",
+  "body": null,
+  "breaking_change": null
+}"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert_eq!(result, "refactor(sanitizer): harden JSON extraction");
+}
+
+#[test]
+fn sanitize_with_noise_before_plain_text() {
+    let raw = r#"The diff spans several files. refactor: improve thing"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert_eq!(result, "refactor: improve thing");
+}
+
+#[test]
+fn sanitize_with_think_block_json() {
+    // qwen3/ollama native thinking uses <think> tags, not <thought>
+    let raw = r#"<think>
+I need to analyze the diff. The main change is adding a new struct.
+</think>
+{
+  "type": "feat",
+  "scope": "core",
+  "subject": "add DiffFingerprint struct for similarity comparison",
+  "body": null,
+  "breaking_change": null
+}"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert_eq!(
+        result,
+        "feat(core): add DiffFingerprint struct for similarity comparison"
+    );
+}
+
+#[test]
+fn sanitize_with_unclosed_think_block() {
+    let raw = r#"<think>
+I will analyze the changes...
+
+feat: add DiffFingerprint struct for similarity comparison"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert_eq!(
+        result,
+        "feat: add DiffFingerprint struct for similarity comparison"
+    );
+}
+
+#[test]
+fn sanitize_conversational_preamble_with_json() {
+    // Claude/Anthropic sometimes outputs conversational text before JSON
+    let raw = r#"Let me analyze the changes in the diff.
+
+{"type": "refactor", "scope": "splitter", "subject": "upgrade clustering to hybrid Jaccard similarity", "body": null, "breaking_change": null}"#;
+    let format = CommitFormat::default();
+    let result = CommitSanitizer::sanitize(raw, &format).unwrap();
+    assert_eq!(
+        result,
+        "refactor(splitter): upgrade clustering to hybrid Jaccard similarity"
+    );
+}

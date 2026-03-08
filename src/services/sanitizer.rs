@@ -27,6 +27,17 @@ static SCOPE_REGEX: LazyLock<Regex> =
 
 static CODE_FENCE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"```[\s\S]*?```").unwrap());
 
+static THOUGHT_BLOCK_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)<(?:thought|think)>[\s\S]*?</(?:thought|think)>").unwrap());
+
+static UNCLOSED_THOUGHT_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^\s*<(?:thought|think)>\s*").unwrap());
+
+static VALID_TYPE_START_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    let types = CommitType::ALL.join("|");
+    Regex::new(&format!(r"(?m)(?:^|\s)({})(?:\(|!|:)", types)).unwrap()
+});
+
 static PREAMBLE_PATTERNS: &[&str] = &[
     "here's the commit message",
     "here is the commit message",
@@ -102,7 +113,7 @@ impl CommitSanitizer {
     ///   `  <continuation lines, indented two spaces>`
     ///
     /// `str::len()` is `const fn` since Rust 1.39 — `FIRST_LINE_BUDGET` is a
-    /// valid compile-time constant on MSRV 1.85.
+    /// valid compile-time constant on MSRV 1.94.
     fn format_breaking_footer(desc: &str) -> String {
         const PREFIX: &str = "BREAKING CHANGE: ";
         const FIRST_LINE_BUDGET: usize = 72 - PREFIX.len(); // 55
@@ -136,29 +147,34 @@ impl CommitSanitizer {
     }
 
     fn try_parse_json(raw: &str) -> std::result::Result<StructuredCommit, ()> {
-        let trimmed = raw.trim();
+        // Strip thought blocks first to avoid picking up braces inside thoughts
+        let stripped = THOUGHT_BLOCK_REGEX.replace_all(raw, "");
+        let stripped = UNCLOSED_THOUGHT_REGEX.replace(&stripped, "");
+        let trimmed = stripped.trim();
 
-        // Direct JSON
-        if trimmed.starts_with('{') {
-            return serde_json::from_str(trimmed).map_err(|_| ());
-        }
-
-        // JSON in code fence
-        if let Some(start) = trimmed.find("```json") {
-            let after_fence = &trimmed[start + 7..];
-            if let Some(end) = after_fence.find("```") {
-                let json = after_fence[..end].trim();
-                return serde_json::from_str(json).map_err(|_| ());
+        // 1. Look for the start of our specific JSON structure
+        // We look for "type" key because that's mandatory and highly specific.
+        if let Some(type_key_pos) = trimmed.find("type") {
+            // Find the '{' that starts this object (search backwards from "type")
+            if let Some(start_brace) = trimmed[..type_key_pos].rfind('{') {
+                let json_candidate = &trimmed[start_brace..];
+                // Find the last '}' to handle trailing text
+                if let Some(end_brace) = json_candidate.rfind('}') {
+                    let json = &json_candidate[..=end_brace];
+                    if let Ok(structured) = serde_json::from_str::<StructuredCommit>(json) {
+                        return Ok(structured);
+                    }
+                }
             }
         }
 
-        // Plain code fence
-        if let Some(start) = trimmed.find("```") {
-            let after_fence = &trimmed[start + 3..];
-            if let Some(end) = after_fence.find("```") {
-                let content = after_fence[..end].trim();
-                if content.starts_with('{') {
-                    return serde_json::from_str(content).map_err(|_| ());
+        // 2. Fallback to any brace if specific start not found
+        if let Some(start_brace) = trimmed.find('{') {
+            let json_candidate = &trimmed[start_brace..];
+            if let Some(end_brace) = json_candidate.rfind('}') {
+                let json = &json_candidate[..=end_brace];
+                if let Ok(structured) = serde_json::from_str::<StructuredCommit>(json) {
+                    return Ok(structured);
                 }
             }
         }
@@ -266,8 +282,17 @@ impl CommitSanitizer {
     fn clean_text(raw: &str, format: &CommitFormat) -> String {
         let mut cleaned = raw.to_string();
 
+        // Remove thought blocks
+        cleaned = THOUGHT_BLOCK_REGEX.replace_all(&cleaned, "").to_string();
+        cleaned = UNCLOSED_THOUGHT_REGEX.replace(&cleaned, "").to_string();
+
         // Remove code fences
         cleaned = CODE_FENCE_REGEX.replace_all(&cleaned, "").to_string();
+
+        // Find the actual start of the conventional commit (skip preambles/thoughts)
+        if let Some(mat) = VALID_TYPE_START_REGEX.find(&cleaned) {
+            cleaned = cleaned[mat.start()..].to_string();
+        }
 
         // Remove quotes at start/end
         cleaned = cleaned.trim().to_string();
