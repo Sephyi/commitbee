@@ -10,14 +10,74 @@ pub struct PromptContext {
     pub file_breakdown: String,
     pub symbols_added: String,
     pub symbols_removed: String,
+    pub symbols_modified: String,
+    pub public_api_removed: String,
     pub suggested_type: CommitType,
     pub suggested_scope: Option<String>,
     pub truncated_diff: String,
+    // Evidence flags for constraint-based anti-hallucination
+    pub is_mechanical: bool,
+    pub has_bug_evidence: bool,
+    pub public_api_removed_count: usize,
+    pub has_new_public_api: bool,
+    pub is_dependency_only: bool,
+    /// Number of files in this group (for focus instruction on large groups)
+    pub file_count: usize,
+    /// Most significant change for subject anchoring (e.g., "added CommitValidator struct")
+    pub primary_change: Option<String>,
+    /// Short rationale for why these files were grouped together
+    pub group_rationale: Option<String>,
+    /// Metadata-level breaking signals detected from diff content
+    pub metadata_breaking_signals: Vec<String>,
 }
 
 impl PromptContext {
     pub fn to_prompt(&self) -> String {
         let symbols_section = self.format_symbols_section();
+        let breaking_warning = self.format_breaking_warning();
+        let evidence_section = self.format_evidence_section();
+        let constraints_section = self.format_constraints_section();
+
+        // Calculate available chars for subject after type(scope): prefix
+        let prefix_len = self.suggested_type.as_str().len()
+            + self
+                .suggested_scope
+                .as_ref()
+                .map(|s| s.len() + 2)
+                .unwrap_or(0) // "(scope)"
+            + 2; // ": "
+        let subject_budget = 72_usize.saturating_sub(prefix_len);
+
+        let focus_instruction = if self.file_count > 5 {
+            "\nFOCUS: This group contains many files. Focus the subject on the single most significant change. Do not try to describe every change — pick the primary one.\n"
+        } else {
+            ""
+        };
+
+        let primary_change_line = self
+            .primary_change
+            .as_ref()
+            .map(|pc| format!("\nPRIMARY_CHANGE: {}\n", pc))
+            .unwrap_or_default();
+
+        let group_rationale_line = self
+            .group_rationale
+            .as_ref()
+            .map(|gr| format!("GROUP_REASON: {}\n", gr))
+            .unwrap_or_default();
+
+        let metadata_breaking_section = if self.metadata_breaking_signals.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n⚠ METADATA BREAKING CHANGES DETECTED:\n{}\n",
+                self.metadata_breaking_signals
+                    .iter()
+                    .map(|s| format!("- {}", s))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
 
         format!(
             r#"Analyze this git diff and generate a commit message.
@@ -25,17 +85,17 @@ impl PromptContext {
 SUMMARY: {summary}
 FILES: {files}
 SUGGESTED TYPE: {commit_type}{scope}
-{symbols}
+{group_rationale}{evidence}{primary_change}{symbols}
 DIFF:
 {diff}
-
+{constraints}{breaking}{metadata_breaking}{focus}
 Write a JSON commit message describing the changes shown in the diff.
-The subject must be specific - describe WHAT was changed (e.g., "add system prompt to ollama provider", "update dependency versions").
+The subject must be specific and under {subject_budget} chars — describe WHAT was changed (e.g., "add system prompt to ollama provider", "update dependency versions").
 For the body: if the change is trivial (single rename, typo fix), use null. Otherwise write a short body (1-3 sentences) explaining WHY the change was made or what it enables.
 For breaking_change: only set this if existing users or dependents must change their code, config, or scripts to keep working — e.g., a public function/endpoint removed or renamed, a required parameter or field added, a config key changed. New optional features, bug fixes, and internal refactors are NOT breaking. Default to null.
 
 Output format:
-{{"type": "{commit_type}", "scope": {scope_json}, "subject": "<imperative verb + what changed>", "body": "<why this change was made, or null if trivial>", "breaking_change": null}}"#,
+{{"type": "<type>", "scope": {scope_json}, "subject": "<imperative verb + what changed>", "body": "<why this change was made, or null if trivial>", "breaking_change": null}}"#,
             summary = self.change_summary,
             files = self.file_breakdown.trim(),
             commit_type = self.suggested_type.as_str(),
@@ -44,7 +104,15 @@ Output format:
                 .as_ref()
                 .map(|s| format!("\nSCOPE: {}", s))
                 .unwrap_or_default(),
+            evidence = evidence_section,
             symbols = symbols_section,
+            breaking = breaking_warning,
+            constraints = constraints_section,
+            focus = focus_instruction,
+            primary_change = primary_change_line,
+            group_rationale = group_rationale_line,
+            metadata_breaking = metadata_breaking_section,
+            subject_budget = subject_budget,
             scope_json = self
                 .suggested_scope
                 .as_ref()
@@ -57,8 +125,9 @@ Output format:
     fn format_symbols_section(&self) -> String {
         let has_added = !self.symbols_added.is_empty();
         let has_removed = !self.symbols_removed.is_empty();
+        let has_modified = !self.symbols_modified.is_empty();
 
-        if !has_added && !has_removed {
+        if !has_added && !has_removed && !has_modified {
             return String::new();
         }
 
@@ -75,7 +144,80 @@ Output format:
                 self.symbols_removed.replace('\n', "\n    ")
             ));
         }
+        if has_modified {
+            section.push_str(&format!(
+                "\n  Modified (signature changed):\n    {}",
+                self.symbols_modified.replace('\n', "\n    ")
+            ));
+        }
         section.push('\n');
         section
+    }
+
+    fn format_breaking_warning(&self) -> String {
+        if self.public_api_removed.is_empty() {
+            return String::new();
+        }
+
+        format!(
+            "\n⚠ PUBLIC API REMOVED — describe this in breaking_change field:\n    {}\n",
+            self.public_api_removed.replace('\n', "\n    ")
+        )
+    }
+
+    fn format_evidence_section(&self) -> String {
+        let yn = |b: bool| if b { "yes" } else { "no" };
+
+        format!(
+            "\nEVIDENCE:\n\
+             - Is this a mechanical/formatting change? {}\n\
+             - Does the diff contain bug-fix comments? {}\n\
+             - How many public APIs were removed? {}\n\
+             - Were new public APIs added? {}\n\
+             - Are all changes in dependency/config files? {}\n",
+            yn(self.is_mechanical),
+            yn(self.has_bug_evidence),
+            self.public_api_removed_count,
+            yn(self.has_new_public_api),
+            yn(self.is_dependency_only),
+        )
+    }
+
+    fn format_constraints_section(&self) -> String {
+        let mut rules = Vec::new();
+
+        if !self.has_bug_evidence {
+            rules.push(
+                "- No bug-fix comments found: prefer \"refactor\" over \"fix\". \
+                 Only use \"fix\" if the diff clearly corrects wrong behavior.",
+            );
+        }
+        if self.is_mechanical {
+            rules.push(
+                "- Mechanical/formatting change detected: use \"style\" or \"refactor\", not \"feat\" or \"fix\".",
+            );
+        }
+        if self.public_api_removed_count > 0 {
+            rules.push(
+                "- Public APIs were removed: set breaking_change to describe what was removed \
+                 (e.g., \"removed `old_fn()`, use `new_fn()` instead\"). \
+                 Never copy labels from this prompt as the description.",
+            );
+        }
+        if self.is_dependency_only {
+            rules.push("- All changes are in dependency/config files: use \"chore\".");
+        }
+        if !self.metadata_breaking_signals.is_empty() {
+            rules.push(
+                "- Metadata breaking changes detected (version requirements raised, features removed, etc.): \
+                 set breaking_change to describe the compatibility impact.",
+            );
+        }
+
+        if rules.is_empty() {
+            return String::new();
+        }
+
+        format!("\nCONSTRAINTS (must follow):\n{}\n", rules.join("\n"))
     }
 }

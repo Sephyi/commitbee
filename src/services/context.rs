@@ -21,6 +21,12 @@ const SKIP_CONTENT_FILES: &[&str] = &[
     "Gemfile.lock",
     "poetry.lock",
     "composer.lock",
+    "Pipfile.lock",
+    "uv.lock",
+    "pubspec.lock",
+    "flake.lock",
+    "shrinkwrap.yaml",
+    "mix.lock",
 ];
 
 pub struct ContextBuilder;
@@ -51,10 +57,26 @@ impl ContextBuilder {
         let diff_budget = remaining.saturating_sub(remaining / 5).max(MIN_DIFF_BUDGET);
         let symbol_budget = remaining.saturating_sub(diff_budget);
 
-        // Deduplicate: a symbol that appears in both added and removed with the same
-        // kind+name+file was modified in-place (its definition line didn't move but its
-        // content changed). Showing it as both Added and Removed misleads the LLM into
-        // treating content changes as symbol creations/deletions. Drop both sides.
+        // Tri-state symbol classification:
+        // - AddedOnly: symbol appears only in added set
+        // - RemovedOnly: symbol appears only in removed set
+        // - Modified: same name+kind+file in both added and removed (signature changed)
+        //
+        // Modified symbols are shown separately (not as both Added and Removed, which
+        // misleads the LLM). Public modified symbols contribute to breaking risk.
+        let modified_symbols: Vec<&CodeSymbol> = symbols
+            .iter()
+            .filter(|s| {
+                s.is_added
+                    && symbols.iter().any(|other| {
+                        !other.is_added
+                            && other.kind == s.kind
+                            && other.name == s.name
+                            && other.file == s.file
+                    })
+            })
+            .collect();
+
         let symbols_deduped: Vec<CodeSymbol> = symbols
             .iter()
             .filter(|s| {
@@ -69,26 +91,57 @@ impl ContextBuilder {
             .collect();
 
         let symbols_added =
-            Self::format_symbols_with_budget(&symbols_deduped, true, symbol_budget / 2);
+            Self::format_symbols_with_budget(&symbols_deduped, true, symbol_budget / 3);
         let symbols_removed =
-            Self::format_symbols_with_budget(&symbols_deduped, false, symbol_budget / 2);
+            Self::format_symbols_with_budget(&symbols_deduped, false, symbol_budget / 3);
+
+        // Format modified symbols (signature changes)
+        let symbols_modified = Self::format_modified_symbols(&modified_symbols, symbol_budget / 3);
+
+        // Highlight removed public symbols — strong signal for breaking changes
+        let public_api_removed = Self::format_public_api_removed(&symbols_deduped);
 
         // Diff gets remaining budget
         let actual_diff_budget = max_context
             .saturating_sub(used)
             .saturating_sub(symbols_added.len())
-            .saturating_sub(symbols_removed.len());
+            .saturating_sub(symbols_removed.len())
+            .saturating_sub(symbols_modified.len())
+            .saturating_sub(public_api_removed.len());
 
         let truncated_diff = Self::truncate_diff_adaptive(changes, config, actual_diff_budget);
+
+        // Evidence flags for constraint-based anti-hallucination
+        let is_mechanical = Self::detect_mechanical_transform(changes, &symbols_deduped);
+        let has_bug_evidence = Self::detect_bug_evidence(changes);
+        // RemovedOnly public symbols + modified public symbols both contribute to breaking risk
+        let public_api_removed_count = symbols_deduped
+            .iter()
+            .filter(|s| !s.is_added && s.is_public)
+            .count()
+            + modified_symbols.iter().filter(|s| s.is_public).count();
+        let has_new_public_api = symbols_deduped.iter().any(|s| s.is_added && s.is_public);
+        let is_dependency_only = Self::detect_dependency_only(changes);
 
         PromptContext {
             change_summary,
             file_breakdown,
             symbols_added,
             symbols_removed,
+            symbols_modified,
+            public_api_removed,
             suggested_type: commit_type,
             suggested_scope: scope,
             truncated_diff,
+            is_mechanical,
+            has_bug_evidence,
+            public_api_removed_count,
+            has_new_public_api,
+            is_dependency_only,
+            file_count: changes.files.len(),
+            primary_change: Self::detect_primary_change(changes, &symbols_deduped),
+            group_rationale: None, // Set by splitter when generating per-group prompts
+            metadata_breaking_signals: Self::detect_metadata_breaking(changes),
         }
     }
 
@@ -115,7 +168,7 @@ impl ContextBuilder {
             return CommitType::Build;
         }
 
-        // New public functions/structs -> feat
+        // New public functions/structs -> feat (unless it's an API replacement)
         let has_new_public_symbols = symbols.iter().any(|s| {
             s.is_added
                 && s.is_public
@@ -124,6 +177,20 @@ impl ContextBuilder {
                     SymbolKind::Function | SymbolKind::Struct | SymbolKind::Trait
                 )
         });
+
+        let has_removed_public_symbols = symbols.iter().any(|s| {
+            !s.is_added
+                && s.is_public
+                && matches!(
+                    s.kind,
+                    SymbolKind::Function | SymbolKind::Struct | SymbolKind::Trait
+                )
+        });
+
+        // API replacement: adding new public APIs while removing old ones → refactor
+        if has_new_public_symbols && has_removed_public_symbols {
+            return CommitType::Refactor;
+        }
 
         if has_new_public_symbols {
             return CommitType::Feat;
@@ -145,9 +212,18 @@ impl ContextBuilder {
             return CommitType::Refactor;
         }
 
-        // Small changes -> fix
+        // Balanced small changes (additions ≈ deletions) with no new symbols -> style/refactor
+        // This catches mechanical transformations like reformatting, collapsing nesting, etc.
         if changes.stats.insertions < 20 && changes.stats.deletions < 20 {
-            return CommitType::Fix;
+            let has_any_new_symbols = symbols.iter().any(|s| s.is_added);
+            let has_any_removed_symbols = symbols.iter().any(|s| !s.is_added);
+            let balanced = changes.stats.insertions.abs_diff(changes.stats.deletions) <= 5;
+
+            if balanced && !has_any_new_symbols && !has_any_removed_symbols {
+                return CommitType::Style;
+            }
+
+            return CommitType::Refactor;
         }
 
         CommitType::Feat
@@ -182,22 +258,22 @@ impl ContextBuilder {
 
         for (i, component) in components.iter().enumerate() {
             match *component {
-                "src" | "lib" => {
-                    if let Some(next) = components.get(i + 1) {
-                        if !next.contains('.')
-                            && *next != "main"
-                            && *next != "lib"
-                            && *next != "mod"
-                        {
-                            return Some(next.to_string());
-                        }
+                "src" | "lib" | "app" | "internal" | "cmd" | "api" | "modules" => {
+                    if let Some(next) = components.get(i + 1)
+                        && !next.contains('.')
+                        && *next != "main"
+                        && *next != "lib"
+                        && *next != "mod"
+                        && *next != "index"
+                    {
+                        return Some(next.to_string());
                     }
                 }
-                "packages" | "crates" | "apps" => {
-                    if let Some(next) = components.get(i + 1) {
-                        if !next.contains('.') {
-                            return Some(next.to_string());
-                        }
+                "packages" | "crates" | "apps" | "services" | "plugins" | "workspaces" => {
+                    if let Some(next) = components.get(i + 1)
+                        && !next.contains('.')
+                    {
+                        return Some(next.to_string());
                     }
                 }
                 _ => {}
@@ -300,6 +376,234 @@ impl ContextBuilder {
         output
     }
 
+    /// Format modified symbols (signature changed: same name+kind+file in both added and removed).
+    fn format_modified_symbols(symbols: &[&CodeSymbol], char_budget: usize) -> String {
+        if symbols.is_empty() {
+            return String::new();
+        }
+
+        let mut output = String::new();
+        let mut count = 0;
+
+        for sym in symbols {
+            let visibility = if sym.is_public { "pub " } else { "" };
+            let line = format!(
+                "[~] {}{:?} {} ({}:{})",
+                visibility,
+                sym.kind,
+                sym.name,
+                sym.file.display(),
+                sym.line
+            );
+            if output.len() + line.len() + 1 > char_budget {
+                break;
+            }
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&line);
+            count += 1;
+        }
+
+        let remaining = symbols.len() - count;
+        if remaining > 0 {
+            output.push_str(&format!("\n... and {} more modified symbols", remaining));
+        }
+
+        output
+    }
+
+    /// Format removed public symbols as a prominent warning for the LLM.
+    /// This helps small models detect breaking changes they would otherwise miss.
+    fn format_public_api_removed(symbols: &[CodeSymbol]) -> String {
+        let removed_public: Vec<_> = symbols
+            .iter()
+            .filter(|s| !s.is_added && s.is_public)
+            .collect();
+
+        if removed_public.is_empty() {
+            return String::new();
+        }
+
+        let mut output = String::new();
+        for symbol in &removed_public {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&symbol.to_string());
+        }
+        output
+    }
+
+    /// Detect if changes are a mechanical/syntactic transformation with no semantic impact.
+    ///
+    /// True when: no symbol definitions changed, adds ≈ removes (balanced),
+    /// and changes are small. Catches reformatting, nesting collapse, import reorder.
+    fn detect_mechanical_transform(changes: &StagedChanges, symbols: &[CodeSymbol]) -> bool {
+        // Any symbol added or removed means it's not purely mechanical
+        if !symbols.is_empty() {
+            return false;
+        }
+
+        let ins = changes.stats.insertions;
+        let del = changes.stats.deletions;
+        let total = ins + del;
+
+        // Need actual changes, and they should be small
+        if total == 0 || total > 80 {
+            return false;
+        }
+
+        // Must be balanced (adds ≈ removes)
+        let balance = ins.min(del) as f64 / ins.max(del).max(1) as f64;
+        balance > 0.5
+    }
+
+    /// Detect if the diff contains evidence of a bug fix.
+    ///
+    /// Conservative: only flags explicit fix/bug comments in added lines.
+    /// When false, the model is guided away from using "fix" type.
+    fn detect_bug_evidence(changes: &StagedChanges) -> bool {
+        changes.files.iter().any(|f| {
+            f.diff
+                .lines()
+                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+                .any(|l| {
+                    let lower = l[1..].to_lowercase();
+                    lower.contains("// fix")
+                        || lower.contains("# fix")
+                        || lower.contains("/* fix")
+                        || lower.contains("// bug")
+                        || lower.contains("# bug")
+                        || lower.contains("fixme")
+                        || lower.contains("hotfix")
+                })
+        })
+    }
+
+    /// Detect if all changes are to dependency/config files only.
+    fn detect_dependency_only(changes: &StagedChanges) -> bool {
+        !changes.files.is_empty()
+            && changes
+                .files
+                .iter()
+                .all(|f| matches!(f.category, FileCategory::Config | FileCategory::Build))
+    }
+
+    /// Identify the most significant change to anchor the subject line.
+    ///
+    /// Priority: new public APIs > removed public APIs > largest file by change size > new private symbols.
+    fn detect_primary_change(changes: &StagedChanges, symbols: &[CodeSymbol]) -> Option<String> {
+        // 1. New public API (highest signal)
+        let new_public: Vec<_> = symbols
+            .iter()
+            .filter(|s| s.is_added && s.is_public)
+            .collect();
+        if let Some(sym) = new_public.first() {
+            return Some(format!("added {:?} {} (public)", sym.kind, sym.name));
+        }
+
+        // 2. Removed public API (breaking = important)
+        let removed_public: Vec<_> = symbols
+            .iter()
+            .filter(|s| !s.is_added && s.is_public)
+            .collect();
+        if let Some(sym) = removed_public.first() {
+            return Some(format!("removed {:?} {} (public)", sym.kind, sym.name));
+        }
+
+        // 3. File with most lines changed
+        let biggest = changes
+            .files
+            .iter()
+            .max_by_key(|f| f.additions + f.deletions);
+        if let Some(f) = biggest {
+            let stem = f
+                .path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown");
+            return Some(format!(
+                "most changes in {} (+{} -{})",
+                stem, f.additions, f.deletions
+            ));
+        }
+
+        None
+    }
+
+    /// Scan diff content for metadata changes that indicate breaking changes.
+    ///
+    /// Detects: MSRV bumps, minimum engine/runtime version raises, removed features/exports.
+    fn detect_metadata_breaking(changes: &StagedChanges) -> Vec<String> {
+        let mut signals = Vec::new();
+
+        for file in &changes.files {
+            let name = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            for line in file.diff.lines() {
+                let is_removed = line.starts_with('-') && !line.starts_with("---");
+                let is_added = line.starts_with('+') && !line.starts_with("+++");
+                let content = if is_removed || is_added {
+                    &line[1..]
+                } else {
+                    continue;
+                };
+
+                match name {
+                    "Cargo.toml" => {
+                        // rust-version (MSRV) changed
+                        if content.contains("rust-version") && is_added {
+                            signals.push(format!("MSRV changed in Cargo.toml: {}", content.trim()));
+                        }
+                    }
+                    "package.json" => {
+                        // engines.node minimum raised
+                        if content.contains("\"node\"") && is_added && content.contains("engines") {
+                            signals.push(format!(
+                                "Node engine requirement changed: {}",
+                                content.trim()
+                            ));
+                        }
+                    }
+                    "pyproject.toml" => {
+                        // requires-python minimum raised
+                        if content.contains("requires-python") && is_added {
+                            signals.push(format!(
+                                "Python version requirement changed: {}",
+                                content.trim()
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+
+                // Cross-file: removed feature flags
+                if is_removed
+                    && name == "Cargo.toml"
+                    && content.trim_start().starts_with('[')
+                    && content.contains("features")
+                {
+                    signals.push("Cargo.toml [features] section modified".to_string());
+                }
+
+                // Removed public exports
+                if is_removed {
+                    let trimmed = content.trim();
+                    if trimmed.starts_with("pub use ") || trimmed.starts_with("pub mod ") {
+                        signals.push(format!("Removed public re-export: {}", trimmed));
+                    }
+                    if trimmed.starts_with("export {") || trimmed.starts_with("export default") {
+                        signals.push(format!("Removed JS/TS export: {}", trimmed));
+                    }
+                }
+            }
+        }
+
+        signals.dedup();
+        signals
+    }
+
     /// Check if a file should have its content skipped (lock files, etc.)
     fn should_skip_content(path: &std::path::Path) -> bool {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -340,7 +644,7 @@ impl ContextBuilder {
         config: &Config,
         char_budget: usize,
     ) -> String {
-        let mut output = String::new();
+        let mut output = String::with_capacity(char_budget);
         let mut files_included = 0;
         let total_files = changes.files.len();
         let files = changes.files_by_priority();
