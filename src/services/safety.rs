@@ -79,15 +79,25 @@ pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
 pub fn check_for_conflicts(changes: &StagedChanges) -> bool {
     for file in &changes.files {
         // Skip docs/test files where conflict markers might be intentional examples
-        if file.path.to_string_lossy().contains("test")
-            || file.path.to_string_lossy().contains("doc")
-            || file.path.to_string_lossy().contains("example")
-        {
+        // Use path components to avoid matching "testing_utils" or "documentation" substrings
+        if file.path.components().any(|c| {
+            let s = c.as_os_str().to_string_lossy();
+            s == "tests" || s == "docs" || s == "examples" || s.contains("test")
+        }) {
             continue;
         }
 
-        if file.diff.contains("<<<<<<<") || file.diff.contains(">>>>>>>") {
-            return true;
+        // Only check added lines for conflict markers
+        for line in file.diff.lines() {
+            if line.starts_with('+') && !line.starts_with("+++") {
+                // Split strings to prevent self-detection in this file's own diff
+                const CONFLICT_START: &str = concat!("<", "<<<<<<");
+                const CONFLICT_END: &str = concat!(">", ">>>>>>");
+
+                if line.contains(CONFLICT_START) || line.contains(CONFLICT_END) {
+                    return true;
+                }
+            }
         }
     }
     false

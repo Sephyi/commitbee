@@ -58,9 +58,9 @@ impl GitService {
     pub async fn get_staged_changes(&self, max_file_lines: usize) -> Result<StagedChanges> {
         self.check_state()?;
 
-        // Two calls total (down from N+1): name-status + unified diff
+        // Two calls total: name-status (NUL delimited) + unified diff
         let (status_output, diff_output) = tokio::try_join!(
-            self.run_git(&["diff", "--cached", "--name-status", "--no-renames"]),
+            self.run_git(&["diff", "-z", "--cached", "--name-status", "--no-renames"]),
             self.run_git(&[
                 "diff",
                 "--cached",
@@ -75,24 +75,22 @@ impl GitService {
         let mut files = Vec::new();
         let mut stats = DiffStats::default();
 
-        for line in status_output.lines() {
-            if line.is_empty() {
-                continue;
-            }
+        let mut parts = status_output.split('\0').filter(|s| !s.is_empty());
 
-            let parts: Vec<&str> = line.splitn(2, '\t').collect();
-            if parts.len() != 2 {
-                continue;
-            }
+        while let Some(status_code) = parts.next() {
+            let path_str = match parts.next() {
+                Some(p) => p,
+                None => break, // Should not happen with well-formed git output
+            };
 
-            let status = match parts[0] {
+            let status = match status_code {
                 "A" => ChangeStatus::Added,
                 "M" => ChangeStatus::Modified,
                 "D" => ChangeStatus::Deleted,
                 _ => continue,
             };
 
-            let file_path = Path::new(parts[1]).to_path_buf();
+            let file_path = PathBuf::from(path_str);
             let category = FileCategory::from_path(&file_path);
             let is_binary = Self::is_binary_path(&file_path);
 
@@ -100,8 +98,13 @@ impl GitService {
                 continue;
             }
 
+            // For lookups in file_diffs, we need the string key.
+            // Note: split_unified_diff currently uses paths from "diff --git a/... b/..." headers which are usually standard strings.
+            // Complex unicode paths might mismatch if git output encoding differs, but -z guarantees strict bytes for status.
+            let diff_key = file_path.to_string_lossy();
+
             let diff = file_diffs
-                .get(parts[1])
+                .get(diff_key.as_ref())
                 .map(|d| Self::truncate_diff(d, max_file_lines))
                 .unwrap_or_default();
 

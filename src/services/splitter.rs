@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::domain::{CodeSymbol, CommitType, FileCategory, FileChange, StagedChanges};
@@ -228,6 +228,44 @@ impl CommitSplitter {
         }
     }
 
+    /// Compute Jaccard similarity between two sets of tokens.
+    fn jaccard_index(a: &HashSet<String>, b: &HashSet<String>) -> f64 {
+        if a.is_empty() && b.is_empty() {
+            return 1.0;
+        }
+        let intersection = a.intersection(b).count();
+        let union = a.len() + b.len() - intersection;
+        if union == 0 {
+            0.0
+        } else {
+            intersection as f64 / union as f64
+        }
+    }
+
+    /// Extract significant tokens from a diff.
+    /// Captures the vocabulary of the change (variable names, keywords, types).
+    fn tokenize_diff(diff: &str) -> HashSet<String> {
+        let mut tokens = HashSet::new();
+        for line in diff.lines() {
+            // Only process add/remove lines, skip headers
+            if (!line.starts_with('+') && !line.starts_with('-'))
+                || line.starts_with("+++")
+                || line.starts_with("---")
+            {
+                continue;
+            }
+
+            // Split by non-alphanumeric characters to get words
+            for word in line[1..].split(|c: char| !c.is_alphanumeric()) {
+                if word.len() > 2 {
+                    // Skip tiny tokens
+                    tokens.insert(word.to_string());
+                }
+            }
+        }
+        tokens
+    }
+
     /// Group source files by diff-shape similarity.
     ///
     /// Files with very similar fingerprints (same kind of transformation)
@@ -237,34 +275,47 @@ impl CommitSplitter {
             return vec![files.to_vec()];
         }
 
-        let fingerprints: Vec<(&FileChange, DiffFingerprint)> = files
+        // Pre-calculate features for all files
+        let features: Vec<(&FileChange, DiffFingerprint, HashSet<String>)> = files
             .iter()
-            .map(|f| (*f, Self::diff_fingerprint(f)))
+            .map(|f| (*f, Self::diff_fingerprint(f), Self::tokenize_diff(&f.diff)))
             .collect();
 
-        // Greedy clustering: assign each file to the first similar group, or create new
-        let mut clusters: Vec<(DiffFingerprint, Vec<&'a FileChange>)> = Vec::new();
+        // Greedy clustering with hybrid similarity
+        let mut clusters: Vec<(DiffFingerprint, HashSet<String>, Vec<&'a FileChange>)> = Vec::new();
 
-        for (file, fp) in &fingerprints {
+        for (file, fp, tokens) in &features {
             let mut assigned = false;
 
-            for (centroid, members) in &mut clusters {
-                if centroid.is_similar(fp) {
-                    members.push(file);
-                    assigned = true;
-                    break;
+            for (centroid_fp, centroid_tokens, members) in &mut clusters {
+                // Hybrid similarity:
+                // 1. Must be statistically similar (shape/size)
+                // 2. Must share content vocabulary (Jaccard index)
+
+                if centroid_fp.is_similar(fp) {
+                    let content_sim = Self::jaccard_index(centroid_tokens, tokens);
+
+                    // Threshold: 0.4 implies significant vocabulary overlap
+                    // e.g., sharing variable names, types, or specific syntax patterns
+                    if content_sim > 0.4 {
+                        members.push(file);
+                        // Update centroid tokens? Union them to represent the group better?
+                        // For simple greedy, keeping the first file's tokens as centroid is simpler/stable.
+                        assigned = true;
+                        break;
+                    }
                 }
             }
 
             if !assigned {
-                clusters.push((fp.clone(), vec![file]));
+                clusters.push((fp.clone(), tokens.clone(), vec![file]));
             }
         }
 
         // If clustering produced only 1 group, check if it's genuinely uniform
         // or if we should fall back to module-based splitting.
         if clusters.len() == 1 {
-            let (centroid, cluster_files) = &clusters[0];
+            let (centroid, _, cluster_files) = &clusters[0];
 
             // If all files have non-empty, highly balanced diffs (adds ≈ removes) and are
             // small, they likely received the same mechanical transformation → keep grouped.
@@ -290,7 +341,7 @@ impl CommitSplitter {
 
         let mut result: Vec<Vec<&'a FileChange>> = Vec::new();
 
-        for (_, cluster_files) in clusters {
+        for (_, _, cluster_files) in clusters {
             // E2: Sub-split large clusters that span multiple modules.
             // If a group has >6 files across multiple modules, the shape clustering
             // wasn't discriminating enough — split by module to avoid mega-groups.
