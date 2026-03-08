@@ -6,10 +6,12 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 2.7
+**Version**: 2.8
 **Date**: 2026-03-08
 **Status**: Active
 **Author**: Sephyi + Claude
+
+**Revision 2.8**: v0.3.0 release prep (2026-03-08) — Sanitizer robustness: thought/think block stripping (both `<thought>` and qwen3 `<think>` tags), targeted JSON extraction via "type" key, conversational preamble detection via `VALID_TYPE_START_REGEX`, 9 new sanitizer tests (178 total). Splitter: Jaccard similarity hybrid clustering (content vocabulary overlap alongside diff-shape fingerprinting). Prompt engineering: removed Think-then-Compress (caused token budget exhaustion on <10B models), simplified user prompt, integrated concrete entity rule into system prompt. Git service: NUL-delimited name-status parsing (`-z` flag). Safety: component-based path matching in conflict detector, added-line-only scanning, concat! self-detection prevention. Context: bug evidence → fix type inference, default fallback changed from Feat to Refactor. CI: MSRV matrix updated 1.85→1.94.
 
 **Revision 2.7**: Splitter precision + subject quality + metadata breaking (2026-03-08) — FR-023 enhanced: targeted caller detection (E1), post-clustering sub-split for >6-file groups (E2), focus instruction for >5-file groups (E3), scored support file assignment with known pairs (H6), group rationale in per-group prompts (H2). FR-034 now fully implemented: metadata-aware breaking detection for MSRV/engines.node/requires-python (G1), symbol tri-state with ModifiedSignature (H5). FR-041 expanded to 6 rules: added subject specificity validator (F3). PE-001: negative examples (BAD/GOOD pairs). PE-002: primary change detection (F1), metadata breaking signals, modified symbols section. Performance: Arc\<String\> for diffs, String::with_capacity. Test count: 169.
 
@@ -368,7 +370,7 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **What**: Detect when staged changes contain logically independent changes that should be separate commits. Offer to split automatically with per-group LLM message generation.
 - **Status**: **Implemented** (v0.2.0, enhanced post-v0.2.0)
 - **How it works**:
-  1. **Diff-shape fingerprinting**: Groups files by structural similarity of their diffs (not just path proximity). Mechanical changes cluster together regardless of directory.
+  1. **Diff-shape fingerprinting + Jaccard clustering**: Groups files by structural similarity of their diffs combined with content vocabulary overlap (Jaccard index > 0.4). Files must share both similar change shape AND significant token overlap to cluster together, preventing false grouping of unrelated small edits.
   2. **Symbol dependency merging**: Groups connected by targeted caller detection are merged — only when a file's diff adds a line that directly calls a new function from another group (`+` lines containing `sym_name(`), not loose text matches that caused cascading merges from imports.
   3. **Category separation**: Docs and config files get their own groups rather than being dumped on the largest source group.
   4. **Module detection**: Group source files by parent directory (e.g., `src/services/llm/*.rs` → "llm"). Fall back to file stem when parent is generic (22 generic dirs: `src`, `lib`, `services`, `domain`, `utils`, `helpers`, `internal`, `core`, `pkg`, `cmd`, `app`, `api`, `modules`, `components`, `common`, `shared`, `middleware`, `handlers`, `controllers`, `models`, `views`, `routes`).
@@ -435,7 +437,8 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
   - Dependency-only detection: all changes in dependency/config files → `chore` ✅
   - Metadata-aware breaking detection: scans diffs for `rust-version` changes (MSRV), `engines.node` tightening, `requires-python` tightening, removed `pub use`/`pub mod`/`export` statements ✅
   - Symbol tri-state classification: `AddedOnly`, `RemovedOnly`, `ModifiedSignature` — same-name add+remove pairs recognized as signature changes, public modified symbols contribute to breaking risk ✅
-  - Default fallback is `Unknown` (let LLM determine), not `Feat` ✅
+  - Bug evidence detection: explicit `has_bug_evidence` check early in inference chain → `fix` type when bug-fix comments found ✅
+  - Default fallback is `Refactor` (safer than `Feat` for ambiguous changes) ✅
 
 #### FR-035: Rename Detection
 
@@ -800,7 +803,7 @@ proptest! {
 - `cargo deny check` (license compliance)
 - Run on: push to `development`, all PRs
 - Matrix: stable Rust + MSRV (1.94)
-- **Edition 2024**: Rust edition 2024 requires MSRV 1.85; let chains (Rust 1.94) raise the effective MSRV to 1.94. CI matrix explicitly tests both stable and 1.94 to verify compatibility.
+- **Edition 2024**: Rust edition 2024 requires MSRV 1.94; let chains (Rust 1.94) raise the effective MSRV to 1.94. CI matrix explicitly tests both stable and 1.94 to verify compatibility.
 
 ### TR-006: Evaluation Harness (`commitbee eval`)
 
@@ -856,6 +859,7 @@ opt-level = "z"  # or "s" — benchmark both
 
 - Defines persona, rules, and output format
 - Uses a JSON schema template with nullable fields and 2 micro few-shot examples (API replacement, style-only change) optimized for <4B parameter models
+- **Concrete entity rule**: Subject must name at least one concrete entity (function, struct, variable, file) from the diff — integrated directly into the Subject rule line
 - Negative examples (BAD/GOOD pairs): flags vague subjects ("update code and improve things") and multi-concern subjects ("refactor code for better performance and add validation") alongside positive examples
 - Explicitly states what NOT to do (no conversational tone, no file-by-file listing, no business language)
 - Anti-hallucination rules: "Never copy labels, field names, or evidence tags from the prompt into your output"
@@ -912,7 +916,7 @@ opt-level = "z"  # or "s" — benchmark both
 
 - FR-001: Fix UTF-8 panics ✅
 - FR-002: Include symbols in prompt (with fallback ladder) ✅
-- FR-003: Unit test suite (169 tests) ✅
+- FR-003: Unit test suite (178 tests) ✅
 - FR-004: Remove unused dependencies ✅
 - FR-005: Fix dead code ✅
 - FR-006: Reduce tokio features ✅
@@ -929,7 +933,7 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-019: Secure API key storage ✅ (feature-gated)
 - FR-020: Async git operations ✅
 - FR-021: Single-pass diff parsing ✅
-- FR-022: Integration test suite ✅ (169 tests)
+- FR-022: Integration test suite ✅ (178 tests)
 - FR-023: Commit splitting ✅
 - FR-039: Config validation & doctor command ✅ (shipped in v0.2.0)
 - TR-005: CI pipeline ✅

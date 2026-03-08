@@ -21,6 +21,7 @@ CommitBee is a Rust-native CLI tool that uses **tree-sitter semantic analysis** 
 | ------------------------------------ | --------- | --------------- |
 | 🌳 Tree-sitter semantic analysis     | **Yes**   | No              |
 | 🔀 Automatic commit splitting        | **Yes**   | No              |
+| 🧠 Evidence-based type inference     | **Yes**   | No              |
 | 🔒 Built-in secret scanning          | **Yes**   | Rarely          |
 | 📊 Token budget management           | **Yes**   | No              |
 | ⚡ Streaming LLM output              | **Yes**   | Rarely          |
@@ -32,7 +33,7 @@ Every competitor sends raw diffs to LLMs. CommitBee sends **semantic context** �
 
 ### Commit splitting
 
-When your staged changes contain logically independent work (e.g., a bugfix in one module + a refactor in another), CommitBee detects this and offers to split them into separate, well-typed commits automatically. No other tool in the space does this.
+When your staged changes contain logically independent work (e.g., a bugfix in one module + a refactor in another), CommitBee detects this and offers to split them into separate, well-typed commits automatically. The splitter uses diff-shape fingerprinting with Jaccard similarity clustering — files are grouped not just by directory but by the actual shape and vocabulary of their changes.
 
 ```txt
 ⚡ Commit split suggested — 2 logical change groups detected:
@@ -175,13 +176,13 @@ CommitBee's pipeline goes beyond simple diff forwarding:
                                 classes, etc.)   suggest split    semantic context    format)
 ```
 
-1. **Git Service** — Discovers the repo, reads staged changes and diffs
-2. **Tree-sitter Analyzer** — Parses both staged and HEAD file versions in parallel (via rayon), maps diff hunks to symbol spans (functions, structs, methods)
-3. **Commit Splitter** — Groups files by module, detects multi-concern changes, offers to split into separate commits
-4. **Context Builder** — Assembles a budget-aware prompt with file breakdown, semantic symbols, inferred commit type/scope, and truncated diff
-5. **Safety Scanner** — Checks for secrets and merge conflicts before anything leaves your machine
+1. **Git Service** — Discovers the repo via gix, reads staged changes and diffs (NUL-delimited for path safety)
+2. **Tree-sitter Analyzer** — Parses both staged and HEAD file versions in parallel (via rayon), maps diff hunks to symbol spans (functions, structs, methods) with tri-state tracking (added/removed/modified-signature)
+3. **Commit Splitter** — Groups files using diff-shape fingerprinting + Jaccard similarity clustering, detects multi-concern changes, offers to split into separate commits
+4. **Context Builder** — Assembles a budget-aware prompt with evidence flags, constraint rules, primary change detection, and metadata-aware breaking change signals
+5. **Safety Scanner** — Checks for secrets and merge conflicts (added-line-only, with self-detection prevention) before anything leaves your machine
 6. **LLM Provider** — Streams the prompt to your chosen model and parses the response
-7. **Commit Sanitizer** — Validates the output as proper conventional commit format (JSON or plain text), wraps body at 72 chars
+7. **Commit Sanitizer** — Validates the output as proper conventional commit format, handles JSON extraction from noisy LLM output (thought blocks, conversational preambles, code fences), wraps body at 72 chars
 
 ### Supported languages
 
@@ -222,12 +223,12 @@ src/
 │   ├── context.rs       # PromptContext (semantic prompt assembly)
 │   └── commit.rs        # CommitType (single source of truth)
 └── services/
-    ├── git.rs           # GitService (gix + git CLI)
-    ├── analyzer.rs      # AnalyzerService (tree-sitter)
-    ├── context.rs       # ContextBuilder (token budget)
+    ├── git.rs           # GitService (gix + git CLI, concurrent content fetching)
+    ├── analyzer.rs      # AnalyzerService (tree-sitter, parallel via rayon)
+    ├── context.rs       # ContextBuilder (token budget, evidence flags)
     ├── safety.rs        # Secret scanning, conflict detection
     ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
-    ├── splitter.rs      # CommitSplitter (multi-commit detection)
+    ├── splitter.rs      # CommitSplitter (diff-shape + Jaccard clustering)
     └── llm/
         ├── mod.rs       # LlmProvider trait + enum dispatch + shared SYSTEM_PROMPT
         ├── ollama.rs    # OllamaProvider (streaming NDJSON)
@@ -238,7 +239,7 @@ src/
 ## 🧪 Testing
 
 ```bash
-cargo test                    # All tests (169 tests)
+cargo test                    # All tests (178 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test splitter    # CommitSplitter tests
 cargo test --test safety      # Secret scanner tests
@@ -255,10 +256,23 @@ The test suite includes snapshot tests ([insta](https://insta.rs/)), property-ba
 | --------------------------- | ---------- | ---------------- |
 | 🔧 Stability & Correctness  | `v0.2.0`   | ✅ Complete       |
 | ✨ Polish & Providers       | `v0.2.0`   | ✅ Complete       |
-| 🚀 Differentiation          | `v0.3.0`   | 📋 Planned       |
+| 🚀 Differentiation          | `v0.3.0`   | ✅ Complete       |
 | 👑 Market Leadership        | `v0.4.0+`  | 🔮 Future        |
 
-### v0.2.0 highlights (complete)
+### v0.3.0 highlights (current)
+
+- **Diff-shape fingerprinting + Jaccard clustering** — Splitter groups files by change shape and content vocabulary, not just directory
+- **Evidence-based type inference** — Constraint rules from code analysis drive commit type selection (bug evidence → fix, mechanical → style, dependency-only → chore)
+- **Robust LLM output parsing** — Sanitizer handles `<think>`/`<thought>` blocks, conversational preambles, noisy JSON extraction
+- **Metadata-aware breaking change detection** — Detects MSRV bumps, engines.node, requires-python changes
+- **Symbol tri-state tracking** — Added/removed/modified-signature differentiation in tree-sitter analysis
+- **Primary change detection** — Identifies the single most significant change for subject anchoring
+- **Post-generation validation** — Subject specificity validator ensures concrete entity naming
+- **NUL-delimited git parsing** — Safe handling of paths with special characters
+- **Parallel tree-sitter parsing** — rayon for CPU-bound parsing, tokio JoinSet for concurrent git fetching
+- **Anti-hallucination prompt engineering** — EVIDENCE/CONSTRAINTS sections, negative examples, anti-copy rules
+
+### v0.2.0 highlights
 
 - **Cloud providers** — OpenAI-compatible and Anthropic streaming support
 - **Commit splitting** — Automatic detection and splitting of multi-concern staged changes

@@ -160,7 +160,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (169 tests)
+cargo test                    # All tests (178 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -240,9 +240,9 @@ When adding or updating crates:
 ### Known Issues
 
 - **No streaming during split generation**: When commit splitting generates per-group messages, LLM output is not streamed to the terminal (tokens are consumed silently). Single-commit generation streams normally. Low priority — split generation is fast since each sub-prompt is smaller.
-- **Thinking model output**: Models with thinking enabled (e.g. `qwen3:4b` default) prepend `<think>...</think>` blocks that can break sanitizer parsing. The `hopephoto/Qwen3-4B-Instruct-2507_q8` variant does not exhibit this. Fix needed: strip thinking blocks in sanitizer pre-processing and/or pass `think: false` in Ollama API options.
+- **Thinking model output**: Models with thinking enabled (e.g. `qwen3:4b` default) prepend `<think>...</think>` blocks before their JSON response. The sanitizer now strips both `<think>` and `<thought>` blocks (closed and unclosed) during parsing, so this is handled. However, with tight token budgets (`num_predict: 256`), thinking tokens still consume output budget. Consider passing `think: false` in Ollama API options for models that support it, or increasing `num_predict` for thinking models.
+- **Think-then-Compress prompting**: Evaluated and removed in v0.3.0. Adding `<thought>` instructions to prompts caused small models (<10B) to spend their token budget on analysis text instead of JSON output. The pre-computed EVIDENCE/CONSTRAINTS/SYMBOLS sections already do the "thinking" for the model. **Future consideration**: revisit for larger models (70B+, cloud APIs) where chain-of-thought genuinely improves output quality — would require bumping `num_predict` to 512+ and careful prompt engineering to keep thinking concise.
 
 ### Post-Implementation Documentation TODOs
 
-- **README.md roadmap**: Pre-existing version mismatch — README shows v0.3.0 as "Polish & Providers ✅ Complete" but PRD says v0.2.0 shipped both Phase 1 and Phase 2, and v0.3.0 is the upcoming Differentiation release. Reconcile before the v0.3.0 release.
-- **README.md Running Tests**: Updated to 169 (was 133 in README, now fixed).
+- **README.md Running Tests**: Kept in sync with test count updates (currently 178).
