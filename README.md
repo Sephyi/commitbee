@@ -4,17 +4,16 @@ SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -->
 
-# 🐝 CommitBee &emsp; [![Build Status]][ci] [![MSRV]][rust-1.94] [![License]][license-file] [![REUSE Status]][reuse-info] ![Total Downloads]
+# 🐝 CommitBee &emsp; [![Build Status]][ci] [![MSRV]][rust-1.94] [![License]][license-file] [![Total Downloads]][crates-io]
 
 [Build Status]: https://github.com/sephyi/commitbee/actions/workflows/ci.yml/badge.svg?branch=main
 [ci]: https://github.com/sephyi/commitbee/actions/workflows/ci.yml
 [MSRV]: https://img.shields.io/badge/MSRV-1.94-orange.svg
-[rust-1.94]: https://blog.rust-lang.org/2025/06/26/Rust-1.94.0.html
+[rust-1.94]: https://blog.rust-lang.org/2026/03/05/Rust-1.94.0
 [License]: https://img.shields.io/badge/license-PolyForm--Noncommercial-blue.svg
 [license-file]: LICENSES/PolyForm-Noncommercial-1.0.0.txt
-[REUSE Status]: https://api.reuse.software/badge/github.com/sephyi/commitbee
-[reuse-info]: https://api.reuse.software/info/github.com/sephyi/commitbee
 [Total Downloads]: https://img.shields.io/crates/d/commitbee?style=social&logo=iCloud&logoColor=black
+[crates-io]: https://crates.io/crates/commitbee
 
 **The commit message generator that actually understands your code.**
 
