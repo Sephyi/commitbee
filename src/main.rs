@@ -55,7 +55,7 @@ async fn main() {
         match e {
             error::Error::Cancelled => {
                 eprintln!("Aborted.");
-                std::process::exit(0);
+                std::process::exit(130);
             }
             _ => {
                 eprintln!("{:?}", miette::Report::new(e));
