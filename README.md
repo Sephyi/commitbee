@@ -4,36 +4,59 @@ SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -->
 
-# 🐝 CommitBee
+# 🐝 CommitBee &emsp; [![Build Status]][ci] [![MSRV]][rust-1.94] [![License]][license-file] [![REUSE Status]][reuse-info] ![Total Downloads]
 
-[![CI](https://github.com/sephyi/commitbee/actions/workflows/ci.yml/badge.svg?branch=development)](https://github.com/sephyi/commitbee/actions/workflows/ci.yml)
-[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm--Noncommercial-blue)](LICENSES/PolyForm-Noncommercial-1.0.0.txt)
-[![MSRV: 1.94](https://img.shields.io/badge/MSRV-1.94-orange)](https://blog.rust-lang.org/)
-[![REUSE](https://api.reuse.software/badge/github.com/sephyi/commitbee)](https://api.reuse.software/info/github.com/sephyi/commitbee)
+[Build Status]: https://github.com/sephyi/commitbee/actions/workflows/ci.yml/badge.svg?branch=main
+[ci]: https://github.com/sephyi/commitbee/actions/workflows/ci.yml
+[MSRV]: https://img.shields.io/badge/MSRV-1.94-orange.svg
+[rust-1.94]: https://blog.rust-lang.org/2025/06/26/Rust-1.94.0.html
+[License]: https://img.shields.io/badge/license-PolyForm--Noncommercial-blue.svg
+[license-file]: LICENSES/PolyForm-Noncommercial-1.0.0.txt
+[REUSE Status]: https://api.reuse.software/badge/github.com/sephyi/commitbee
+[reuse-info]: https://api.reuse.software/info/github.com/sephyi/commitbee
+[Total Downloads]: https://img.shields.io/crates/d/commitbee?style=social&logo=iCloud&logoColor=black
 
 **The commit message generator that actually understands your code.**
 
-CommitBee is a Rust-native CLI tool that uses **tree-sitter semantic analysis** and LLMs to generate high-quality [conventional commit](https://www.conventionalcommits.org/) messages. Unlike every other tool in this space, CommitBee doesn't just pipe raw `git diff` output to an LLM — it parses both the staged and HEAD versions of your files, maps diff hunks to symbol spans (functions, classes, methods), and provides structured semantic context. This produces fundamentally better commit messages, especially for complex multi-file changes.
+Most tools in this space pipe raw `git diff` to an LLM and hope for the best. CommitBee parses your code with [tree-sitter](https://tree-sitter.github.io/tree-sitter/), maps diff hunks to symbol spans, and gives the LLM structured semantic context — producing fundamentally better commit messages, especially for complex multi-file changes.
 
-## ✨ What Makes CommitBee Different
+## ✨ What Sets CommitBee Apart
 
-| Feature                              | CommitBee | Others          |
-| ------------------------------------ | --------- | --------------- |
-| 🌳 Tree-sitter semantic analysis     | **Yes**   | No              |
-| 🔀 Automatic commit splitting        | **Yes**   | No              |
-| 🧠 Evidence-based type inference     | **Yes**   | No              |
-| 🔒 Built-in secret scanning          | **Yes**   | Rarely          |
-| 📊 Token budget management           | **Yes**   | No              |
-| ⚡ Streaming LLM output              | **Yes**   | Rarely          |
-| 🔍 Prompt debug mode                 | **Yes**   | No              |
-| 🏠 Local-first (Ollama default)      | **Yes**   | Cloud-first     |
-| 🦀 Single static binary              | **Yes**   | Node.js/Python  |
+### 🌳 It reads your code, not just your diffs
 
-Every competitor sends raw diffs to LLMs. CommitBee sends **semantic context** — which functions changed, what was added or removed, and why the change matters structurally.
+CommitBee uses tree-sitter to parse both the staged and HEAD versions of every changed file — in parallel across CPU cores. It extracts 10 symbol types (functions, methods, structs, enums, traits, impls, classes, interfaces, constants, type aliases) and maps diff hunks to their spans. The LLM doesn't see "lines 42-58 changed" — it sees "the `validate()` function in `sanitizer.rs` was modified, and a new `retry()` method was added." Symbols are tracked in three states: **added**, **removed**, and **modified-signature**.
 
-### Commit splitting
+Supported languages: **Rust, TypeScript, JavaScript, Python, Go**. Files in other languages still get full diff context — just without symbol extraction.
 
-When your staged changes contain logically independent work (e.g., a bugfix in one module + a refactor in another), CommitBee detects this and offers to split them into separate, well-typed commits automatically. The splitter uses diff-shape fingerprinting with Jaccard similarity clustering — files are grouped not just by directory but by the actual shape and vocabulary of their changes.
+### 🧠 It reasons about what changed
+
+Before the LLM generates anything, CommitBee computes deterministic evidence from your code and encodes it as hard constraints in the prompt:
+
+- **Bug-fix evidence** in the diff → `fix`. No bug evidence → the LLM can't call it a `fix`.
+- **Formatting-only changes** (whitespace, import reordering) → `style`. Not `feat`, not `fix`.
+- **Dependency-only changes** → `chore`. Always.
+- **Public API removed** → breaking change flagged automatically.
+- **MSRV bumps, `engines.node`, `requires-python` changes** → metadata-aware breaking detection.
+
+Commit types are driven by code analysis, not LLM guesswork. The prompt includes computed EVIDENCE flags, CONSTRAINTS the model must follow, the primary change for subject anchoring, a character budget for the subject line, and anti-hallucination rules with negative examples.
+
+### ✅ It validates and corrects its own output
+
+Every generated message passes through a 7-rule validation pipeline:
+
+1. Fix requires evidence — no bug comments, no `fix` type
+2. Breaking change detection — removed public APIs must be flagged
+3. Anti-hallucination — breaking change text can't copy internal field names
+4. Mechanical changes must use `style`
+5. Dependency-only changes must use `chore`
+6. Subject specificity — rejects generic messages like "update code" or "improve things"
+7. Subject length — enforces the 72-character first line limit
+
+If any rule fails, CommitBee appends targeted correction instructions and re-prompts the LLM — up to 3 attempts, re-validating after each. The final output goes through a sanitizer that strips thinking blocks, extracts JSON from code fences, removes conversational preambles, and wraps the body at 72 characters. You get a clean, spec-compliant conventional commit or a clear error — never a silently mangled message.
+
+### 🔀 It splits multi-concern commits
+
+When your staged changes mix independent work (a bugfix in one module + a refactor in another), CommitBee detects it and offers to split them into separate, well-typed commits. The splitter uses diff-shape fingerprinting combined with Jaccard similarity on content vocabulary — files are grouped by the actual shape and language of their changes, not just by directory. Symbol dependency merging keeps related files together even when their diff shapes differ: if `foo()` is removed from one file and added in another, they stay in the same commit.
 
 ```txt
 ⚡ Commit split suggested — 2 logical change groups detected:
@@ -47,6 +70,34 @@ When your staged changes contain logically independent work (e.g., a bugfix in o
 
 ? Split into separate commits? (Y/n)
 ```
+
+### The pipeline
+
+```txt
+┌─────────┐    ┌──────────┐    ┌────────────┐    ┌──────────┐    ┌───────────┐    ┌─────────┐
+│  Stage  │ →  │   Git    │ →  │ Tree-sitter│ →  │  Split   │ →  │  Context  │ →  │   LLM   │
+│ Changes │    │  Service │    │  Analyzer  │    │ Detector │    │  Builder  │    │Provider │
+└─────────┘    └──────────┘    └────────────┘    └──────────┘    └───────────┘    └─────────┘
+                    │                │                 │                │               │
+               Staged diff      Symbol spans     Group files      Budget-aware     Commit message
+               + file list      (functions,      by module,       prompt with      (conventional
+                                classes, etc.)   suggest split    semantic context    format)
+```
+
+### And there's more
+
+- **🏠 Local-first** — Ollama by default. Your code never leaves your machine. No API keys needed.
+- **🔒 Secret scanning** — Catches API keys, private keys, and connection strings before anything reaches the LLM.
+- **⚡ Streaming** — Real-time token display from all 3 providers (Ollama, OpenAI, Anthropic) with Ctrl+C cancellation.
+- **📊 Token budget** — Smart truncation that prioritizes the most important files within ~6K tokens.
+- **🎯 Multi-candidate** — Generate up to 5 messages and pick the best one interactively.
+- **🪝 Git hooks** — `prepare-commit-msg` hook with TTY detection for safe non-interactive fallback.
+- **🔍 Prompt debug** — `--show-prompt` shows exactly what the LLM sees. Full transparency.
+- **🩺 Doctor** — `commitbee doctor` checks config, connectivity, and model availability.
+- **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
+- **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
+- **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
+- **🧪 182 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -70,10 +121,10 @@ The binary will be at `./target/release/commitbee`.
 
 - **Rust** 1.94+ (edition 2024)
 - **Ollama** running locally (default provider) — [Install Ollama](https://ollama.ai)
-- A model pulled in Ollama (recommended: `qwen3:4b`)
+- A model pulled in Ollama (recommended: `qwen3.5:4b`)
 
 ```bash
-ollama pull qwen3:4b
+ollama pull qwen3.5:4b
 ```
 
 ## 🚀 Quick Start
@@ -97,40 +148,20 @@ commitbee --show-prompt
 
 That's it. CommitBee works with zero configuration if Ollama is running locally.
 
+> If CommitBee saves you time, consider [**sponsoring the project**](https://github.com/sponsors/Sephyi) 💛
+
+## 📖 Documentation
+
+- **[Full Guide](DOCS.md)** — configuration, providers, splitting, validation, troubleshooting
+- **[PRD & Roadmap](PRD.md)** — product requirements and future plans
+
 ## 🔧 Configuration
 
-CommitBee stores configuration in a platform-specific directory. Create a config with:
+Run `commitbee init` to create a config file. Works out of the box with zero config if Ollama is running locally.
 
-```bash
-commitbee init
-```
+See [Configuration](DOCS.md#-configuration) for the full config reference, environment variables, and layering priority.
 
-### Example config
-
-```toml
-provider = "ollama"
-model = "qwen3:4b"
-ollama_host = "http://localhost:11434"
-max_diff_lines = 500
-max_file_lines = 100
-max_context_chars = 24000
-
-[format]
-include_body = true
-include_scope = true
-lowercase_subject = true
-```
-
-### Environment variables
-
-| Variable                 | Description              | Default                    |
-| ------------------------ | ------------------------ | -------------------------- |
-| `COMMITBEE_PROVIDER`     | LLM provider             | `ollama`                   |
-| `COMMITBEE_MODEL`        | Model name               | `qwen3:4b`                 |
-| `COMMITBEE_OLLAMA_HOST`  | Ollama server URL        | `http://localhost:11434`   |
-| `COMMITBEE_API_KEY`      | API key (cloud providers)| —                          |
-
-## 📖 Usage
+## 💻 Usage
 
 ```bash
 commitbee [OPTIONS] [COMMAND]
@@ -138,63 +169,28 @@ commitbee [OPTIONS] [COMMAND]
 
 ### Options
 
-| Flag               | Description                            |
-| ------------------ | -------------------------------------- |
-| `--dry-run`        | Print message only, don't commit       |
-| `--yes`            | Auto-confirm and commit                |
-| `-n, --generate`   | Generate N candidates (1-5, default 1) |
-| `--no-split`       | Disable commit split suggestions       |
-| `--no-scope`       | Disable scope in commit messages       |
-| `--allow-secrets`  | Allow committing with detected secrets |
-| `--verbose`        | Show symbol extraction details         |
-| `--show-prompt`    | Debug: display the full LLM prompt     |
+| Flag | Description |
+| --- | --- |
+| `--dry-run` | Print message only, don't commit |
+| `--yes` | Auto-confirm and commit |
+| `-n, --generate` | Generate N candidates (1-5, default 1) |
+| `--no-split` | Disable commit split suggestions |
+| `--no-scope` | Disable scope in commit messages |
+| `--allow-secrets` | Allow committing with detected secrets |
+| `--verbose` | Show symbol extraction details |
+| `--show-prompt` | Debug: display the full LLM prompt |
 
 ### Commands
 
-| Command               | Description                            |
-| --------------------- | -------------------------------------- |
-| `init`                | Create a config file                   |
-| `config`              | Show current configuration             |
-| `doctor`              | Check configuration and connectivity   |
-| `completions <shell>` | Generate shell completions             |
-| `hook install`        | Install prepare-commit-msg hook        |
-| `hook uninstall`      | Remove prepare-commit-msg hook         |
-| `hook status`         | Check if hook is installed             |
-
-## 🌳 How It Works
-
-CommitBee's pipeline goes beyond simple diff forwarding:
-
-```txt
-┌─────────┐    ┌──────────┐    ┌────────────┐    ┌──────────┐    ┌───────────┐    ┌─────────┐
-│  Stage  │ →  │   Git    │ →  │ Tree-sitter│ →  │  Split   │ →  │  Context  │ →  │   LLM   │
-│ Changes │    │  Service │    │  Analyzer  │    │ Detector │    │  Builder  │    │Provider │
-└─────────┘    └──────────┘    └────────────┘    └──────────┘    └───────────┘    └─────────┘
-                    │                │                 │                │               │
-               Staged diff      Symbol spans     Group files      Budget-aware     Commit message
-               + file list      (functions,      by module,       prompt with      (conventional
-                                classes, etc.)   suggest split    semantic context    format)
-```
-
-1. **Git Service** — Discovers the repo via gix, reads staged changes and diffs (NUL-delimited for path safety)
-2. **Tree-sitter Analyzer** — Parses both staged and HEAD file versions in parallel (via rayon), maps diff hunks to symbol spans (functions, structs, methods) with tri-state tracking (added/removed/modified-signature)
-3. **Commit Splitter** — Groups files using diff-shape fingerprinting + Jaccard similarity clustering, detects multi-concern changes, offers to split into separate commits
-4. **Context Builder** — Assembles a budget-aware prompt with evidence flags, constraint rules, primary change detection, and metadata-aware breaking change signals
-5. **Safety Scanner** — Checks for secrets and merge conflicts (added-line-only, with self-detection prevention) before anything leaves your machine
-6. **LLM Provider** — Streams the prompt to your chosen model and parses the response
-7. **Commit Sanitizer** — Validates the output as proper conventional commit format, handles JSON extraction from noisy LLM output (thought blocks, conversational preambles, code fences), wraps body at 72 chars
-
-### Supported languages
-
-| Language     | Parser                   |
-| ------------ | ------------------------ |
-| Rust         | `tree-sitter-rust`       |
-| TypeScript   | `tree-sitter-typescript` |
-| JavaScript   | `tree-sitter-javascript` |
-| Python       | `tree-sitter-python`     |
-| Go           | `tree-sitter-go`         |
-
-Files in unsupported languages are still included in the diff context — they just don't get semantic symbol extraction.
+| Command | Description |
+| --- | --- |
+| `init` | Create a config file |
+| `config` | Show current configuration |
+| `doctor` | Check configuration and connectivity |
+| `completions <shell>` | Generate shell completions |
+| `hook install` | Install prepare-commit-msg hook |
+| `hook uninstall` | Remove prepare-commit-msg hook |
+| `hook status` | Check if hook is installed |
 
 ## 🔒 Security
 
@@ -207,59 +203,25 @@ CommitBee scans all content before it's sent to any LLM provider:
 
 The default provider (Ollama) runs entirely on your machine. No data leaves your network unless you explicitly configure a cloud provider.
 
-## 🏗️ Architecture
-
-```bash
-src/
-├── main.rs              # Entry point
-├── lib.rs               # Library exports
-├── app.rs               # Application orchestrator
-├── cli.rs               # CLI arguments (clap)
-├── config.rs            # Configuration (figment layered)
-├── error.rs             # Error types (thiserror + miette)
-├── domain/
-│   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
-│   ├── symbol.rs        # CodeSymbol, SymbolKind
-│   ├── context.rs       # PromptContext (semantic prompt assembly)
-│   └── commit.rs        # CommitType (single source of truth)
-└── services/
-    ├── git.rs           # GitService (gix + git CLI, concurrent content fetching)
-    ├── analyzer.rs      # AnalyzerService (tree-sitter, parallel via rayon)
-    ├── context.rs       # ContextBuilder (token budget, evidence flags)
-    ├── safety.rs        # Secret scanning, conflict detection
-    ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
-    ├── splitter.rs      # CommitSplitter (diff-shape + Jaccard clustering)
-    └── llm/
-        ├── mod.rs       # LlmProvider trait + enum dispatch + shared SYSTEM_PROMPT
-        ├── ollama.rs    # OllamaProvider (streaming NDJSON)
-        ├── openai.rs    # OpenAiProvider (SSE streaming)
-        └── anthropic.rs # AnthropicProvider (SSE streaming)
-```
-
 ## 🧪 Testing
 
 ```bash
-cargo test                    # All tests (178 tests)
-cargo test --test sanitizer   # CommitSanitizer tests
-cargo test --test splitter    # CommitSplitter tests
-cargo test --test safety      # Secret scanner tests
-cargo test --test context     # ContextBuilder tests
-cargo test --test commit_type # CommitType tests
-cargo test --test integration # LLM provider integration tests
+cargo test   # 182 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
-The test suite includes snapshot tests ([insta](https://insta.rs/)), property-based tests ([proptest](https://proptest-rs.github.io/proptest/)), never-panic guarantees for all user-facing parsers, and integration tests using [wiremock](https://docs.rs/wiremock) for LLM provider mocking.
+See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
-## 🗺️ Roadmap
+## 🗺️ Changelog
 
-| Phase                       | Version    | Status           |
-| --------------------------- | ---------- | ---------------- |
-| 🔧 Stability & Correctness  | `v0.2.0`   | ✅ Complete       |
-| ✨ Polish & Providers       | `v0.2.0`   | ✅ Complete       |
-| 🚀 Differentiation          | `v0.3.0`   | ✅ Complete       |
-| 👑 Market Leadership        | `v0.4.0+`  | 🔮 Future        |
+### 🔬 `v0.3.1` — Reliability (current)
 
-### v0.3.0 highlights (current)
+- **Multi-pass corrective retry** — Validator checks LLM output against 7 rules and retries up to 3 times with targeted correction instructions
+- **Subject length enforcement** — Rejects subjects exceeding 72-char first line with a clear error instead of silent truncation
+- **Stronger prompt budget** — Character limit embedded directly in JSON template, "HARD LIMIT" phrasing for better small-model compliance
+- **Default model: `qwen3.5:4b`** — Smaller (3.4GB), no thinking overhead, clean JSON output out of the box
+- **Configurable thinking mode** — `think` config option for Ollama models that support reasoning separation
+
+### 🚀 `v0.3.0` — Differentiation
 
 - **Diff-shape fingerprinting + Jaccard clustering** — Splitter groups files by change shape and content vocabulary, not just directory
 - **Evidence-based type inference** — Constraint rules from code analysis drive commit type selection (bug evidence → fix, mechanical → style, dependency-only → chore)
@@ -272,7 +234,7 @@ The test suite includes snapshot tests ([insta](https://insta.rs/)), property-ba
 - **Parallel tree-sitter parsing** — rayon for CPU-bound parsing, tokio JoinSet for concurrent git fetching
 - **Anti-hallucination prompt engineering** — EVIDENCE/CONSTRAINTS sections, negative examples, anti-copy rules
 
-### v0.2.0 highlights
+### ✨ `v0.2.0` — Polish & Providers
 
 - **Cloud providers** — OpenAI-compatible and Anthropic streaming support
 - **Commit splitting** — Automatic detection and splitting of multi-concern staged changes
@@ -292,27 +254,9 @@ See [`PRD.md`](PRD.md) for the full product requirements document.
 
 Contributions are welcome! By contributing, you agree to the [Contributor License Agreement](CLA.md) — you'll be asked to sign it when you open your first pull request.
 
-The project uses:
-
-- **Rust edition 2024** (MSRV 1.94)
-- **Conventional commits** for all commit messages
-- **REUSE/SPDX** for license compliance
-
-```bash
-# Development workflow
-cargo fmt                     # Format code
-cargo clippy -- -D warnings   # Lint (must pass clean)
-cargo test                    # Run all tests
-
-# Manual testing
-git add some-file.rs
-cargo run -- --dry-run        # Preview commit message
-cargo run -- --show-prompt    # Debug the LLM prompt
-```
-
 ## 💛 Sponsor
 
-If you find CommitBee useful, consider [sponsoring my work](https://github.com/sponsors/Sephyi).
+If you find CommitBee useful, consider [**sponsoring my work**](https://github.com/sponsors/Sephyi) — it helps keep the project going.
 
 ## 📄 License
 

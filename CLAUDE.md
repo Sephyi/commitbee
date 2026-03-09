@@ -20,7 +20,7 @@ cargo build --release
 - **Hybrid Git**: gix for repo discovery, git CLI for diffs (documented choice)
 - **Tree-sitter**: Full file parsing with hunk mapping (not just +/- lines)
 - **Parallelism**: rayon for CPU-bound tree-sitter parsing, tokio JoinSet for concurrent git content fetching
-- **LLM**: Ollama primary (qwen3:4b), OpenAI/Anthropic secondary
+- **LLM**: Ollama primary (qwen3.5:4b), OpenAI/Anthropic secondary
 - **Streaming**: Line-buffered JSON parsing with CancellationToken
 
 ## Key Design Decisions
@@ -61,7 +61,7 @@ Location: platform-dependent (use `commitbee init` to create, `commitbee doctor`
 
 ```toml
 provider = "ollama"
-model = "qwen3:4b"
+model = "qwen3.5:4b"
 ollama_host = "http://localhost:11434"
 max_diff_lines = 500
 max_file_lines = 100
@@ -160,7 +160,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (178 tests)
+cargo test                    # All tests (182 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -240,9 +240,10 @@ When adding or updating crates:
 ### Known Issues
 
 - **No streaming during split generation**: When commit splitting generates per-group messages, LLM output is not streamed to the terminal (tokens are consumed silently). Single-commit generation streams normally. Low priority — split generation is fast since each sub-prompt is smaller.
-- **Thinking model output**: Models with thinking enabled (e.g. `qwen3:4b` default) prepend `<think>...</think>` blocks before their JSON response. The sanitizer now strips both `<think>` and `<thought>` blocks (closed and unclosed) during parsing, so this is handled. However, with tight token budgets (`num_predict: 256`), thinking tokens still consume output budget. Consider passing `think: false` in Ollama API options for models that support it, or increasing `num_predict` for thinking models.
+- **Thinking model output**: Models with thinking enabled prepend `<think>...</think>` blocks before their JSON response. The sanitizer strips both `<think>` and `<thought>` blocks (closed and unclosed) during parsing. The `think` config option (default: `false`) controls whether Ollama's thinking separation is used. The default model `qwen3.5:4b` does not use thinking mode and works well with the default `num_predict: 256`.
 - **Think-then-Compress prompting**: Evaluated and removed in v0.3.0. Adding `<thought>` instructions to prompts caused small models (<10B) to spend their token budget on analysis text instead of JSON output. The pre-computed EVIDENCE/CONSTRAINTS/SYMBOLS sections already do the "thinking" for the model. **Future consideration**: revisit for larger models (70B+, cloud APIs) where chain-of-thought genuinely improves output quality — would require bumping `num_predict` to 512+ and careful prompt engineering to keep thinking concise.
+- **Retry improvement plan**: Current retry is single-pass (one correction attempt via `validate_and_retry()`). **Future improvement**: configurable `max_retries` (default 3), prioritized violation ordering — fix critical errors first (e.g., `breaking_change` detection, invalid type), then structural issues, then length shortening last. Per-group retry for split commits. Would require a new config field and loop in `validate_and_retry()`.
 
 ### Post-Implementation Documentation TODOs
 
-- **README.md Running Tests**: Kept in sync with test count updates (currently 178).
+- **README.md Running Tests**: Kept in sync with test count updates (currently 182).

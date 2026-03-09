@@ -6,10 +6,14 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 2.8
+**Version**: 3.0
 **Date**: 2026-03-08
 **Status**: Active
 **Author**: Sephyi + Claude
+
+**Revision 3.0**: v0.3.1 multi-pass retry + prompt enforcement (2026-03-08) — FR-041 expanded to 7 rules: added Rule 7 (subject length validation with char budget). `validate_and_retry` upgraded from single-shot to multi-pass loop (up to 3 attempts with re-validation after each). Prompt engineering: "HARD LIMIT" phrasing + char budget embedded in JSON template placeholder for stronger small-model compliance. 182 tests.
+
+**Revision 2.9**: v0.3.1 patch (2026-03-08) — Default model switched from `qwen3:4b-instruct-2507-q8_0` to `qwen3.5:4b` (smaller, no thinking overhead, clean JSON output). Subject length enforcement: CommitValidator Rule 7 rejects subjects that would exceed 72-char first line and triggers corrective retry with budget hint; sanitizer returns error instead of silent `...` truncation (removed `truncate_with_ellipsis`). Added `think` config option (default: `false`) for Ollama thinking/reasoning separation. 182 tests.
 
 **Revision 2.8**: v0.3.0 release prep (2026-03-08) — Sanitizer robustness: thought/think block stripping (both `<thought>` and qwen3 `<think>` tags), targeted JSON extraction via "type" key, conversational preamble detection via `VALID_TYPE_START_REGEX`, 9 new sanitizer tests (178 total). Splitter: Jaccard similarity hybrid clustering (content vocabulary overlap alongside diff-shape fingerprinting). Prompt engineering: removed Think-then-Compress (caused token budget exhaustion on <10B models), simplified user prompt, integrated concrete entity rule into system prompt. Git service: NUL-delimited name-status parsing (`-z` flag). Safety: component-based path matching in conflict detector, added-line-only scanning, concat! self-detection prevention. Context: bug evidence → fix type inference, default fallback changed from Feat to Refactor. CI: MSRV matrix updated 1.85→1.94.
 
@@ -45,7 +49,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 ### Compatibility Policy
 
 - **v0.2.0** shipped with all Phase 1 (stability) and Phase 2 (polish/providers) features. Config format preserved, no breaking CLI changes.
-- **v0.3.0** (next release) is the differentiation release. May introduce breaking changes. Migration documentation will accompany any breaking release.
+- **v0.3.0** is the differentiation release. **v0.3.1** is a patch: default model switched to `qwen3.5:4b`, subject length validation with retry, `think` config option. No breaking changes.
 
 ## 2. Competitive Landscape
 
@@ -483,19 +487,20 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 
 #### FR-041: Post-Generation Validation ✅ (implemented post-v0.2.0)
 
-- **What**: Evidence-based validation of LLM output against deterministic code analysis signals, with one corrective retry on violation.
-- **Status**: **Implemented** (post-v0.2.0)
+- **What**: Evidence-based validation of LLM output against deterministic code analysis signals, with multi-pass corrective retry on violation.
+- **Status**: **Implemented** (post-v0.2.0, enhanced v0.3.1)
 - **How it works**:
   1. **Evidence flags**: Five deterministic signals computed from code analysis before LLM generation: `is_mechanical` (formatting/whitespace-only), `has_bug_evidence` (bug-fix comments in diff), `public_api_removed_count` (removed public functions/structs/traits), `has_new_public_api` (new public symbols added), `is_dependency_only` (all changes in dependency/config files).
-  2. **CommitValidator**: After LLM generates a structured commit, validates it against evidence flags with 6 rules:
+  2. **CommitValidator**: After LLM generates a structured commit, validates it against evidence flags with 7 rules:
      - `fix` type requires `has_bug_evidence` (otherwise → `refactor`)
      - `breaking_change` must be set when public APIs removed
      - `breaking_change` must not copy internal field names (anti-hallucination)
      - Mechanical transforms cannot be `feat` or `fix` (→ `style`/`refactor`)
      - Dependency-only changes must be `chore`
      - Subject specificity: generic verb+noun combinations (e.g., "update code", "improve things") trigger retry with instruction to name specific APIs/modules changed
-  3. **Corrective retry**: On violation, appends a `CORRECTIONS` section to the prompt listing each violation with fix instructions, and re-prompts the LLM once. Never retries more than once.
-- **Acceptance**: Tested with 8 dedicated unit tests covering each validation rule, valid commit acceptance, and corrections formatting.
+     - Subject length: rejects subjects that would produce a first line exceeding 72 chars, reports char budget
+  3. **Multi-pass corrective retry** (v0.3.1): On violation, appends a `CORRECTIONS` section to the prompt listing each violation with fix instructions, and re-prompts the LLM. Re-validates the retry output and retries again if violations persist, up to 3 total attempts. Sanitizer rejects overlong first lines with a descriptive error (no silent truncation).
+- **Acceptance**: Tested with 10 dedicated unit tests covering each validation rule, valid commit acceptance, boundary cases, and corrections formatting.
 
 ### 4.4 P3 — Future (v0.4.0+: Market Leadership)
 
