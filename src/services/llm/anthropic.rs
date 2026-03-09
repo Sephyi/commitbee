@@ -162,24 +162,21 @@ impl AnthropicProvider {
                     line_buffer.push_str(&String::from_utf8_lossy(&chunk));
 
                     while let Some(newline_pos) = line_buffer.find('\n') {
-                        let line = line_buffer[..newline_pos].to_string();
-                        line_buffer = line_buffer[newline_pos + 1..].to_string();
-
-                        let line = line.trim();
-                        if line.is_empty() {
-                            continue;
-                        }
-
-                        // SSE format: "event: <type>" followed by "data: <json>"
-                        if line.starts_with("event:") {
-                            continue;
-                        }
-
-                        let Some(data) = line.strip_prefix("data: ") else {
-                            continue;
+                        // Parse from slice to avoid allocating a String per line
+                        let result = {
+                            let line = line_buffer[..newline_pos].trim();
+                            if line.is_empty() || line.starts_with("event:") {
+                                None
+                            } else if let Some(data) = line.strip_prefix("data: ") {
+                                serde_json::from_str::<StreamEvent>(data).ok()
+                            } else {
+                                None
+                            }
                         };
+                        // Shift buffer in-place (no allocation)
+                        line_buffer.drain(..=newline_pos);
 
-                        if let Ok(event) = serde_json::from_str::<StreamEvent>(data) {
+                        if let Some(event) = result {
                             match event.event_type.as_str() {
                                 "content_block_delta" => {
                                     if let Some(delta) = &event.delta

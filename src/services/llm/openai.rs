@@ -179,19 +179,21 @@ impl OpenAiProvider {
                     line_buffer.push_str(&String::from_utf8_lossy(&chunk));
 
                     while let Some(newline_pos) = line_buffer.find('\n') {
-                        let line = line_buffer[..newline_pos].to_string();
-                        line_buffer = line_buffer[newline_pos + 1..].to_string();
-
-                        let line = line.trim();
-                        if line.is_empty() || line == "data: [DONE]" {
-                            continue;
-                        }
-
-                        let Some(data) = line.strip_prefix("data: ") else {
-                            continue;
+                        // Parse from slice to avoid allocating a String per line
+                        let result = {
+                            let line = line_buffer[..newline_pos].trim();
+                            if line.is_empty() || line == "data: [DONE]" {
+                                None
+                            } else if let Some(data) = line.strip_prefix("data: ") {
+                                serde_json::from_str::<ChatChunk>(data).ok()
+                            } else {
+                                None
+                            }
                         };
+                        // Shift buffer in-place (no allocation)
+                        line_buffer.drain(..=newline_pos);
 
-                        if let Ok(chunk) = serde_json::from_str::<ChatChunk>(data) {
+                        if let Some(chunk) = result {
                             for choice in &chunk.choices {
                                 if let Some(ref content) = choice.delta.content {
                                     let _ = token_tx.send(content.clone()).await;

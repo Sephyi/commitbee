@@ -201,15 +201,19 @@ impl OllamaProvider {
 
                     // Process complete lines (newline-delimited JSON)
                     while let Some(newline_pos) = line_buffer.find('\n') {
-                        let line = line_buffer[..newline_pos].to_string();
-                        line_buffer = line_buffer[newline_pos + 1..].to_string();
+                        // Parse from slice to avoid allocating a String per line
+                        let result = {
+                            let line = &line_buffer[..newline_pos];
+                            if line.is_empty() {
+                                None
+                            } else {
+                                serde_json::from_str::<GenerateResponse>(line).ok()
+                            }
+                        };
+                        // Shift buffer in-place (no allocation)
+                        line_buffer.drain(..=newline_pos);
 
-                        if line.is_empty() {
-                            continue;
-                        }
-
-                        if let Ok(resp) = serde_json::from_str::<GenerateResponse>(&line) {
-                            // Send token for streaming display
+                        if let Some(resp) = result {
                             let _ = token_tx.send(resp.response.clone()).await;
                             full_response.push_str(&resp.response);
 
