@@ -58,13 +58,16 @@ struct ModelInfo {
 }
 
 impl OllamaProvider {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &Config) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()
-            .unwrap_or_default();
+            .map_err(|e| Error::Provider {
+                provider: "ollama".into(),
+                message: format!("failed to build HTTP client: {e}"),
+            })?;
 
-        Self {
+        Ok(Self {
             client,
             // Sanitize: remove trailing slashes to avoid //api/generate
             host: config.ollama_host.trim_end_matches('/').to_string(),
@@ -72,7 +75,7 @@ impl OllamaProvider {
             temperature: config.temperature,
             num_predict: config.num_predict,
             think: config.think,
-        }
+        })
     }
 
     /// Check Ollama connectivity and return available model names

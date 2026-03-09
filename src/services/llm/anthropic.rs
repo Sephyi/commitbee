@@ -56,13 +56,16 @@ struct ContentDelta {
 }
 
 impl AnthropicProvider {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &Config) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()
-            .unwrap_or_default();
+            .map_err(|e| Error::Provider {
+                provider: "anthropic".into(),
+                message: format!("failed to build HTTP client: {e}"),
+            })?;
 
-        Self {
+        Ok(Self {
             client,
             base_url: config
                 .anthropic_base_url
@@ -74,7 +77,7 @@ impl AnthropicProvider {
             api_key: config.api_key.clone().unwrap_or_default(),
             temperature: config.temperature,
             max_tokens: config.num_predict,
-        }
+        })
     }
 
     pub async fn verify_connection(&self) -> Result<()> {

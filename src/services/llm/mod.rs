@@ -87,11 +87,11 @@ impl LlmBackend {
 
 pub fn create_provider(config: &Config) -> Result<LlmBackend> {
     match config.provider {
-        Provider::Ollama => Ok(LlmBackend::Ollama(ollama::OllamaProvider::new(config))),
-        Provider::OpenAI => Ok(LlmBackend::OpenAi(openai::OpenAiProvider::new(config))),
+        Provider::Ollama => Ok(LlmBackend::Ollama(ollama::OllamaProvider::new(config)?)),
+        Provider::OpenAI => Ok(LlmBackend::OpenAi(openai::OpenAiProvider::new(config)?)),
         Provider::Anthropic => Ok(LlmBackend::Anthropic(anthropic::AnthropicProvider::new(
             config,
-        ))),
+        )?)),
     }
 }
 

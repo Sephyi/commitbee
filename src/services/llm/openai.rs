@@ -58,13 +58,16 @@ struct Delta {
 }
 
 impl OpenAiProvider {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &Config) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()
-            .unwrap_or_default();
+            .map_err(|e| Error::Provider {
+                provider: "openai".into(),
+                message: format!("failed to build HTTP client: {e}"),
+            })?;
 
-        Self {
+        Ok(Self {
             client,
             base_url: config
                 .openai_base_url
@@ -76,7 +79,7 @@ impl OpenAiProvider {
             api_key: config.api_key.clone().unwrap_or_default(),
             temperature: config.temperature,
             max_tokens: config.num_predict,
-        }
+        })
     }
 
     pub async fn verify_connection(&self) -> Result<()> {

@@ -88,7 +88,7 @@ async fn ollama_health_check_success() {
         .mount(&server)
         .await;
 
-    let provider = OllamaProvider::new(&ollama_config(&server.uri()));
+    let provider = OllamaProvider::new(&ollama_config(&server.uri())).unwrap();
     let models = provider.health_check().await.unwrap();
 
     assert_eq!(models.len(), 2);
@@ -99,7 +99,7 @@ async fn ollama_health_check_success() {
 #[tokio::test]
 async fn ollama_health_check_connection_refused() {
     // Use a port that is almost certainly not listening
-    let provider = OllamaProvider::new(&ollama_config("http://127.0.0.1:1"));
+    let provider = OllamaProvider::new(&ollama_config("http://127.0.0.1:1")).unwrap();
     let result = provider.health_check().await;
 
     assert!(result.is_err(), "expected error for connection refused");
@@ -127,7 +127,7 @@ async fn ollama_model_not_found() {
         .mount(&server)
         .await;
 
-    let provider = OllamaProvider::new(&ollama_config(&server.uri()));
+    let provider = OllamaProvider::new(&ollama_config(&server.uri())).unwrap();
     let result = provider.verify_model().await;
 
     assert!(result.is_err(), "expected error when model is not found");
@@ -163,7 +163,7 @@ async fn ollama_streaming_response() {
         .mount(&server)
         .await;
 
-    let provider = OllamaProvider::new(&ollama_config(&server.uri()));
+    let provider = OllamaProvider::new(&ollama_config(&server.uri())).unwrap();
     let (tx, rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
@@ -191,7 +191,7 @@ async fn ollama_server_error() {
         .mount(&server)
         .await;
 
-    let provider = OllamaProvider::new(&ollama_config(&server.uri()));
+    let provider = OllamaProvider::new(&ollama_config(&server.uri())).unwrap();
     let (tx, _rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
@@ -233,7 +233,7 @@ async fn openai_streaming_response() {
         .mount(&server)
         .await;
 
-    let provider = OpenAiProvider::new(&openai_config(&server.uri()));
+    let provider = OpenAiProvider::new(&openai_config(&server.uri())).unwrap();
     let (tx, rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
@@ -263,7 +263,7 @@ async fn openai_unauthorized() {
         .mount(&server)
         .await;
 
-    let provider = OpenAiProvider::new(&openai_config(&server.uri()));
+    let provider = OpenAiProvider::new(&openai_config(&server.uri())).unwrap();
     let result = provider.verify_connection().await;
 
     assert!(result.is_err(), "expected error for 401 response");
@@ -306,7 +306,7 @@ async fn anthropic_streaming_response() {
         .mount(&server)
         .await;
 
-    let provider = AnthropicProvider::new(&anthropic_config(&server.uri()));
+    let provider = AnthropicProvider::new(&anthropic_config(&server.uri())).unwrap();
     let (tx, rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
@@ -333,7 +333,7 @@ async fn anthropic_verify_missing_key() {
         ..Config::default()
     };
 
-    let provider = AnthropicProvider::new(&config);
+    let provider = AnthropicProvider::new(&config).unwrap();
     let result = provider.verify_connection().await;
 
     assert!(result.is_err(), "expected error for missing API key");
@@ -362,7 +362,7 @@ async fn anthropic_server_error() {
         .mount(&server)
         .await;
 
-    let provider = AnthropicProvider::new(&anthropic_config(&server.uri()));
+    let provider = AnthropicProvider::new(&anthropic_config(&server.uri())).unwrap();
     let (tx, _rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
