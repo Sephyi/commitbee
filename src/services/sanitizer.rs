@@ -89,23 +89,6 @@ impl CommitSanitizer {
         result
     }
 
-    /// Truncate a string to at most `max_chars` characters, appending "..." if truncated.
-    /// Safe for multi-byte UTF-8 (never slices mid-character).
-    fn truncate_with_ellipsis(s: &str, max_chars: usize) -> String {
-        let suffix = "...";
-        let target = max_chars.saturating_sub(suffix.len());
-        let boundary = s
-            .char_indices()
-            .nth(target)
-            .map(|(i, _)| i)
-            .unwrap_or(s.len());
-        if boundary < s.len() {
-            format!("{}{}", &s[..boundary], suffix)
-        } else {
-            s.to_string()
-        }
-    }
-
     /// Format a breaking change description as a git-trailer-safe footer.
     ///
     /// Output:
@@ -142,6 +125,16 @@ impl CommitSanitizer {
 
         // Step 3: Validate conventional commit format
         Self::validate_conventional(&cleaned)?;
+
+        // Step 4: Validate first line length
+        let first_line = cleaned.lines().next().unwrap_or("");
+        if first_line.chars().count() > 72 {
+            return Err(Error::InvalidCommitMessage(format!(
+                "First line is {} chars (max 72): '{}'",
+                first_line.chars().count(),
+                first_line,
+            )));
+        }
 
         Ok(cleaned)
     }
@@ -249,12 +242,14 @@ impl CommitSanitizer {
             None => format!("{}{}: {}", commit_type, bang, subject),
         };
 
-        // Truncate if too long
-        let first_line = if first_line.chars().count() > 72 {
-            Self::truncate_with_ellipsis(&first_line, 72)
-        } else {
-            first_line
-        };
+        // Reject if too long (validator should have caught this and triggered retry)
+        if first_line.chars().count() > 72 {
+            return Err(Error::InvalidCommitMessage(format!(
+                "First line is {} chars (max 72): '{}'",
+                first_line.chars().count(),
+                first_line,
+            )));
+        }
 
         // Body gated by include_body; footer always emitted when breaking (D4, 5d)
         let body_section: Option<String> = if format.include_body {
@@ -322,17 +317,6 @@ impl CommitSanitizer {
                 let lowered: String = first.to_lowercase().chain(chars).collect();
                 cleaned = format!("{}{}", prefix, lowered);
             }
-        }
-
-        // Ensure first line <= 72 chars
-        if let Some(first_newline) = cleaned.find('\n') {
-            let first_line = &cleaned[..first_newline];
-            if first_line.chars().count() > 72 {
-                let truncated = Self::truncate_with_ellipsis(first_line, 72);
-                cleaned = format!("{}{}", truncated, &cleaned[first_newline..]);
-            }
-        } else if cleaned.chars().count() > 72 {
-            cleaned = Self::truncate_with_ellipsis(&cleaned, 72);
         }
 
         cleaned
@@ -442,6 +426,28 @@ impl CommitValidator {
                  Avoid vague verbs like \"update\", \"improve\", \"change\"."
                     .to_string(),
             );
+        }
+
+        // Rule 7: subject too long for 72-char first line
+        let subject_trimmed = commit.subject.trim().trim_end_matches('.');
+        let prefix_len = commit.commit_type.len()
+            + commit.scope.as_ref().map(|s| s.len() + 2).unwrap_or(0)
+            + if commit.breaking_change.is_some() {
+                1
+            } else {
+                0
+            }
+            + 2; // ": "
+        let first_line_len = prefix_len + subject_trimmed.chars().count();
+        if first_line_len > 72 {
+            let budget = 72_usize.saturating_sub(prefix_len);
+            violations.push(format!(
+                "Subject is {} chars but must be under {} chars \
+                 (first line would be {} chars, max 72). Shorten it.",
+                subject_trimmed.chars().count(),
+                budget,
+                first_line_len,
+            ));
         }
 
         violations

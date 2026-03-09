@@ -325,6 +325,7 @@ impl App {
                 println!("Timeout: {}s", self.config.timeout_secs);
                 println!("Temperature: {}", self.config.temperature);
                 println!("Max tokens: {}", self.config.num_predict);
+                println!("Think: {}", self.config.think);
                 println!();
                 println!("[format]");
                 println!("  include_body: {}", self.config.format.include_body);
@@ -1009,8 +1010,8 @@ fi
     // ─── Post-Generation Validation ───
 
     /// Validate raw LLM output against evidence flags. If violations exist,
-    /// re-prompt once with corrections appended. Returns the corrected raw
-    /// output, or None if no retry was needed or the retry also failed.
+    /// re-prompt with corrections appended, up to 3 attempts. Returns the
+    /// corrected raw output, or None if no retry was needed.
     async fn validate_and_retry(
         &self,
         raw: &str,
@@ -1018,43 +1019,70 @@ fi
         provider: &llm::LlmBackend,
         original_prompt: &str,
     ) -> Option<String> {
-        let structured = CommitSanitizer::parse_structured(raw)?;
+        const MAX_RETRIES: usize = 3;
 
-        let violations = CommitValidator::validate(
-            &structured,
-            context.has_bug_evidence,
-            context.is_mechanical,
-            context.public_api_removed_count,
-            context.is_dependency_only,
-        );
+        let mut current_raw = raw.to_string();
 
-        if violations.is_empty() {
-            return None; // No violations, use original
+        for attempt in 1..=MAX_RETRIES {
+            let structured = match CommitSanitizer::parse_structured(&current_raw) {
+                Some(s) => s,
+                None => {
+                    if attempt == 1 {
+                        return None; // Can't parse, let sanitize() handle it
+                    }
+                    break; // Retry produced unparseable output, use last good one
+                }
+            };
+
+            let violations = CommitValidator::validate(
+                &structured,
+                context.has_bug_evidence,
+                context.is_mechanical,
+                context.public_api_removed_count,
+                context.is_dependency_only,
+            );
+
+            if violations.is_empty() {
+                return if attempt == 1 {
+                    None // First pass clean, use original
+                } else {
+                    debug!(attempt, "retry resolved all violations");
+                    Some(current_raw)
+                };
+            }
+
+            debug!(
+                attempt,
+                violations = violations.len(),
+                "violations detected, retrying with corrections"
+            );
+
+            let corrections = CommitValidator::format_corrections(&violations);
+            let retry_prompt = format!("{}\n{}", original_prompt, corrections);
+
+            let (tx, mut rx) = mpsc::channel::<String>(64);
+            let cancel = self.cancel_token.clone();
+            let drain_handle = tokio::spawn(async move { while rx.recv().await.is_some() {} });
+
+            match provider.generate(&retry_prompt, tx, cancel).await {
+                Ok(retry_raw) if !retry_raw.trim().is_empty() => {
+                    let _ = drain_handle.await;
+                    current_raw = retry_raw;
+                }
+                _ => {
+                    let _ = drain_handle.await;
+                    warn!(attempt, "retry failed or empty, using previous output");
+                    break;
+                }
+            }
         }
 
-        debug!(
-            violations = violations.len(),
-            "evidence violations detected, retrying with corrections"
-        );
-
-        let corrections = CommitValidator::format_corrections(&violations);
-        let retry_prompt = format!("{}\n{}", original_prompt, corrections);
-
-        let (tx, mut rx) = mpsc::channel::<String>(64);
-        let cancel = self.cancel_token.clone();
-        let drain_handle = tokio::spawn(async move { while rx.recv().await.is_some() {} });
-
-        match provider.generate(&retry_prompt, tx, cancel).await {
-            Ok(retry_raw) if !retry_raw.trim().is_empty() => {
-                let _ = drain_handle.await;
-                debug!("retry succeeded, using corrected output");
-                Some(retry_raw)
-            }
-            _ => {
-                let _ = drain_handle.await;
-                warn!("retry failed or empty, using original output");
-                None
-            }
+        // Exhausted retries — return best effort if we did any retries
+        if current_raw != raw {
+            warn!("max retries exhausted, using best-effort output");
+            Some(current_raw)
+        } else {
+            None
         }
     }
 

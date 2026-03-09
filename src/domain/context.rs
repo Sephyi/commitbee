@@ -89,11 +89,11 @@ SUGGESTED TYPE: {commit_type}{scope}
 DIFF:
 {diff}
 {constraints}{breaking}{metadata_breaking}{focus}
-Subject must be under {subject_budget} chars and name at least one concrete entity (function, struct, variable) from the diff.
+HARD LIMIT: subject must be under {subject_budget} chars (count carefully). Name at least one concrete entity (function, struct, variable) from the diff.
 Body: 1-3 sentences on WHY, or null if trivial. breaking_change: only if existing users must change code/config to stay compatible, else null.
 
 Respond with ONLY this JSON:
-{{"type": "<type>", "scope": {scope_json}, "subject": "<imperative verb + what changed>", "body": null, "breaking_change": null}}"#,
+{{"type": "<type>", "scope": {scope_json}, "subject": "<MUST be under {subject_budget} chars>", "body": null, "breaking_change": null}}"#,
             summary = self.change_summary,
             files = self.file_breakdown.trim(),
             commit_type = self.suggested_type.as_str(),

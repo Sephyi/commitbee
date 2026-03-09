@@ -218,21 +218,30 @@ fn sanitize_truncation_boundary_72() {
         "exactly 72 chars should not be truncated"
     );
 
-    // 67 chars → first line = 73 chars → should be truncated
+    // 67 chars → first line = 73 chars → should be rejected with error
     let subject_67 = "b".repeat(67);
     let raw = format!(
         r#"{{"type": "feat", "scope": null, "subject": "{}", "body": null}}"#,
         subject_67
     );
-    let result = CommitSanitizer::sanitize(&raw, &default_format()).unwrap();
+    let result = CommitSanitizer::sanitize(&raw, &default_format());
+    assert!(result.is_err(), "73+ char first line should be rejected");
+    let err_msg = result.unwrap_err().to_string();
     assert!(
-        result.chars().count() <= 72,
-        "73+ char first line should be truncated to ≤72, got {}",
-        result.chars().count()
+        err_msg.contains("73 chars") && err_msg.contains("max 72"),
+        "error should mention the char count and limit, got: {}",
+        err_msg,
     );
+}
+
+#[test]
+fn sanitize_plain_text_rejects_long_first_line() {
+    let long_subject = "a".repeat(67); // "feat: " + 67 = 73 > 72
+    let raw = format!("feat: {}", long_subject);
+    let result = CommitSanitizer::sanitize(&raw, &default_format());
     assert!(
-        result.ends_with("..."),
-        "truncated line should end with '...'"
+        result.is_err(),
+        "plain text with 73+ char first line should be rejected"
     );
 }
 
@@ -588,6 +597,44 @@ fn validator_accepts_valid_commit() {
     assert!(
         violations.is_empty(),
         "should accept valid commit: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_rejects_long_subject() {
+    // "refactor(services): " = 20 chars, so subject budget = 52
+    let long_subject = "a".repeat(60); // 20 + 60 = 80 > 72
+    let commit = StructuredCommit {
+        commit_type: "refactor".to_string(),
+        scope: Some("services".to_string()),
+        subject: long_subject,
+        body: None,
+        breaking_change: None,
+    };
+    let violations = CommitValidator::validate(&commit, false, false, 0, false);
+    assert!(
+        violations.iter().any(|v| v.contains("Shorten")),
+        "should reject subject that exceeds 72-char first line: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn validator_accepts_subject_at_boundary() {
+    // "feat: " = 6 chars, subject = 66 chars → exactly 72
+    let subject = "a".repeat(66);
+    let commit = StructuredCommit {
+        commit_type: "feat".to_string(),
+        scope: None,
+        subject,
+        body: None,
+        breaking_change: None,
+    };
+    let violations = CommitValidator::validate(&commit, false, false, 0, false);
+    assert!(
+        !violations.iter().any(|v| v.contains("Shorten")),
+        "exactly 72 chars should not trigger length violation: {:?}",
         violations
     );
 }
