@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name: Feature Request
+description: Suggest a new feature or improvement for CommitBee
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for CommitBee? We'd love to hear it. Please describe what you'd like and why.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What problem does this solve, or what workflow would it improve?
+      placeholder: "I often find myself wanting to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How do you envision this working?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you tried any workarounds, or are there other tools that handle this?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of CommitBee does this relate to?
+      options:
+        - Commit message quality
+        - Commit splitting
+        - LLM providers / model support
+        - CLI / UX
+        - Configuration
+        - Git hook integration
+        - Tree-sitter / language support
+        - Security / secret scanning
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any other details, screenshots, or examples.
