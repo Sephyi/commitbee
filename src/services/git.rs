@@ -55,7 +55,12 @@ impl GitService {
 
     // ─── Staged Changes (Single-Pass Diff) ───
 
-    pub async fn get_staged_changes(&self, max_file_lines: usize) -> Result<StagedChanges> {
+    /// Returns `(StagedChanges, full_diff)` — the full diff is the raw unified
+    /// diff output before per-file truncation, for use by the secret scanner.
+    pub async fn get_staged_changes(
+        &self,
+        max_file_lines: usize,
+    ) -> Result<(StagedChanges, String)> {
         self.check_state()?;
 
         // Two calls total: name-status (NUL delimited) + unified diff
@@ -133,7 +138,7 @@ impl GitService {
             return Err(Error::NoStagedChanges);
         }
 
-        Ok(StagedChanges { files, stats })
+        Ok((StagedChanges { files, stats }, diff_output))
     }
 
     /// Split a unified diff into per-file sections keyed by file path.

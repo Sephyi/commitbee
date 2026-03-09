@@ -5,7 +5,9 @@
 mod helpers;
 
 use commitbee::domain::ChangeStatus;
-use commitbee::services::safety::{check_for_conflicts, scan_for_secrets};
+use commitbee::services::safety::{
+    check_for_conflicts, scan_for_secrets, scan_full_diff_for_secrets,
+};
 use helpers::{make_file_change, make_staged_changes};
 
 // ─── Secret detection: one test per pattern ───────────────────────────────────
@@ -331,6 +333,90 @@ fn ignores_conflict_markers_in_doc_paths() {
     );
 }
 
+// ─── Full untruncated diff scanner ───────────────────────────────────────────
+
+#[test]
+fn full_diff_detects_secret_in_added_lines() {
+    let full_diff = "\
+diff --git a/src/config.rs b/src/config.rs
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -1,3 +1,4 @@
+ use std::env;
++API_KEY=abcdefghijklmnopqrstuvwxyz1234567890abcdef
+ fn main() {}
+";
+    let matches = scan_full_diff_for_secrets(full_diff);
+    assert!(!matches.is_empty(), "expected secret in full diff");
+    assert_eq!(matches[0].pattern_name, "API Key");
+    assert_eq!(matches[0].file, "src/config.rs");
+}
+
+#[test]
+fn full_diff_ignores_removed_lines() {
+    let full_diff = "\
+diff --git a/src/config.rs b/src/config.rs
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -1,4 +1,3 @@
+ use std::env;
+-API_KEY=abcdefghijklmnopqrstuvwxyz1234567890abcdef
+ fn main() {}
+";
+    let matches = scan_full_diff_for_secrets(full_diff);
+    assert!(
+        matches.is_empty(),
+        "removed lines should not trigger secrets"
+    );
+}
+
+#[test]
+fn full_diff_catches_secret_beyond_truncation() {
+    // Simulate a long diff where the secret is well past what max_file_lines would truncate
+    let mut diff = String::from(
+        "diff --git a/src/big.rs b/src/big.rs\n\
+         --- a/src/big.rs\n\
+         +++ b/src/big.rs\n\
+         @@ -1,200 +1,201 @@\n",
+    );
+    // 150 normal added lines (past typical max_file_lines=100)
+    for i in 0..150 {
+        diff.push_str(&format!("+let x{} = {};\n", i, i));
+    }
+    // Secret on line 151
+    diff.push_str("+AKIAIOSFODNN7EXAMPLE\n");
+
+    let matches = scan_full_diff_for_secrets(&diff);
+    assert!(
+        !matches.is_empty(),
+        "secret after truncation point should be caught"
+    );
+    assert_eq!(matches[0].pattern_name, "AWS Key");
+    assert_eq!(matches[0].file, "src/big.rs");
+}
+
+#[test]
+fn full_diff_tracks_multiple_files() {
+    let full_diff = "\
+diff --git a/src/a.rs b/src/a.rs
+--- a/src/a.rs
++++ b/src/a.rs
+@@ -1,2 +1,3 @@
+ fn a() {}
++let normal = true;
+diff --git a/src/b.rs b/src/b.rs
+--- a/src/b.rs
++++ b/src/b.rs
+@@ -1,2 +1,3 @@
+ fn b() {}
++sk-abcdefghijklmnopqrstuvwxyz1234567890abcdefghijkl
+";
+    let matches = scan_full_diff_for_secrets(full_diff);
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].file, "src/b.rs");
+    assert_eq!(matches[0].pattern_name, "OpenAI Key");
+}
+
 // ─── Proptest: never-panic guarantees ─────────────────────────────────────────
 
 proptest::proptest! {
@@ -345,6 +431,12 @@ proptest::proptest! {
         )]);
         // Must not panic regardless of input
         let _ = scan_for_secrets(&changes);
+    }
+
+    #[test]
+    fn full_diff_scanner_never_panics(input in proptest::prelude::any::<String>()) {
+        // Must not panic regardless of input
+        let _ = scan_full_diff_for_secrets(&input);
     }
 
     #[test]

@@ -52,6 +52,12 @@ static SECRET_PATTERNS: LazyLock<Vec<(&str, Regex)>> = LazyLock::new(|| {
     ]
 });
 
+/// Scan per-file truncated diffs for secrets.
+///
+/// Prefer `scan_full_diff_for_secrets` in the main binary — it catches
+/// secrets beyond `max_file_lines` truncation. This function is retained
+/// for library consumers who only have `StagedChanges`.
+#[allow(dead_code)]
 pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
     let mut found = Vec::new();
 
@@ -78,6 +84,63 @@ pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
                     });
                     break; // One match per line is enough
                 }
+            }
+        }
+    }
+
+    found
+}
+
+/// Scan the full unified diff for secrets (before per-file truncation).
+///
+/// This catches secrets that would be missed by `scan_for_secrets` when
+/// file diffs are truncated to `max_file_lines`. Parses the raw `git diff`
+/// output directly, tracking file paths from diff headers.
+pub fn scan_full_diff_for_secrets(full_diff: &str) -> Vec<SecretMatch> {
+    let mut found = Vec::new();
+    let mut current_file = String::new();
+    let mut line_num: usize = 0;
+
+    for line in full_diff.lines() {
+        // Track current file from diff headers
+        if line.starts_with("diff --git ") {
+            line_num = 0;
+            continue;
+        }
+
+        if let Some(path) = line.strip_prefix("+++ b/") {
+            current_file = path.to_string();
+            continue;
+        }
+
+        if line == "+++ /dev/null" {
+            // Deleted file — keep current_file from --- header
+            continue;
+        }
+
+        if let Some(path) = line.strip_prefix("--- a/") {
+            // For deleted files, this is the only file path we get
+            if current_file.is_empty() {
+                current_file = path.to_string();
+            }
+            continue;
+        }
+
+        line_num += 1;
+
+        // Only check added lines
+        if !line.starts_with('+') || line.starts_with("+++") {
+            continue;
+        }
+
+        for (name, pattern) in SECRET_PATTERNS.iter() {
+            if pattern.is_match(line) {
+                found.push(SecretMatch {
+                    pattern_name: name.to_string(),
+                    file: current_file.clone(),
+                    line: Some(line_num),
+                });
+                break;
             }
         }
     }

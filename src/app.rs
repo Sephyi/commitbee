@@ -74,7 +74,7 @@ impl App {
         self.print_status("Analyzing staged changes...");
 
         let git = GitService::discover()?;
-        let changes = git.get_staged_changes(self.config.max_file_lines).await?;
+        let (changes, full_diff) = git.get_staged_changes(self.config.max_file_lines).await?;
 
         self.print_info(&format!(
             "{} files with changes detected (+{} -{})",
@@ -88,7 +88,8 @@ impl App {
             return Err(Error::MergeConflicts);
         }
 
-        let secrets = safety::scan_for_secrets(&changes);
+        // Scan the full untruncated diff for secrets (not the per-file truncated diffs)
+        let secrets = safety::scan_full_diff_for_secrets(&full_diff);
         if !secrets.is_empty() {
             warn!(
                 count = secrets.len(),
