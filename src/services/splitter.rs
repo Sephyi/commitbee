@@ -611,10 +611,11 @@ impl CommitSplitter {
 
     /// Calculate total change size for a group (for sorting).
     fn group_change_size(group: &CommitGroup, changes: &StagedChanges) -> usize {
+        let group_files: HashSet<&PathBuf> = group.files.iter().collect();
         changes
             .files
             .iter()
-            .filter(|f| group.files.contains(&f.path))
+            .filter(|f| group_files.contains(&f.path))
             .map(|f| f.additions + f.deletions)
             .sum()
     }

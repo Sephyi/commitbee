@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+use std::collections::HashSet;
+
 use crate::config::Config;
 use crate::domain::{
     ChangeStatus, CodeSymbol, CommitType, FileCategory, PromptContext, StagedChanges, SymbolKind,
@@ -64,28 +66,38 @@ impl ContextBuilder {
         //
         // Modified symbols are shown separately (not as both Added and Removed, which
         // misleads the LLM). Public modified symbols contribute to breaking risk.
+        //
+        // Uses HashSet for O(1) lookup instead of O(N^2) nested iteration (P2).
+        type SymbolKey<'a> = (&'a SymbolKind, &'a str, &'a std::path::Path);
+
+        let added_keys: HashSet<SymbolKey<'_>> = symbols
+            .iter()
+            .filter(|s| s.is_added)
+            .map(|s| (&s.kind, s.name.as_str(), s.file.as_path()))
+            .collect();
+
+        let removed_keys: HashSet<SymbolKey<'_>> = symbols
+            .iter()
+            .filter(|s| !s.is_added)
+            .map(|s| (&s.kind, s.name.as_str(), s.file.as_path()))
+            .collect();
+
         let modified_symbols: Vec<&CodeSymbol> = symbols
             .iter()
             .filter(|s| {
-                s.is_added
-                    && symbols.iter().any(|other| {
-                        !other.is_added
-                            && other.kind == s.kind
-                            && other.name == s.name
-                            && other.file == s.file
-                    })
+                s.is_added && removed_keys.contains(&(&s.kind, s.name.as_str(), s.file.as_path()))
             })
             .collect();
 
         let symbols_deduped: Vec<CodeSymbol> = symbols
             .iter()
             .filter(|s| {
-                !symbols.iter().any(|other| {
-                    other.is_added != s.is_added
-                        && other.kind == s.kind
-                        && other.name == s.name
-                        && other.file == s.file
-                })
+                let key: SymbolKey<'_> = (&s.kind, s.name.as_str(), s.file.as_path());
+                if s.is_added {
+                    !removed_keys.contains(&key)
+                } else {
+                    !added_keys.contains(&key)
+                }
             })
             .cloned()
             .collect();
@@ -173,31 +185,36 @@ impl ContextBuilder {
             return CommitType::Fix;
         }
 
-        // New public functions/structs -> feat (unless it's an API replacement)
-        let has_new_public_symbols = symbols.iter().any(|s| {
-            s.is_added
-                && s.is_public
-                && matches!(
-                    s.kind,
-                    SymbolKind::Function | SymbolKind::Struct | SymbolKind::Trait
-                )
-        });
-
-        let has_removed_public_symbols = symbols.iter().any(|s| {
-            !s.is_added
-                && s.is_public
-                && matches!(
-                    s.kind,
-                    SymbolKind::Function | SymbolKind::Struct | SymbolKind::Trait
-                )
-        });
+        // Single-pass symbol evidence: compute all flags in one iteration
+        let (has_new_public, has_removed_public, has_any_new, has_any_removed) =
+            symbols.iter().fold(
+                (false, false, false, false),
+                |(mut np, mut rp, mut an, mut ar), s| {
+                    let is_api_kind = matches!(
+                        s.kind,
+                        SymbolKind::Function | SymbolKind::Struct | SymbolKind::Trait
+                    );
+                    if s.is_added {
+                        an = true;
+                        if s.is_public && is_api_kind {
+                            np = true;
+                        }
+                    } else {
+                        ar = true;
+                        if s.is_public && is_api_kind {
+                            rp = true;
+                        }
+                    }
+                    (np, rp, an, ar)
+                },
+            );
 
         // API replacement: adding new public APIs while removing old ones → refactor
-        if has_new_public_symbols && has_removed_public_symbols {
+        if has_new_public && has_removed_public {
             return CommitType::Refactor;
         }
 
-        if has_new_public_symbols {
+        if has_new_public {
             return CommitType::Feat;
         }
 
@@ -220,11 +237,9 @@ impl ContextBuilder {
         // Balanced small changes (additions ≈ deletions) with no new symbols -> style/refactor
         // This catches mechanical transformations like reformatting, collapsing nesting, etc.
         if changes.stats.insertions < 20 && changes.stats.deletions < 20 {
-            let has_any_new_symbols = symbols.iter().any(|s| s.is_added);
-            let has_any_removed_symbols = symbols.iter().any(|s| !s.is_added);
             let balanced = changes.stats.insertions.abs_diff(changes.stats.deletions) <= 5;
 
-            if balanced && !has_any_new_symbols && !has_any_removed_symbols {
+            if balanced && !has_any_new && !has_any_removed {
                 return CommitType::Style;
             }
 
