@@ -21,6 +21,7 @@ pub struct OllamaProvider {
     model: String,
     temperature: f32,
     num_predict: u32,
+    think: bool,
 }
 
 #[derive(Serialize)]
@@ -29,6 +30,7 @@ struct GenerateRequest {
     prompt: String,
     system: String,
     stream: bool,
+    think: bool,
     options: OllamaOptions,
 }
 
@@ -40,6 +42,7 @@ struct OllamaOptions {
 
 #[derive(Deserialize)]
 struct GenerateResponse {
+    #[serde(default)]
     response: String,
     done: bool,
 }
@@ -68,6 +71,7 @@ impl OllamaProvider {
             model: config.model.clone(),
             temperature: config.temperature,
             num_predict: config.num_predict,
+            think: config.think,
         }
     }
 
@@ -133,6 +137,7 @@ impl OllamaProvider {
                 prompt: prompt.to_string(),
                 system: SYSTEM_PROMPT.to_string(),
                 stream: true,
+                think: self.think,
                 options: OllamaOptions {
                     temperature: self.temperature,
                     num_predict: self.num_predict,
@@ -173,7 +178,6 @@ impl OllamaProvider {
         // CRITICAL: Buffer for handling chunk boundaries
         // Chunks from bytes_stream() are NOT aligned to newlines!
         let mut line_buffer = String::new();
-
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {

@@ -98,6 +98,12 @@ pub struct Config {
     #[serde(default = "default_num_predict")]
     pub num_predict: u32,
 
+    /// Enable thinking/reasoning for Ollama models that support it (default: false)
+    /// When enabled, thinking tokens are separated from the response.
+    /// Requires higher num_predict (8192+) to accommodate thinking tokens.
+    #[serde(default)]
+    pub think: bool,
+
     /// Base URL for OpenAI-compatible APIs (default: https://api.openai.com/v1)
     #[serde(default)]
     pub openai_base_url: Option<String>,
@@ -116,7 +122,7 @@ fn default_max_context_chars() -> usize {
 }
 
 fn default_model() -> String {
-    "qwen3:4b".into()
+    "qwen3.5:4b".into()
 }
 fn default_ollama_host() -> String {
     "http://localhost:11434".into()
@@ -150,6 +156,7 @@ impl Default for Config {
             timeout_secs: default_timeout_secs(),
             temperature: default_temperature(),
             num_predict: default_num_predict(),
+            think: false,
             openai_base_url: None,
             anthropic_base_url: None,
             format: CommitFormat::default(),
@@ -308,7 +315,7 @@ impl Config {
 provider = "ollama"
 
 # Model name (for Ollama, use `ollama list` to see available)
-model = "qwen3:4b"
+model = "qwen3.5:4b"
 
 # Ollama server URL
 ollama_host = "http://localhost:11434"
@@ -318,6 +325,15 @@ max_diff_lines = 500
 
 # Maximum lines per file in diff
 max_file_lines = 100
+
+# Maximum tokens to generate (default 256)
+# Increase to 8192+ if using thinking models with think = true
+# num_predict = 256
+
+# Enable thinking/reasoning for Ollama models (default: false)
+# When enabled, models like qwen3 will reason before responding.
+# Requires higher num_predict (8192+) to accommodate thinking tokens.
+# think = false
 
 # Maximum context characters for LLM prompt (~4 chars per token)
 # Increase for larger models (e.g., 48000 for 16K context)

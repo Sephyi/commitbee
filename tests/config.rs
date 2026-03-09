@@ -10,7 +10,7 @@ use commitbee::config::{Config, Provider};
 fn default_config_values() {
     let config = Config::default();
     assert_eq!(config.provider, Provider::Ollama);
-    assert_eq!(config.model, "qwen3:4b");
+    assert_eq!(config.model, "qwen3.5:4b");
     assert_eq!(config.ollama_host, "http://localhost:11434");
     assert!(config.api_key.is_none());
     assert_eq!(config.max_diff_lines, 500);
@@ -19,6 +19,7 @@ fn default_config_values() {
     assert_eq!(config.timeout_secs, 300);
     assert!((config.temperature - 0.3).abs() < f32::EPSILON);
     assert_eq!(config.num_predict, 256);
+    assert!(!config.think);
     assert!(config.format.include_body);
     assert!(config.format.include_scope);
     assert!(config.format.lowercase_subject);
@@ -71,6 +72,18 @@ fn empty_toml_uses_all_defaults() {
     assert_eq!(config.provider, default.provider);
     assert_eq!(config.model, default.model);
     assert_eq!(config.max_diff_lines, default.max_diff_lines);
+}
+
+#[test]
+fn think_defaults_to_false() {
+    let config: Config = toml::from_str("").unwrap();
+    assert!(!config.think);
+}
+
+#[test]
+fn think_can_be_enabled() {
+    let config: Config = toml::from_str("think = true").unwrap();
+    assert!(config.think);
 }
 
 // ─── Provider display ────────────────────────────────────────────────────────

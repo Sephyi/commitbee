@@ -23,7 +23,7 @@ use commitbee::services::sanitizer::CommitSanitizer;
 fn ollama_config(server_url: &str) -> Config {
     Config {
         provider: Provider::Ollama,
-        model: "qwen3:4b".into(),
+        model: "qwen3.5:4b".into(),
         ollama_host: server_url.to_string(),
         timeout_secs: 5,
         temperature: 0.3,
@@ -134,7 +134,7 @@ async fn ollama_model_not_found() {
     let err = result.unwrap_err();
     match err {
         Error::ModelNotFound { model, available } => {
-            assert_eq!(model, "qwen3:4b");
+            assert_eq!(model, "qwen3.5:4b");
             assert!(available.contains(&"llama3:8b".to_string()));
             assert!(available.contains(&"codellama:7b".to_string()));
         }
