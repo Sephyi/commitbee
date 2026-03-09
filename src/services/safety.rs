@@ -25,14 +25,25 @@ static SECRET_PATTERNS: LazyLock<Vec<(&str, Regex)>> = LazyLock::new(|| {
             "Private Key",
             Regex::new(r"-----BEGIN .* PRIVATE KEY-----").unwrap(),
         ),
-        ("OpenAI Key", Regex::new(r"sk-[a-zA-Z0-9]{48}").unwrap()),
+        (
+            "OpenAI Key",
+            Regex::new(r"sk-[a-zA-Z0-9]{48}|sk-proj-[a-zA-Z0-9\-_]{40,}").unwrap(),
+        ),
         (
             "Anthropic Key",
             Regex::new(r"sk-ant-[a-zA-Z0-9-]{80,}").unwrap(),
         ),
         (
+            "GitHub Token",
+            Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").unwrap(),
+        ),
+        (
             "Generic Secret",
             Regex::new(r#"(?i)(password|secret|token)\s*[:=]\s*["'][^"']{8,}["']"#).unwrap(),
+        ),
+        (
+            "Generic Secret (unquoted)",
+            Regex::new(r#"(?i)(password|secret|token)\s*[:=]\s*[^\s'"]{16,}"#).unwrap(),
         ),
         (
             "Connection String",

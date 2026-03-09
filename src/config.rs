@@ -8,6 +8,7 @@ use figment::providers::{Env, Format, Serialized, Toml};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use tracing::warn;
 
 use crate::cli::Cli;
 use crate::error::{Error, Result};
@@ -61,7 +62,7 @@ impl std::fmt::Display for Provider {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub provider: Provider,
@@ -164,15 +165,40 @@ impl Default for Config {
     }
 }
 
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("provider", &self.provider)
+            .field("model", &self.model)
+            .field("ollama_host", &self.ollama_host)
+            .field("api_key", &self.api_key.as_ref().map(|_| "[REDACTED]"))
+            .field("max_diff_lines", &self.max_diff_lines)
+            .field("max_file_lines", &self.max_file_lines)
+            .field("max_context_chars", &self.max_context_chars)
+            .field("timeout_secs", &self.timeout_secs)
+            .field("temperature", &self.temperature)
+            .field("num_predict", &self.num_predict)
+            .field("think", &self.think)
+            .field("openai_base_url", &self.openai_base_url)
+            .field("anthropic_base_url", &self.anthropic_base_url)
+            .field("format", &self.format)
+            .finish()
+    }
+}
+
 impl Config {
     /// Load with priority: CLI > ENV > user config > project config > defaults
     pub fn load(cli: &Cli) -> Result<Self> {
         let mut figment = Figment::new().merge(Serialized::defaults(Config::default()));
 
         // Project-level config (.commitbee.toml in repo root)
+        // Security: project config can override settings but should not
+        // be able to set api_key or redirect cloud provider base URLs.
+        let mut has_project_config = false;
         if let Ok(cwd) = std::env::current_dir() {
             let project_config = cwd.join(".commitbee.toml");
             if project_config.exists() {
+                has_project_config = true;
                 figment = figment.merge(Toml::file(&project_config));
             }
         }
@@ -191,6 +217,26 @@ impl Config {
         let mut config: Config = figment
             .extract()
             .map_err(|e| Error::Config(e.to_string()))?;
+
+        // Security: warn if project-level config overrides security-sensitive fields
+        if has_project_config
+            && let Ok(cwd) = std::env::current_dir()
+            && let Ok(content) = fs::read_to_string(cwd.join(".commitbee.toml"))
+            && let Ok(table) = content.parse::<toml::Table>()
+        {
+            if table.contains_key("api_key") {
+                warn!("project .commitbee.toml sets api_key — ignoring for security");
+                config.api_key = None;
+            }
+            if table.contains_key("openai_base_url") {
+                warn!("project .commitbee.toml overrides openai_base_url — verify this is trusted");
+            }
+            if table.contains_key("anthropic_base_url") {
+                warn!(
+                    "project .commitbee.toml overrides anthropic_base_url — verify this is trusted"
+                );
+            }
+        }
 
         // Provider-specific API key fallback
         if config.api_key.is_none() {
@@ -213,7 +259,7 @@ impl Config {
         }
 
         // CLI overrides (highest priority)
-        config.apply_cli(cli);
+        config.apply_cli(cli)?;
         config.validate()?;
         Ok(config)
     }
@@ -226,12 +272,18 @@ impl Config {
         Self::config_dir().map(|d| d.join("config.toml"))
     }
 
-    fn apply_cli(&mut self, cli: &Cli) {
+    fn apply_cli(&mut self, cli: &Cli) -> Result<()> {
         if let Some(ref p) = cli.provider {
             self.provider = match p.to_lowercase().as_str() {
+                "ollama" => Provider::Ollama,
                 "openai" => Provider::OpenAI,
                 "anthropic" => Provider::Anthropic,
-                _ => Provider::Ollama,
+                other => {
+                    return Err(Error::Config(format!(
+                        "Unknown provider '{}'. Valid options: ollama, openai, anthropic",
+                        other
+                    )));
+                }
             };
         }
         if let Some(ref m) = cli.model {
@@ -240,6 +292,7 @@ impl Config {
         if cli.no_scope {
             self.format.include_scope = false;
         }
+        Ok(())
     }
 
     fn validate(&self) -> Result<()> {
@@ -294,6 +347,26 @@ impl Config {
             return Err(Error::Config(format!(
                 "ollama_host must start with http:// or https://, got '{}'",
                 self.ollama_host
+            )));
+        }
+
+        // Validate cloud provider base URLs
+        if let Some(ref url) = self.openai_base_url
+            && !url.starts_with("http://")
+            && !url.starts_with("https://")
+        {
+            return Err(Error::Config(format!(
+                "openai_base_url must start with http:// or https://, got '{}'",
+                url
+            )));
+        }
+        if let Some(ref url) = self.anthropic_base_url
+            && !url.starts_with("http://")
+            && !url.starts_with("https://")
+        {
+            return Err(Error::Config(format!(
+                "anthropic_base_url must start with http:// or https://, got '{}'",
+                url
             )));
         }
 

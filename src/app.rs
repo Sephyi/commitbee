@@ -89,7 +89,7 @@ impl App {
         }
 
         let secrets = safety::scan_for_secrets(&changes);
-        if !secrets.is_empty() && !self.cli.allow_secrets {
+        if !secrets.is_empty() {
             warn!(
                 count = secrets.len(),
                 "potential secrets detected in staged changes"
@@ -104,11 +104,26 @@ impl App {
                 );
             }
 
+            // Cloud providers: always block when secrets detected
             if self.config.provider != crate::config::Provider::Ollama {
                 return Err(Error::SecretsDetected {
                     patterns: secrets.iter().map(|s| s.pattern_name.clone()).collect(),
                 });
             }
+
+            // Ollama: only allow with --allow-secrets and verified-local host
+            if !self.cli.allow_secrets {
+                return Err(Error::SecretsDetected {
+                    patterns: secrets.iter().map(|s| s.pattern_name.clone()).collect(),
+                });
+            }
+
+            if !Self::is_local_host(&self.config.ollama_host) {
+                return Err(Error::SecretsDetected {
+                    patterns: secrets.iter().map(|s| s.pattern_name.clone()).collect(),
+                });
+            }
+
             self.print_info("Proceeding with local Ollama (data stays local)");
         }
 
@@ -163,6 +178,7 @@ impl App {
             eprintln!("{}", style("--- PROMPT ---").dim());
             eprintln!("{}", prompt);
             eprintln!("{}", style("--- END PROMPT ---").dim());
+            return Ok(());
         }
 
         if self.cancel_token.is_cancelled() {
@@ -270,7 +286,7 @@ impl App {
 
         // Step 7: Confirm and commit
         if self.cli.dry_run {
-            println!("\n{}", message);
+            println!("{}", message);
             return Ok(());
         }
 
@@ -280,7 +296,7 @@ impl App {
             if !is_interactive {
                 eprintln!("{}", style("warning:").yellow().bold());
                 eprintln!("  Not a terminal. Use --yes to auto-confirm in scripts/hooks.");
-                println!("\n{}", message);
+                println!("{}", message);
                 return Ok(());
             }
 
@@ -826,7 +842,7 @@ fi
 # Generate commit message and write to file
 MSG=$(commitbee --yes --dry-run 2>/dev/null)
 if [ $? -eq 0 ] && [ -n "$MSG" ]; then
-    echo "$MSG" > "$COMMIT_MSG_FILE"
+    printf '%s\n' "$MSG" > "$COMMIT_MSG_FILE"
 fi
 "#;
 
@@ -1084,6 +1100,25 @@ fi
         } else {
             None
         }
+    }
+
+    // ─── Security Helpers ───
+
+    /// Check if a URL host resolves to a loopback address (localhost, 127.0.0.1, ::1).
+    fn is_local_host(url: &str) -> bool {
+        // Parse out the host from the URL
+        let host = url
+            .strip_prefix("http://")
+            .or_else(|| url.strip_prefix("https://"))
+            .unwrap_or(url)
+            .split('/')
+            .next()
+            .unwrap_or("")
+            .split(':')
+            .next()
+            .unwrap_or("");
+
+        matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
     }
 
     // ─── Output Helpers ───

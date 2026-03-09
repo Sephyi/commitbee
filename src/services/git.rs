@@ -94,21 +94,25 @@ impl GitService {
             let category = FileCategory::from_path(&file_path);
             let is_binary = Self::is_binary_path(&file_path);
 
-            if is_binary {
-                continue;
-            }
-
             // For lookups in file_diffs, we need the string key.
             // Note: split_unified_diff currently uses paths from "diff --git a/... b/..." headers which are usually standard strings.
             // Complex unicode paths might mismatch if git output encoding differs, but -z guarantees strict bytes for status.
             let diff_key = file_path.to_string_lossy();
 
-            let diff = file_diffs
-                .get(diff_key.as_ref())
+            // Count stats from full diff BEFORE truncation to get accurate numbers
+            let full_diff = if is_binary {
+                None
+            } else {
+                file_diffs.get(diff_key.as_ref())
+            };
+
+            let (additions, deletions) =
+                full_diff.map(|d| Self::count_changes(d)).unwrap_or((0, 0));
+
+            // Truncate diff for prompt context (binary files get empty diff)
+            let diff = full_diff
                 .map(|d| Self::truncate_diff(d, max_file_lines))
                 .unwrap_or_default();
-
-            let (additions, deletions) = Self::count_changes(&diff);
 
             files.push(FileChange {
                 path: file_path,
