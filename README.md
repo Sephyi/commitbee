@@ -213,7 +213,7 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
 ## 🗺️ Changelog
 
-### 🔬 `v0.3.1` — Reliability (current)
+### 🔬 `v0.3.1` — Trust, but Verify (current)
 
 - **Multi-pass corrective retry** — Validator checks LLM output against 7 rules and retries up to 3 times with targeted correction instructions
 - **Subject length enforcement** — Rejects subjects exceeding 72-char first line with a clear error instead of silent truncation
@@ -221,7 +221,7 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 - **Default model: `qwen3.5:4b`** — Smaller (3.4GB), no thinking overhead, clean JSON output out of the box
 - **Configurable thinking mode** — `think` config option for Ollama models that support reasoning separation
 
-### 🚀 `v0.3.0` — Differentiation
+### 🚀 `v0.3.0` — Read Between the Lines
 
 - **Diff-shape fingerprinting + Jaccard clustering** — Splitter groups files by change shape and content vocabulary, not just directory
 - **Evidence-based type inference** — Constraint rules from code analysis drive commit type selection (bug evidence → fix, mechanical → style, dependency-only → chore)
@@ -234,7 +234,7 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 - **Parallel tree-sitter parsing** — rayon for CPU-bound parsing, tokio JoinSet for concurrent git fetching
 - **Anti-hallucination prompt engineering** — EVIDENCE/CONSTRAINTS sections, negative examples, anti-copy rules
 
-### ✨ `v0.2.0` — Polish & Providers
+### ✨ `v0.2.0` — Commit, Don't Think
 
 - **Cloud providers** — OpenAI-compatible and Anthropic streaming support
 - **Commit splitting** — Automatic detection and splitting of multi-concern staged changes
