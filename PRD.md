@@ -6,36 +6,34 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 3.3
+**Version**: 4.0
 **Date**: 2026-03-13
 **Status**: Active
 **Author**: Sephyi + Claude
 
-**Revision 3.3**: v0.4.0 full feature completion (2026-03-13) — FR-030 (Custom Prompt Templates): `TemplateService` with `system_prompt_path`/`template_path` config. FR-032 (Multi-Language Commit Messages): `--locale` flag with ISO 639-1 codes. FR-036 (Tree-sitter Query Patterns): `.scm` query files replacing manual AST walking. FR-057 (Additional Language Support): Java, C, C++, Ruby, C# with feature-gated crates and 15 tests. FR-058 (Commit History Style Learning): `HistoryService` with type/scope/case/compliance analysis. TR-006 (Evaluation Harness): fixture-based pipeline testing. TR-007 (Fuzzing): 3 `cargo-fuzz` targets. Moved FR-057/FR-058 from Phase 3 to Phase 2. 280 tests.
+## Changelog
 
-**Revision 3.2**: v0.4.0 feature implementation (2026-03-13) — FR-035 (Rename Detection): `--find-renames=N%` with configurable threshold, `ChangeStatus::Renamed`, NUL-delimited R-status parsing. FR-037 (Expanded Secret Scanning): 25 built-in patterns across 13 categories, pluggable `build_patterns()` engine with custom/disabled config. FR-038 (Progress Indicators): `indicatif` spinners with TTY detection, `Progress` struct with phase/info/warning/finish methods. 202 tests.
+<details>
+<summary>Revision history (v3.3 → v4.0)</summary>
 
-**Revision 3.1**: Deep codebase audit + streaming hardening (2026-03-13) — LLM provider hardening: `Provider::new()` returns `Result`, 1 MB response cap (`MAX_RESPONSE_BYTES`), EOF buffer parsing for all SSE providers, zero-allocation streaming (slice + drain), HTTP error body propagation. Security: full untruncated diff scanning for secrets, `sk-proj-` pattern support. Performance: HashSet symbol dedup, single-pass evidence detection, `String::with_capacity` pre-allocation. Error handling: hardened observability in analyzer and app orchestrator. 188 tests.
+| Version | Date       | Summary |
+|---------|------------|---------|
+| 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 295, removed dead cross-references. |
+| 3.3     | 2026-03-13 | v0.4.0 full feature completion — FR-030 (Custom Prompt Templates), FR-032 (Multi-Language), FR-036 (Tree-sitter Query Patterns), FR-057 (Additional Languages), FR-058 (History Learning), TR-006 (Eval Harness), TR-007 (Fuzzing). 295 tests. |
+| 3.2     | 2026-03-13 | FR-035 (Rename Detection), FR-037 (Expanded Secret Scanning), FR-038 (Progress Indicators). 202 tests. |
+| 3.1     | 2026-03-13 | Deep codebase audit + streaming hardening: `Provider::new()` returns `Result`, 1 MB response cap, EOF buffer parsing, zero-allocation streaming, HTTP error body propagation. 188 tests. |
+| 3.0     | 2026-03-08 | v0.3.1 multi-pass retry + prompt enforcement. FR-041 expanded to 7 rules. 182 tests. |
+| 2.9     | 2026-03-08 | v0.3.1 patch: default model → `qwen3.5:4b`, subject length enforcement, `think` config option. |
+| 2.8     | 2026-03-08 | v0.3.0 release prep — sanitizer robustness, splitter Jaccard clustering, simplified prompts, NUL-delimited git parsing. 178 tests. |
+| 2.7     | 2026-03-08 | Splitter precision + subject quality + metadata breaking detection. 169 tests. |
+| 2.6     | 2026-03-08 | Message quality overhaul — FR-041, FR-034 partial, FR-023 enhanced, PE-001/PE-002 updates. 168 tests. |
+| 2.5     | 2026-02-22 | PRD structural cleanup (FR placement fixes). |
+| 2.4     | 2026-02-22 | Conventional Commits 1.0.0 spec compliance, symbol dedup. 133 tests. |
+| 2.3     | 2026-02-22 | Version alignment — v0.2.0 shipped Phase 1+2, roadmap renumbered. |
+| 2.2     | 2026-02-18 | FR-023 (commit splitting), competitive matrix update, 118 tests. |
+| 2.1     | 2026-02-17 | Enhancement review integration — eval harness, fallback ladder, cancellation contract, streaming trait, golden fixtures. |
 
-**Revision 3.0**: v0.3.1 multi-pass retry + prompt enforcement (2026-03-08) — FR-041 expanded to 7 rules: added Rule 7 (subject length validation with char budget). `validate_and_retry` upgraded from single-shot to multi-pass loop (up to 3 attempts with re-validation after each). Prompt engineering: "HARD LIMIT" phrasing + char budget embedded in JSON template placeholder for stronger small-model compliance. 182 tests.
-
-**Revision 2.9**: v0.3.1 patch (2026-03-08) — Default model switched from `qwen3:4b-instruct-2507-q8_0` to `qwen3.5:4b` (smaller, no thinking overhead, clean JSON output). Subject length enforcement: CommitValidator Rule 7 rejects subjects that would exceed 72-char first line and triggers corrective retry with budget hint; sanitizer returns error instead of silent `...` truncation (removed `truncate_with_ellipsis`). Added `think` config option (default: `false`) for Ollama thinking/reasoning separation. 182 tests.
-
-**Revision 2.8**: v0.3.0 release prep (2026-03-08) — Sanitizer robustness: thought/think block stripping (both `<thought>` and qwen3 `<think>` tags), targeted JSON extraction via "type" key, conversational preamble detection via `VALID_TYPE_START_REGEX`, 9 new sanitizer tests (178 total). Splitter: Jaccard similarity hybrid clustering (content vocabulary overlap alongside diff-shape fingerprinting). Prompt engineering: removed Think-then-Compress (caused token budget exhaustion on <10B models), simplified user prompt, integrated concrete entity rule into system prompt. Git service: NUL-delimited name-status parsing (`-z` flag). Safety: component-based path matching in conflict detector, added-line-only scanning, concat! self-detection prevention. Context: bug evidence → fix type inference, default fallback changed from Feat to Refactor. CI: MSRV matrix updated 1.85→1.94.
-
-**Revision 2.7**: Splitter precision + subject quality + metadata breaking (2026-03-08) — FR-023 enhanced: targeted caller detection (E1), post-clustering sub-split for >6-file groups (E2), focus instruction for >5-file groups (E3), scored support file assignment with known pairs (H6), group rationale in per-group prompts (H2). FR-034 now fully implemented: metadata-aware breaking detection for MSRV/engines.node/requires-python (G1), symbol tri-state with ModifiedSignature (H5). FR-041 expanded to 6 rules: added subject specificity validator (F3). PE-001: negative examples (BAD/GOOD pairs). PE-002: primary change detection (F1), metadata breaking signals, modified symbols section. Performance: Arc\<String\> for diffs, String::with_capacity. Test count: 169.
-
-**Revision 2.6**: Message quality overhaul (2026-03-08) — Added FR-041 (post-generation validation), updated FR-034 (type heuristics partially implemented: evidence flags, API replacement inference, mechanical/style detection), updated FR-023 (splitter: diff-shape fingerprinting, symbol dependency merging, category separation, expanded GENERIC_DIRS to 22 entries, 16 tests), updated FR-040 (cross-project file categorization: 30+ source languages, 40+ config files, expanded CI/build detection, lock file skip list). Updated PE-001 (anti-hallucination rules, anti-copy rule, micro few-shot examples) and PE-002 (evidence flags, subject budget, CONSTRAINTS section, natural language labels). Test count: 168.
-
-**Revision 2.5**: PRD structural cleanup (2026-02-22) — Fixed FR placement inconsistencies: FR-039 definition moved from Section 4.3 to Section 4.2 (shipped in v0.2.0); FR-040 placed only in Phase 2 roadmap (ships with v0.3.0, not v0.2.0); FR-024 (P1 number in P3 context) merged back into FR-058 to preserve decade numbering convention.
-
-**Revision 2.4**: Post-v0.2.0 spec anchoring (2026-02-22) — Conventional Commits 1.0.0 spec compliance: `!` suffix on breaking changes, `BREAKING CHANGE:` footer (emitted regardless of `include_body`), commit type list synced with `CommitType::ALL` via compile-time test, symbol deduplication in context builder (prevents misleading LLM when function bodies change but definition lines don't move). Test count: 133.
-
-**Revision 2.3**: Version alignment (2026-02-22) — v0.2.0 shipped containing all Phase 1 (stability) and Phase 2 (polish/providers) features. Roadmap renumbered: Phase 3 (differentiation) is now v0.3.0, Phase 4 (market leadership) is now v0.4.0+.
-
-**Revision 2.2**: Implementation status update + commit splitting (2026-02-18) — added FR-023 (commit splitting), FR-024 (commit history style learning, experimental), updated competitive matrix and roadmap to reflect v0.3.0 features already implemented (OpenAI, Anthropic, hooks, multi-generate, completions, figment config, miette, tracing, single-pass diff, async git, keyring, 118 tests). Updated architecture with `splitter.rs`.
-
-**Revision 2.1**: Enhancement review integration (2026-02-17) — incorporated evaluation harness, symbol extraction fallback ladder, cancellation contract, streaming trait abstraction, golden test fixtures, output format contracts, hook edge cases, JSON retry logic, and 12 additional refinements from verification review.
+</details>
 
 ## 1. Vision
 
@@ -54,23 +52,27 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 
 ### Compatibility Policy
 
-- **v0.2.0** shipped with all Phase 1 (stability) and Phase 2 (polish/providers) features. Config format preserved, no breaking CLI changes.
-- **v0.3.0** is the differentiation release. **v0.3.1** is a patch: default model switched to `qwen3.5:4b`, subject length validation with retry, `think` config option. No breaking changes.
+| Release | Scope | Breaking Changes |
+|---------|-------|------------------|
+| v0.2.0  | Stability + polish + providers (Phase 1) | None — config format preserved, no breaking CLI changes |
+| v0.3.0  | Differentiation core (splitter enhancements, validation, heuristics) | None |
+| v0.3.1  | Patch — default model → `qwen3.5:4b`, subject length validation, `think` config | None |
+| v0.4.0  | Feature completion (templates, languages, rename detection, history learning) | None |
 
 ## 2. Competitive Landscape
 
 ### 2.1 Market Position
 
 | Category             | Key Players                                    | CommitBee Advantage                                             |
-| -------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
+|----------------------|------------------------------------------------|-----------------------------------------------------------------|
 | AI commit generators | opencommit (7.2K★), aicommits (8K★), aicommit2 | **Only tool with tree-sitter semantic analysis**                |
-| Rust commit tools.   | rusty-commit, cocogitto, convco                | Semantic analysis + AI generation (cocogitto/convco have no AI) |
+| Rust commit tools    | rusty-commit, cocogitto, convco                | Semantic analysis + AI generation (cocogitto/convco have no AI) |
 | IDE-integrated       | GitHub Copilot, JetBrains AI                   | CLI-first, provider-agnostic, privacy-respecting                |
 
 ### 2.2 Unique Differentiators (No Competitor Has These)
 
 1. **Tree-sitter semantic analysis** — Every competitor sends raw diffs to LLMs
-2. **Commit splitting** — Detects multi-concern staged changes and splits into separate well-typed commits automatically. No competitor offers this.
+2. **Commit splitting** — Detects multi-concern staged changes and splits into separate well-typed commits automatically
 3. **Built-in secret scanning** — Only ORCommit[^1] also has this (via external Gitleaks)
 4. **Token budget management** with adaptive truncation — Most competitors blindly send full diffs
 5. **Streaming output** with cancellation — Most wait for complete response
@@ -78,34 +80,34 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 
 [^1]: ORCommit (<https://github.com/reacherhq/orcommit>) — a Rust-based commit message generator with Gitleaks integration and interactive regeneration with feedback.
 
-### 2.3 Gap Status vs. Competitors
+### 2.3 Feature Status vs. Market Expectations
 
-| Feature                                                        | Market Expectation            | Current State     |
-| -------------------------------------------------------------- | ----------------------------- | ----------------- |
-| Cloud LLM providers (OpenAI, Anthropic)                        | Universal                     | **Implemented**   |
-| Git hook integration                                           | Universal                     | **Implemented**   |
-| Shell completions                                              | Expected for CLI tools        | **Implemented**   |
-| Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | **Implemented**   |
-| Unit/integration tests                                         | Non-negotiable for quality    | **280 tests**     |
-| Commit splitting (multi-concern detection)                     | No competitor has this        | **Implemented**   |
-| Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | **Implemented**   |
+| Feature                                            | Market Expectation            | Status          |
+|----------------------------------------------------|-------------------------------|-----------------|
+| Cloud LLM providers (OpenAI, Anthropic)            | Universal                     | ✅ v0.2.0       |
+| Git hook integration                               | Universal                     | ✅ v0.2.0       |
+| Shell completions                                  | Expected for CLI tools        | ✅ v0.2.0       |
+| Multiple message generation (pick from N)          | Common (aicommits, aicommit2) | ✅ v0.2.0       |
+| Commit splitting (multi-concern detection)         | No competitor has this        | ✅ v0.2.0       |
+| Custom prompt/instruction files                    | Growing (Copilot, aicommit2)  | ✅ v0.4.0       |
+| Unit/integration tests                             | Non-negotiable for quality    | ✅ 295 tests    |
 
-## 3. Architecture Requirements
+## 3. Architecture
 
-### 3.1 Current Architecture Assessment
+### 3.1 Resolved Issues
 
-The existing domain/services separation is solid. The pipeline (CLI -> Git -> Analyzer -> Context -> LLM -> Sanitizer -> Commit) is well-conceived. However, several architectural issues must be addressed:
+The following critical issues from earlier versions have been resolved:
 
-#### Critical Issues
+| Issue | Resolution | Version |
+|-------|-----------|---------|
+| Symbols extracted but never included in LLM prompt | Included in prompt with fallback ladder | v0.2.0 |
+| `App::generate_commit()` untestable monolith | Decomposed into testable methods | v0.2.0 |
+| No dependency injection | Trait abstractions for GitService, LlmProvider | v0.2.0 |
+| Synchronous `std::process::Command` in async runtime | `tokio::process::Command` (FR-020) | v0.2.0 |
+| N+1 git process spawns | Single diff + concurrent `JoinSet` (FR-021) | v0.2.0 |
+| UTF-8 panic in sanitizer | `str::chars()` safe truncation (FR-001) | v0.2.0 |
 
-| Issue                                                         | Impact                                          | Resolution                                                  |
-| ------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------- |
-| Symbols extracted but never included in LLM prompt            | Tree-sitter analysis is wasted computation      | Include in prompt with fallback ladder                      |
-| `App::generate_commit()` is a 160-line untestable monolith    | Cannot unit test any step of the pipeline       | Decompose into testable methods                             |
-| No dependency injection                                       | Services hard-wired, can't mock for tests       | Trait abstractions for GitService, LlmProvider              |
-| ~~Synchronous `std::process::Command` in async runtime~~      | ~~Blocks tokio event loop on large repos~~      | ✅ Resolved (FR-020: `tokio::process::Command`)             |
-| ~~N+1 git process spawns (1 + N per file)~~                   | ~~50 files = 51 process spawns~~                | ✅ Resolved (FR-021: single diff + concurrent `JoinSet`)    |
-| UTF-8 panic in sanitizer (byte-index slicing)                 | Runtime crash on emoji/CJK in commit messages   | Use `str::chars()` for safe truncation                      |
+### 3.2 Open Architecture Concerns
 
 #### Symbol Extraction Fallback Ladder
 
@@ -118,33 +120,25 @@ When building the LLM prompt, symbol context uses a tiered approach:
 
 Each tier produces progressively less useful context but ensures the pipeline never blocks on a parse failure.
 
-#### Dependency Cleanup
+#### Dependency Status
 
-| Dependency    | Action                                                          | Reason                                                 |
-| ------------- | --------------------------------------------------------------- | ------------------------------------------------------ |
-| `anyhow`      | **Remove**                                                      | Never imported anywhere                                |
-| `indicatif`   | **Keep** (start using)                                          | Declared but never used; needed for progress UX        |
-| `once_cell`   | **Replace** with `std::sync::LazyLock`                          | Stable since Rust 1.80, edition 2024                   |
-| `async-trait` | **Replace** with native async traits                            | Stable in edition 2024                                 |
-| `futures`     | **Replace** with `tokio-stream` `StreamExt`                     | Already a dependency                                   |
-| `secrecy`     | **Remove** until cloud providers implemented                    | Wraps unused API key field                             |
-| `tokio`       | **Reduce** to `["rt-multi-thread", "macros", "signal", "sync"]` | Pulls unnecessary features                             |
+| Dependency | Status | Notes |
+|------------|--------|-------|
+| `anyhow` | ✅ Removed | Never imported |
+| `once_cell` | ✅ Replaced | `std::sync::LazyLock` (stable since Rust 1.80) |
+| `async-trait` | ✅ Replaced | Native async traits (edition 2024) |
+| `futures` | ✅ Replaced | `tokio-stream` `StreamExt` |
+| `miette` | ✅ Added | Rich diagnostic errors |
+| `figment` | ✅ Added | Hierarchical config |
+| `tracing` + `tracing-subscriber` | ✅ Added | Structured logging |
+| `clap_complete` | ✅ Added | Shell completions |
+| `keyring` | ✅ Added | Secure API key storage |
+| `insta` | ✅ Added (dev) | Snapshot testing |
+| `indicatif` | ✅ Active | Progress indicators |
 
-#### New Dependencies
+### 3.3 Target Architecture
 
-| Dependency                          | Purpose                                                   | Priority |
-| ----------------------------------- | --------------------------------------------------------- | -------- |
-| `miette`                            | Rich diagnostic errors with help text, codes, suggestions | P0       |
-| `figment`                           | Hierarchical config (defaults < file < env < CLI)         | P1       |
-| `tracing` + `tracing-subscriber`    | Structured logging/diagnostics                            | P1       |
-| `clap_complete`                     | Shell completions generation                              | P1       |
-| `keyring`                           | Secure API key storage (macOS Keychain, etc.)             | P1       |
-| `insta`                             | Snapshot testing                                          | P0 (dev) |
-| `proptest`                          | Property-based testing                                    | P1 (dev) |
-
-### 3.2 Target Architecture
-
-```bash
+```
 commitbee
 ├── src/
 │   ├── main.rs              # Entry point (uses lib, not mod declarations)
@@ -158,21 +152,25 @@ commitbee
 │   │   ├── symbol.rs        # CodeSymbol, SymbolKind
 │   │   ├── context.rs       # PromptContext (includes symbols in prompt)
 │   │   └── commit.rs        # CommitType (single source of truth for types)
+│   ├── queries/             # Tree-sitter .scm query files per language
 │   └── services/
 │       ├── git.rs           # GitService trait + impl (async, single-diff)
 │       ├── analyzer.rs      # AnalyzerService (parallel parsing via rayon)
 │       ├── context.rs       # ContextBuilder (fixed budget math, fallback ladder)
-│       ├── safety.rs        # Secret scanning (expanded patterns)
-│       ├── sanitizer.rs     # CommitSanitizer (UTF-8 safe, body wrapping) + CommitValidator (post-gen validation)
-│       ├── splitter.rs      # CommitSplitter (multi-commit detection + grouping)
+│       ├── safety.rs        # Secret scanning (25 patterns, pluggable engine)
+│       ├── sanitizer.rs     # CommitSanitizer (UTF-8 safe) + CommitValidator (7 rules)
+│       ├── splitter.rs      # CommitSplitter (Jaccard + fingerprinting)
+│       ├── template.rs      # TemplateService (custom prompt templates)
+│       ├── history.rs       # HistoryService (commit style learning, experimental)
 │       └── llm/
 │           ├── mod.rs       # LlmProvider trait (native async, enum dispatch)
 │           ├── ollama.rs    # Ollama (timeout, error differentiation)
-│           ├── openai.rs    # OpenAI-compatible (covers OpenAI, Groq, Together, LM Studio, vLLM)
+│           ├── openai.rs    # OpenAI-compatible (OpenAI, Groq, Together, LM Studio, vLLM)
 │           └── anthropic.rs # Anthropic Claude
 ├── tests/
 │   ├── snapshots/           # insta snapshot files
-│   ├── fixtures/            # Test git repos, diff samples, tree-sitter fixtures, golden semantic fixtures
+│   ├── fixtures/            # Test git repos, diff samples, golden semantic fixtures, eval fixtures
+│   ├── languages.rs         # Feature-gated language tests
 │   ├── sanitizer.rs         # Unit + snapshot + proptest
 │   ├── context.rs           # Unit + snapshot
 │   ├── safety.rs            # Unit + proptest
@@ -180,10 +178,11 @@ commitbee
 │   ├── git.rs               # Integration with tempfile repos
 │   ├── ollama.rs            # Integration with wiremock
 │   └── cli.rs               # CLI integration with assert_cmd
+├── fuzz/                    # cargo-fuzz targets (sanitizer, safety, diff parser)
 └── completions/             # Generated shell completions
 ```
 
-### 3.3 Trait Design for Testability
+### 3.4 Trait Design for Testability
 
 ```rust
 // Services defined as traits for mockability
@@ -221,376 +220,291 @@ pub struct App {
 }
 ```
 
-`generate_stream()` is required for all providers in P1 scope (FR-011, FR-012, FR-013). Providers that do not support streaming should implement `generate_stream()` by wrapping `generate()` as a single-element stream.
+`generate_stream()` is required for all providers. Providers that do not support streaming implement it by wrapping `generate()` as a single-element stream.
 
 ## 4. Feature Requirements
 
-### 4.1 P0 — Shipped (v0.2.0: Stability & Correctness)
+### 4.1 Shipped — v0.2.0 (Stability & Providers)
 
-These are bugs, panics, and missing foundations that must be fixed before any new features.
+All features in this section shipped in v0.2.0. Included for completeness and traceability.
 
-#### FR-001: Fix UTF-8 Panics in Sanitizer
+#### FR-001: Fix UTF-8 Panics in Sanitizer ✅
 
-- **What**: `sanitizer.rs` lines 146/206/210 slice strings at byte index 69. Multi-byte characters (emoji, CJK, accented) at that boundary cause a runtime panic.
-- **Acceptance**: Use `str::chars().take(69).collect::<String>()` for safe truncation. Add proptest that sanitizer never panics on arbitrary Unicode input.
+Use `str::chars().take(69).collect::<String>()` for safe truncation. Proptest guarantees sanitizer never panics on arbitrary Unicode input.
 
-#### FR-002: Include Symbols in LLM Prompt
+#### FR-002: Include Symbols in LLM Prompt ✅
 
-- **What**: Tree-sitter extracts `symbols_added` and `symbols_removed` with budget management, but `PromptContext::to_prompt()` never includes them. The entire semantic analysis pipeline produces output that is thrown away.
-- **Acceptance**: `to_prompt()` includes a "Symbols changed" section listing added/modified/removed functions, methods, structs. Symbol extraction uses the fallback ladder (AST mapping -> hunk heuristic -> file summary -> raw diff) to ensure the prompt always gets the best available context. If tree-sitter parsing fails for a file, the pipeline gracefully degrades rather than omitting the file.
+`to_prompt()` includes a "Symbols changed" section using the fallback ladder (AST mapping → hunk heuristic → file summary → raw diff). Graceful degradation when tree-sitter parsing fails.
 
-#### FR-003: Unit Test Suite (Sanitizer, Safety, Context, Hunk Parser)
+#### FR-003: Unit Test Suite ✅
 
-- **What**: Zero tests exist despite dev-dependencies being declared.
-- **Acceptance**:
-  - `CommitSanitizer`: snapshot tests for JSON parsing, plain text parsing, edge cases (empty, unicode, nested quotes, markdown fences). Proptest that it never panics.
-  - `DiffHunk::parse_from_diff`: snapshot tests for standard diffs, rename diffs, binary diffs, empty diffs.
-  - `safety::scan_for_secrets`: unit tests for each pattern, false positive tests, edge cases.
-  - `ContextBuilder::infer_commit_type`: unit tests for each heuristic path.
-  - `FileCategory::from_path`: unit tests for all categories.
-  - All tests use `insta` for snapshot assertions where applicable.
+Snapshot tests (insta) for sanitizer, diff parser, safety scanner, context builder, and file categorizer. Proptest for never-panic guarantees.
 
-#### FR-004: Remove Unused Dependencies
+#### FR-004: Remove Unused Dependencies ✅
 
-- **What**: `anyhow` (never imported), `once_cell` (replace with `std::sync::LazyLock`), `async-trait` (replace with native async traits), `futures` (replace with `tokio-stream` `StreamExt`).
-- **Acceptance**: `cargo build` succeeds with these crates removed. Binary size decreases.
+Removed `anyhow`, replaced `once_cell` with `std::sync::LazyLock`, replaced `async-trait` with native async traits, replaced `futures` with `tokio-stream`.
 
-#### FR-005: Fix Dead Code
+#### FR-005: Fix Dead Code ✅
 
-- **What**: `old_path` always None, `signature` never read, `ChangeStatus::Renamed` never constructed, `StagedChanges::is_empty()` never called, `CommitType` variants Style/Perf/Ci/Revert never constructed, `is_binary` always false in stored files.
-- **Acceptance**: Either implement the features these fields support (rename detection, signature display) or remove them. No compiler warnings for dead code.
+All dead fields either implemented (rename detection, signature display) or removed. No compiler warnings.
 
-#### FR-006: Reduce Tokio Features
+#### FR-006: Reduce Tokio Features ✅
 
-- **What**: `tokio features=["full"]` pulls fs, net, io-util, time, process, parking_lot unnecessarily.
-- **Acceptance**: Features reduced to `["rt-multi-thread", "macros", "signal", "sync"]`. Add `"process"` only when git calls are migrated to `tokio::process::Command`.
+Features reduced to `["rt-multi-thread", "macros", "signal", "sync", "process"]`.
 
-#### FR-007: CommitType Single Source of Truth
+#### FR-007: CommitType Single Source of Truth ✅
 
-- **What**: `VALID_TYPES: &[&str]` in sanitizer and `CommitType` enum can desync.
-- **Acceptance**: `CommitType` provides `const ALL: &[&str]` used by both the sanitizer and any validation logic. No separate string list.
+`CommitType` provides `const ALL: &[&str]` used by sanitizer and validation. Compile-time test ensures sync.
 
-### 4.2 P1 — Shipped (v0.2.0: Polish & Providers)
+#### FR-010: Rich Diagnostic Errors (miette) ✅
 
-#### FR-010: Rich Diagnostic Errors (miette)
+Every error variant has a human-readable message, error code, help suggestion, and source context where applicable.
 
-- **What**: Replace bare `eprintln!` error display with `miette` diagnostics.
-- **Acceptance**: Every error variant has:
-  - A human-readable message
-  - An error code (e.g., `commitbee::ollama::connection_refused`)
-  - A help suggestion (e.g., "Is Ollama running? Start it with: `ollama serve`")
-  - Source context where applicable (config file parse errors show the offending line)
+#### FR-011: OpenAI-Compatible Provider ✅
 
-#### FR-011: OpenAI-Compatible Provider
+Supports any OpenAI-compatible API (OpenAI, Groq, Together, LM Studio, vLLM). Configurable `api_base_url`, `model`, `api_key`. Streaming with cancellation. Tested with wiremock.
 
-- **What**: Support any OpenAI-compatible API (OpenAI, Groq, Together, LM Studio, vLLM, Ollama's OpenAI endpoint).
-- **Acceptance**:
-  - Configurable `api_base_url`, `model`, `api_key`
-  - Streaming support via `generate_stream()` with cancellation
-  - Timeout configuration
-  - Works with at minimum: OpenAI GPT-4o, LM Studio local, Groq
-  - Tested with wiremock mocks
+#### FR-012: Anthropic Provider ✅
 
-#### FR-012: Anthropic Provider
+Native Anthropic Claude API support. Streaming via `generate_stream()` with cancellation. Tested with wiremock.
 
-- **What**: Native Anthropic Claude API support.
-- **Acceptance**: Works with Claude 3.5 Sonnet and Claude 3 Opus. Streaming via `generate_stream()` with cancellation. Tested with wiremock.
+#### FR-013: Ollama Hardening ✅
 
-#### FR-013: Ollama Hardening
+Configurable timeout (default 300s), connection/model error differentiation with help text, configurable `temperature`/`num_predict`, health check, mid-stream error handling, streaming support.
 
-- **What**: Current Ollama provider has no timeout, no error differentiation, no model parameter tuning.
-- **Acceptance**:
-  - Configurable request timeout (default 300s)
-  - Connection refused -> specific error with help text ("Is Ollama running?")
-  - Model not found -> specific error listing available models (`/api/tags`)
-  - Configurable `temperature` (default 0.3), `num_predict` (default 256)
-  - Health check before generation (`/api/tags` endpoint)
-  - Handle error responses mid-stream
-  - Verify `ollama_host` is actually localhost before skipping secret check
-  - Implement `generate_stream()` trait method for streaming responses
+#### FR-014: Git Hook Integration ✅
 
-#### FR-014: Git Hook Integration
+`commitbee hook install/uninstall/status`. Non-destructive (backs up existing hooks). Detects and skips merge/amend/squash commits. Atomic writes. Graceful fallback if binary not found.
 
-- **What**: `commitbee hook install` / `commitbee hook uninstall` for `prepare-commit-msg` hook.
-- **Acceptance**:
-  - Installs a shell script in `.git/hooks/prepare-commit-msg`
-  - Non-destructive: backs up existing hook if present
-  - Hook runs commitbee in non-interactive mode, writes to `$1` (commit msg file)
-  - Detects and skips merge commits, amend commits, message-provided commits, and squash commits
-  - Respects `--no-verify`: hook checks `$2` for `message`/`merge`/`squash`/`commit` and exits 0 early
-  - Uses atomic writes (write to temp file, then rename) to prevent partial commit message files
-  - `commitbee hook status` shows whether hook is installed
-  - Graceful fallback: if commitbee binary not found, hook exits 0 (doesn't block commits)
+#### FR-015: Shell Completions ✅
 
-#### FR-015: Shell Completions
+`commitbee completions <shell>` for bash, zsh, fish, powershell via `clap_complete`.
 
-- **What**: Generate completions for bash, zsh, fish, powershell.
-- **Acceptance**: `commitbee completions <shell>` outputs completions to stdout. Documented installation instructions per shell.
+#### FR-016: Multiple Message Generation ✅
 
-#### FR-016: Multiple Message Generation
+`commitbee --generate N` with `dialoguer` interactive selection in TTY mode. Non-TTY outputs all N. `--yes` auto-selects first.
 
-- **What**: Generate N candidate messages and let user pick.
-- **Acceptance**: `commitbee --generate 3` produces 3 options. Interactive selection in TTY mode using `dialoguer` (already a dependency). In non-TTY mode, outputs all N separated by blank lines. First option auto-selected with `--yes`.
+#### FR-017: Hierarchical Configuration (figment) ✅
 
-#### FR-017: Hierarchical Configuration (figment)
+Priority: CLI args > env vars > project config (`.commitbee.toml`) > user config > defaults.
 
-- **What**: Replace manual TOML parsing with figment for proper layered config.
-- **Acceptance**: Priority: CLI args > env vars > project config (`.commitbee.toml`) > user config > defaults. Error messages show which source provided which value.
-- **Platform-specific user config paths**:
-
-| Platform | Config Path                                           |
-| -------- | ----------------------------------------------------- |
+| Platform | User Config Path |
+|----------|-----------------|
 | macOS    | `~/Library/Application Support/commitbee/config.toml` |
-| Linux    | `~/.config/commitbee/config.toml` (XDG)               |
-| Windows  | `%APPDATA%\commitbee\config.toml`                     |
+| Linux    | `~/.config/commitbee/config.toml` (XDG) |
+| Windows  | `%APPDATA%\commitbee\config.toml` |
 
-  Use `dirs` crate for platform detection. Existing `~/.config/commitbee/config.toml` remains supported as a fallback on all platforms for backward compatibility.
+Fallback: `~/.config/commitbee/config.toml` on all platforms for backward compatibility.
 
-#### FR-018: Structured Logging (tracing)
+#### FR-018: Structured Logging (tracing) ✅
 
-- **What**: Replace ad-hoc `eprintln!` with structured tracing.
-- **Acceptance**: `RUST_LOG=commitbee=debug` enables verbose output. `--verbose` / `-v` flag maps to tracing levels. Key functions instrumented with `#[instrument]`. Logs include timing information for performance profiling.
+`RUST_LOG=commitbee=debug` for verbose output. `--verbose` / `-v` flag. Key functions instrumented with `#[instrument]`.
 
-#### FR-019: Secure API Key Storage
+#### FR-019: Secure API Key Storage ✅
 
-- **What**: Use system keychain for API keys instead of requiring environment variables.
-- **Acceptance**: `commitbee config set-key <provider>` stores API key in macOS Keychain / Linux Secret Service / Windows Credential Manager via `keyring` crate. Falls back to env var if keychain unavailable. Never stores keys in plaintext config files. `commitbee config get-key <provider>` shows whether a key is stored (not the key itself).
+System keychain via `keyring` (feature-gated). `commitbee config set-key/get-key <provider>`. Env var fallback. Never stores keys in plaintext config.
 
-#### FR-020: Async Git Operations
+#### FR-020: Async Git Operations ✅
 
-- **What**: Replace blocking `std::process::Command` with `tokio::process::Command`.
-- **Acceptance**: All git CLI calls use async process spawning. Event loop is never blocked. Verified with `tokio::time::timeout` test.
+All git CLI calls use `tokio::process::Command`. Event loop never blocked.
 
-#### FR-021: Single-Pass Diff Parsing
+#### FR-021: Single-Pass Diff Parsing ✅
 
-- **What**: Replace N+1 git calls with single `git diff --cached` parsed per-file.
-- **Acceptance**: One `git diff --cached --no-ext-diff --unified=3` call. Output parsed into per-file diffs. Benchmark shows improvement for 50+ file changes.
+One `git diff --cached --no-ext-diff --unified=3` call parsed per-file. NUL-delimited name-status parsing (`-z` flag).
 
-#### FR-022: Integration Test Suite
+#### FR-022: Integration Test Suite ✅
 
-- **What**: End-to-end tests with real git repos and mocked LLM.
-- **Acceptance**:
-  - Git repo setup with `tempfile` + `git init`
-  - Ollama mocked with `wiremock`
-  - Tests cover: normal flow, empty staging, binary files, large diffs, unicode paths, LLM errors, LLM malformed output, cancelled generation
-  - CLI tests with `assert_cmd` / `insta-cmd`
+End-to-end tests with `tempfile` git repos and `wiremock` LLM mocks. CLI tests with `assert_cmd`/`insta-cmd`.
 
-#### FR-023: Commit Splitting (Multi-Concern Detection)
+#### FR-023: Commit Splitting ✅
 
-- **What**: Detect when staged changes contain logically independent changes that should be separate commits. Offer to split automatically with per-group LLM message generation.
-- **Status**: **Implemented** (v0.2.0, enhanced post-v0.2.0)
-- **How it works**:
-  1. **Diff-shape fingerprinting + Jaccard clustering**: Groups files by structural similarity of their diffs combined with content vocabulary overlap (Jaccard index > 0.4). Files must share both similar change shape AND significant token overlap to cluster together, preventing false grouping of unrelated small edits.
-  2. **Symbol dependency merging**: Groups connected by targeted caller detection are merged — only when a file's diff adds a line that directly calls a new function from another group (`+` lines containing `sym_name(`), not loose text matches that caused cascading merges from imports.
-  3. **Category separation**: Docs and config files get their own groups rather than being dumped on the largest source group.
-  4. **Module detection**: Group source files by parent directory (e.g., `src/services/llm/*.rs` → "llm"). Fall back to file stem when parent is generic (22 generic dirs: `src`, `lib`, `services`, `domain`, `utils`, `helpers`, `internal`, `core`, `pkg`, `cmd`, `app`, `api`, `modules`, `components`, `common`, `shared`, `middleware`, `handlers`, `controllers`, `models`, `views`, `routes`).
-  5. **Post-clustering sub-split**: Groups with >6 files spanning multiple modules are automatically sub-split by module to prevent mega-groups.
-  6. **Scored support file assignment**: Support files (docs, config, tests) assigned via affinity scoring — known pairs (Cargo.toml+Lock, package.json+lock), stem overlap, standalone if weak affinity. Replaces blind "attach to largest group" logic.
-  7. **Type+scope inference per group**: Each group gets its own `infer_commit_type()` and `infer_scope()`.
-  8. **Group rationale**: Each per-group prompt includes `GROUP_REASON:` explaining why files were grouped (e.g., "mechanical refactor across 7 files").
-  9. **Focus instruction**: Groups with >5 files get an explicit instruction to focus the subject on the single most significant change.
-  10. **Collapse check**: If all groups have the same type and scope, suggest a single commit instead of splitting.
-  11. **Split execution**: Unstage all → stage group files → commit → repeat for each group.
-- **Safety**: Refuses to split when any staged file also has unstaged modifications (data loss risk).
-- **CLI**: `--no-split` disables the feature. `--yes` and non-TTY mode skip split suggestion (default to single commit).
-- **Acceptance**: Tested with 16 dedicated integration tests covering single module, multi-module, all-tests, all-docs, same-type collapse, test attachment, sort order, diff-shape clustering, symbol dependency merging, and category separation.
+Detects logically independent staged changes and splits into separate well-typed commits.
 
-#### FR-039: Config Validation ✅ (shipped in v0.2.0)
+**Implementation details:**
+1. Diff-shape fingerprinting + Jaccard clustering (vocabulary overlap > 0.4)
+2. Symbol dependency merging via targeted caller detection
+3. Category separation (docs/config get own groups)
+4. Module detection with 22-entry generic directory exclusion list
+5. Post-clustering sub-split for >6-file groups spanning multiple modules
+6. Scored support file assignment (known pairs, stem overlap, standalone fallback)
+7. Type+scope inference per group
+8. Group rationale in per-group prompts (`GROUP_REASON:`)
+9. Focus instruction for >5-file groups
+10. Collapse check (same type+scope → suggest single commit)
+11. Split execution: unstage all → stage group → commit → repeat
 
-- **What**: Invalid config values only fail at runtime.
-- **Acceptance**:
-  - `commitbee config check` validates configuration
-  - `ollama_host` parsed as URL during config load
-  - `max_diff_lines` bounded (10-10000)
-  - Provider enum validated at config time, not runtime
-  - Ollama health check (`/api/tags`) available as `commitbee doctor`
-  - Config file permission warning if world-readable and contains keys
+**Safety**: Refuses to split when staged files also have unstaged modifications.
+**CLI**: `--no-split` disables. `--yes` and non-TTY skip suggestion (default single commit).
+**Tests**: 16 dedicated integration tests.
 
-### 4.3 P2 — Next (v0.3.0: Differentiation)
+#### FR-039: Config Validation ✅
 
-#### FR-030: Custom Prompt Templates ✅ (v0.4.0)
+`commitbee config check` validates configuration. `commitbee doctor` checks Ollama health. URL parsing, numeric bounds, provider enum validation at config time.
 
-- **What**: User-provided system prompt and prompt template files.
-- **Status**: **Implemented** (v0.4.0)
-- **Acceptance**:
-  - `system_prompt_path` and `template_path` in config
-  - Template variables: `{{diff}}`, `{{symbols}}`, `{{files}}`, `{{type}}`, `{{scope}}`
-  - Default templates remain if no custom template specified
-- **Implemented**: `TemplateService` in `src/services/template.rs` — loads custom system prompt and user prompt template files. Config fields `system_prompt_path` and `template_path`. All LLM providers pass through custom system prompt when configured. 7 template tests.
+### 4.2 Shipped — v0.3.x (Differentiation Core)
+
+Features that shipped incrementally across v0.3.0 and v0.3.1.
+
+#### FR-034: Improved Commit Type Heuristics ✅
+
+Evidence-based deterministic commit type inference:
+
+- Test-only → `test`, doc-only → `docs`, CI-only → `ci`, dependency-only → `chore`
+- New files with substantial code → `feat`
+- `fix` requires `has_bug_evidence` (bug-fix comments in diff); without → `refactor`
+- API replacement detection (public APIs added AND removed → `refactor`)
+- Mechanical/formatting detection → `style`/`refactor` (never `feat`/`fix`)
+- Metadata-aware breaking detection: `rust-version`, `engines.node`, `requires-python` changes; removed `pub use`/`pub mod`/`export`
+- Symbol tri-state: `AddedOnly`, `RemovedOnly`, `ModifiedSignature` — public modified symbols contribute to breaking risk
+- Default fallback: `Refactor` (safer than `Feat` for ambiguous changes)
+
+#### FR-040: Conventional Commits 1.0.0 Spec Anchoring ✅
+
+- Breaking changes: `!` suffix + `BREAKING CHANGE:` footer (always emitted, regardless of `include_body`)
+- Footer wrapped at 72 chars with 2-space continuation indent (git-trailer compatible)
+- Single shared `SYSTEM_PROMPT` constant; type list synced with `CommitType::ALL` via compile-time test
+- Sanitizer normalizes `"null"` → non-breaking
+- Symbol deduplication in context builder
+- Cross-project file categorization: 30+ source language extensions, 40+ config patterns, dotfile auto-detection, expanded CI/build/lock file detection
+- Expanded scope inference: additional source/monorepo dirs, generic next-component exclusion
+
+#### FR-041: Post-Generation Validation ✅
+
+Evidence-based LLM output validation with multi-pass corrective retry (up to 3 attempts).
+
+**Evidence flags** (computed before LLM generation):
+- `is_mechanical`, `has_bug_evidence`, `public_api_removed_count`, `has_new_public_api`, `is_dependency_only`
+
+**CommitValidator — 7 rules:**
+1. `fix` requires `has_bug_evidence` (otherwise → `refactor`)
+2. `breaking_change` required when public APIs removed
+3. `breaking_change` must not copy internal field names (anti-hallucination)
+4. Mechanical transforms cannot be `feat`/`fix` (→ `style`/`refactor`)
+5. Dependency-only changes must be `chore`
+6. Subject specificity: generic verb+noun triggers retry with instruction to name specific APIs/modules
+7. Subject length: rejects subjects exceeding 72-char first line, reports char budget
+
+**Retry behavior** (v0.3.1): Appends `CORRECTIONS` section, re-prompts, re-validates. Sanitizer rejects overlong first lines with descriptive error (no silent truncation).
+
+### 4.3 Shipped — v0.4.0 (Feature Completion)
+
+#### FR-030: Custom Prompt Templates ✅
+
+`TemplateService` in `src/services/template.rs`. Config fields: `system_prompt_path`, `template_path`. Template variables: `{{diff}}`, `{{symbols}}`, `{{files}}`, `{{type}}`, `{{scope}}`. Default templates used when no custom template specified. All LLM providers pass through custom system prompt. 7 tests.
+
+#### FR-032: Multi-Language Commit Messages ✅
+
+`--locale <lang>` flag and `locale` config option. `LANGUAGE:` instruction injected into prompt context. ISO 639-1 codes supported. Type/scope remain in English per conventional commits spec.
+
+#### FR-035: Rename Detection ✅
+
+`--find-renames=N%` with configurable `rename_threshold` (default 70%, 0 disables). NUL-delimited `R<NNN>` status parsing consuming two path fields. `ChangeStatus::Renamed` variant with `old_path` on `FileChange`. Context builder formats as `old → new (N% similar)`. Split suggestions show `[R]` marker.
+
+#### FR-036: Tree-sitter Query Patterns ✅
+
+`.scm` query files in `src/queries/` per language with `@name`/`@definition` captures. `LanguageConfig` with `query_source` field. `tree_sitter::Query` + `QueryCursor` + `StreamingIterator` replaces manual `TreeCursor` walking.
+
+#### FR-037: Expanded Secret Scanning ✅
+
+25 built-in `SecretPattern` structs across 13 categories:
+
+| Category | Patterns |
+|----------|----------|
+| Cloud | AWS access/secret, GCP service account/API key, Azure storage |
+| AI/ML | OpenAI (`sk-proj-`), Anthropic, HuggingFace |
+| Source Control | GitHub PAT/fine-grained/OAuth, GitLab |
+| Communication | Slack token/webhook, Discord webhook |
+| Payment | Stripe, Twilio, SendGrid, Mailgun |
+| Database | Connection strings |
+| Crypto | Private keys, JWT |
+| Generic | API key patterns (quoted/unquoted) |
+
+Pluggable engine via `build_patterns(custom, disabled)`. Config: `custom_secret_patterns`, `disabled_secret_patterns`. `LazyLock` default pattern set.
+
+#### FR-038: Progress Indicators ✅
+
+`Progress` struct wrapping `Option<ProgressBar>` with TTY detection (`std::io::stderr().is_terminal()`). Methods: `phase()`, `info()`, `warning()`, `finish()`. `Drop` auto-clears. Non-TTY falls back to `eprintln!` with `console::style()`.
+
+#### FR-057: Additional Language Support ✅
+
+5 new language crates as optional dependencies: `tree-sitter-java`, `tree-sitter-c`, `tree-sitter-cpp`, `tree-sitter-ruby`, `tree-sitter-c-sharp`. Feature flags: `lang-java`, `lang-c`, `lang-cpp`, `lang-ruby`, `lang-csharp`, `all-languages`. Each language has `.scm` query files. Visibility detection for Java/C# public modifiers. 15 feature-gated tests.
+
+#### FR-058: Commit History Style Learning (Experimental) ✅
+
+`HistoryService` in `src/services/history.rs`. `analyze()` fetches last N commit subjects via `git log`, extracts type distribution, scope patterns, case style, conventional compliance ratio, sample subjects. `HistoryContext::to_prompt_section()` formats as `PROJECT STYLE` block.
+
+Config: `learn_from_history` (default `false`), `history_sample_size` (default 50). Feature-gated behind `--experimental-history` or config flag. Does not override conventional commits structure — only influences scope naming and subject phrasing style. Deterministic sort order for equal-count entries.
+
+#### TR-006: Evaluation Harness ✅
+
+`commitbee eval` — runs full pipeline against fixture diffs, compares against expected snapshots. Feature-gated (`eval` feature). Fixtures in `tests/fixtures/eval/`. Pass/fail report with diff of expected vs. actual.
+
+#### TR-007: Fuzzing ✅
+
+3 `cargo-fuzz` targets: `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`. `fuzz/Cargo.toml` with `libfuzzer-sys`.
+
+### 4.4 Unshipped — Remaining v0.4.x Scope
 
 #### FR-031: Exclude Files
 
-- **What**: Skip certain files from analysis.
-- **Acceptance**: `--exclude` CLI flag and `exclude_patterns` config option. Glob patterns (e.g., `*.lock`, `**/*.generated.*`). Excluded files still listed but not analyzed or included in diff context.
-
-#### FR-032: Multi-Language Commit Messages ✅ (v0.4.0)
-
-- **What**: Generate commit messages in languages other than English.
-- **Status**: **Implemented** (v0.4.0)
-- **Acceptance**: `--locale <lang>` flag (e.g., `--locale de`, `--locale ja`). Prompt instructs LLM to write in target language. Type/scope remain in English (conventional commits spec).
-- **Implemented**: `--locale` CLI flag and `locale` config option. `LANGUAGE:` instruction injected into prompt context. ISO 639-1 codes supported.
+`--exclude` CLI flag and `exclude_patterns` config option. Glob patterns (e.g., `*.lock`, `**/*.generated.*`). Excluded files listed but not analyzed or included in diff context.
 
 #### FR-033: Copy to Clipboard
 
-- **What**: `--clipboard` flag copies generated message to clipboard instead of committing.
-- **Acceptance**: Uses system clipboard (pbcopy on macOS, xclip/xsel on Linux, clip on Windows). Works in combination with `--dry-run`.
+`--clipboard` flag copies generated message to clipboard instead of committing. Uses system clipboard (pbcopy/xclip/xsel/clip). Works with `--dry-run`.
 
-#### FR-034: Improved Commit Type Heuristics ✅ (implemented post-v0.2.0)
-
-- **What**: Deterministic commit type inference with evidence-based gating and metadata-aware breaking detection.
-- **Status**: **Implemented** (post-v0.2.0)
-- **How it works**:
-  - Test-only changes → `test` ✅
-  - Doc-only changes → `docs` ✅
-  - CI file changes → `ci` ✅
-  - New files with substantial code → `feat` ✅
-  - Evidence-based `fix` gating: `fix` type requires `has_bug_evidence` (bug-fix comments in diff); without evidence, falls back to `refactor` ✅
-  - API replacement detection: when new public APIs added AND old public APIs removed → `refactor` (not `feat`) ✅
-  - Mechanical/formatting transform detection: style-only or mechanical changes → `style`/`refactor` (never `feat`/`fix`) ✅
-  - Dependency-only detection: all changes in dependency/config files → `chore` ✅
-  - Metadata-aware breaking detection: scans diffs for `rust-version` changes (MSRV), `engines.node` tightening, `requires-python` tightening, removed `pub use`/`pub mod`/`export` statements ✅
-  - Symbol tri-state classification: `AddedOnly`, `RemovedOnly`, `ModifiedSignature` — same-name add+remove pairs recognized as signature changes, public modified symbols contribute to breaking risk ✅
-  - Bug evidence detection: explicit `has_bug_evidence` check early in inference chain → `fix` type when bug-fix comments found ✅
-  - Default fallback is `Refactor` (safer than `Feat` for ambiguous changes) ✅
-
-#### FR-035: Rename Detection ✅ (v0.4.0)
-
-- **What**: Detect file renames instead of showing as add + delete.
-- **Acceptance**: Use `git diff --cached --find-renames`. Parse `R` status. Set `old_path` field. LLM prompt says "renamed X to Y" instead of "added Y, deleted X".
-- **Implemented**: `--find-renames=N%` with configurable `rename_threshold` (default 70%, 0 disables). NUL-delimited `R<NNN>` status parsing consumes two path fields. `ChangeStatus::Renamed` variant (Copy-safe, old_path on `FileChange`). Context builder formats as `old → new (N% similar)`. Split suggestions show `[R]` marker. 202 tests.
-
-#### FR-036: Tree-sitter Query Patterns ✅ (v0.4.0)
-
-- **What**: Replace manual AST walking with tree-sitter query S-expressions.
-- **Status**: **Implemented** (v0.4.0)
-- **Acceptance**: Each language has a `.scm` query file defining symbol extraction. More maintainable, more precise, easier to add new languages.
-- **Implemented**: `src/queries/*.scm` files for each language with `@name` and `@definition` captures. `LanguageConfig` struct with `query_source` field. `tree_sitter::Query` + `QueryCursor` + `StreamingIterator` pattern matching replaces manual `TreeCursor` walking.
-
-#### FR-037: Expanded Secret Scanning ✅ (v0.4.0)
-
-- **What**: Current patterns are incomplete.
-- **Acceptance**:
-  - Updated OpenAI key pattern (`sk-proj-...`)
-  - GitHub token patterns (`ghp_`, `gho_`, `ghs_`, `ghu_`, `github_pat_`)
-  - AWS access keys (`AKIA...`)
-  - Stripe keys (`sk_live_...`, `pk_live_...`)
-  - Generic high-entropy string detection in assignment contexts
-  - Configurable: users can add custom patterns or disable checks
-  - Scan context lines sent to LLM, not just `+` lines
-- **Implemented**: 25 built-in `SecretPattern` structs across 13 categories (Cloud: AWS access/secret, GCP service account/API key, Azure storage; AI/ML: OpenAI, Anthropic, HuggingFace; Source Control: GitHub PAT/fine-grained/OAuth, GitLab; Communication: Slack token/webhook, Discord webhook; Payment: Stripe, Twilio, SendGrid, Mailgun; Database: connection strings; Crypto: private keys, JWT; Generic: API key, quoted/unquoted secrets). Pluggable engine via `build_patterns(custom, disabled)` with `custom_secret_patterns` and `disabled_secret_patterns` config fields. `Box::leak` for custom pattern names (`&'static str`). `LazyLock` for default pattern set. 202 tests.
-
-#### FR-038: Progress Indicators ✅ (v0.4.0)
-
-- **What**: No visual feedback during tree-sitter analysis or LLM model loading.
-- **Acceptance**: Spinner during "Analyzing code..." and "Generating message..." phases using `indicatif`. Suppressed in non-TTY mode. Respects `NO_COLOR`.
-- **Implemented**: `Progress` struct wrapping `Option<ProgressBar>` with TTY detection via `std::io::stderr().is_terminal()`. Methods: `phase()` (spinner message), `info()` (suspended info line), `warning()` (suspended warning), `finish()` (clear). `Drop` impl auto-clears. Non-TTY falls back to plain `eprintln!` with `console::style()`. Replaces old `print_status`/`print_info`/`print_warning` helpers in app.rs. 202 tests.
-
-#### FR-040: Conventional Commits 1.0.0 Spec Anchoring ✅ (implemented post-v0.2.0)
-
-- **What**: Full compliance with the Conventional Commits 1.0.0 specification for breaking changes and type list integrity.
-- **Acceptance**:
-  - Breaking changes emit `!` suffix on the commit first line (e.g., `feat!: remove v1 API`)
-  - `BREAKING CHANGE:` footer always emitted for breaking changes regardless of `include_body` config (it is machine-readable metadata, not prose)
-  - Footer wrapped at 72 chars with continuation lines indented two spaces (git-trailer compatible)
-  - Single shared `SYSTEM_PROMPT` constant in `llm/mod.rs` used by all providers; commit type list kept in sync with `CommitType::ALL` via compile-time test
-  - Sanitizer normalizes string literal `"null"` → non-breaking (defensive handling for model template quirk)
-  - Symbol deduplication in context builder: functions modified in-place no longer appear as both Added and Removed, preventing misleading LLM context
-  - Cross-project file categorization: 30+ source language extensions (Rust, TS, JS, Python, Go, C, C++, C#, Ruby, Swift, Scala, Elixir, PHP, R, Lua, Zig, Nim, Dart, Vue, Svelte, OCaml, Haskell, Clojure, Erlang, Perl, shell), 40+ config file patterns (biome.json, deno.json, .eslintrc, .prettierrc, ruff.toml, Pipfile, Gemfile, pom.xml, build.gradle, mix.exs, pubspec.yaml, renovate.json, dependabot.yml, etc.), dotfile auto-detection (`.something.json/yaml/toml` → Config), expanded CI/build detection (GitLab CI, CircleCI, Jenkinsfile, Travis, Azure Pipelines, Netlify, Vercel, CMake, Procfile)
-  - Expanded scope inference: additional source dirs (`app/`, `internal/`, `cmd/`, `api/`, `modules/`), monorepo dirs (`packages/`, `services/`, `plugins/`, `workspaces/`), generic next-component exclusion (`index`)
-  - Expanded lock file skip list: `Pipfile.lock`, `uv.lock`, `pubspec.lock`, `flake.lock`, `shrinkwrap.yaml`, `mix.lock` (in addition to existing `Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `composer.lock`, `Gemfile.lock`, `poetry.lock`, `go.sum`)
-
-#### FR-041: Post-Generation Validation ✅ (implemented post-v0.2.0)
-
-- **What**: Evidence-based validation of LLM output against deterministic code analysis signals, with multi-pass corrective retry on violation.
-- **Status**: **Implemented** (post-v0.2.0, enhanced v0.3.1)
-- **How it works**:
-  1. **Evidence flags**: Five deterministic signals computed from code analysis before LLM generation: `is_mechanical` (formatting/whitespace-only), `has_bug_evidence` (bug-fix comments in diff), `public_api_removed_count` (removed public functions/structs/traits), `has_new_public_api` (new public symbols added), `is_dependency_only` (all changes in dependency/config files).
-  2. **CommitValidator**: After LLM generates a structured commit, validates it against evidence flags with 7 rules:
-     - `fix` type requires `has_bug_evidence` (otherwise → `refactor`)
-     - `breaking_change` must be set when public APIs removed
-     - `breaking_change` must not copy internal field names (anti-hallucination)
-     - Mechanical transforms cannot be `feat` or `fix` (→ `style`/`refactor`)
-     - Dependency-only changes must be `chore`
-     - Subject specificity: generic verb+noun combinations (e.g., "update code", "improve things") trigger retry with instruction to name specific APIs/modules changed
-     - Subject length: rejects subjects that would produce a first line exceeding 72 chars, reports char budget
-  3. **Multi-pass corrective retry** (v0.3.1): On violation, appends a `CORRECTIONS` section to the prompt listing each violation with fix instructions, and re-prompts the LLM. Re-validates the retry output and retries again if violations persist, up to 3 total attempts. Sanitizer rejects overlong first lines with a descriptive error (no silent truncation).
-- **Acceptance**: Tested with 10 dedicated unit tests covering each validation rule, valid commit acceptance, boundary cases, and corrections formatting.
-
-### 4.4 P3 — Future (v0.4.0+: Market Leadership)
+### 4.5 Future — v0.5.0+ (Market Leadership)
 
 #### FR-050: MCP Server Mode
 
-- **What**: Run commitbee as an MCP server for editor integration (VS Code, Cursor, Claude Code).
-- **Rationale**: Emerging standard (rusty-commit is the only competitor with this). Forward-looking integration strategy.
+Run commitbee as an MCP server for editor integration (VS Code, Cursor, Claude Code). Emerging standard; forward-looking integration.
 
 #### FR-051: Changelog Generation
 
-- **What**: Generate changelogs from commit history using semantic understanding.
-- **Rationale**: Natural extension of understanding commit structure. Competes with git-cliff/cocogitto.
+Generate changelogs from commit history using semantic understanding. Natural extension of commit structure. Competes with git-cliff/cocogitto.
 
 #### FR-052: Multi-Provider Concurrent Generation
 
-- **What**: Query multiple LLMs simultaneously, let user pick best result.
-- **Rationale**: Innovative UX from aicommit2. Leverages commitbee's multi-provider support.
+Query multiple LLMs simultaneously, let user pick best result. Leverages multi-provider support.
 
 #### FR-053: Interactive Regeneration with Feedback
 
-- **What**: After seeing generated message, user can say "make it shorter" / "focus on the API change" / "add more detail about the refactor" and regenerate.
-- **Rationale**: Innovative UX from ORCommit[^1]. Turns one-shot generation into a conversation.
+User can say "make it shorter" / "focus on the API change" after seeing a generated message. Turns one-shot generation into a conversation. Inspired by ORCommit[^1].
 
 #### FR-054: Monorepo Support
 
-- **What**: Detect monorepo structure, scope commits to affected packages.
-- **Rationale**: cocogitto has excellent monorepo support. Enterprise adoption requires this.
+Detect monorepo structure, scope commits to affected packages. Required for enterprise adoption.
 
 #### FR-055: Version Bumping
 
-- **What**: Automatic semantic version bumps based on commit types.
-- **Rationale**: Natural extension of conventional commits understanding. Competes with cocogitto/convco.
+Automatic semantic version bumps based on commit types. Natural extension of conventional commits.
 
 #### FR-056: GitHub Action
 
-- **What**: Run commitbee in CI to validate or rewrite commit messages.
-- **Rationale**: opencommit's GitHub Action is a key differentiator for team adoption.
-
-#### FR-057: Additional Language Support ✅ (v0.4.0)
-
-- **What**: Expand tree-sitter beyond Rust/TS/JS/Python/Go to Java, C/C++, Ruby, C#.
-- **Status**: **Implemented** (v0.4.0)
-- **Acceptance**: Feature-gated language support to control binary size.
-- **Implemented**: 5 new language crates (`tree-sitter-java`, `tree-sitter-c`, `tree-sitter-cpp`, `tree-sitter-ruby`, `tree-sitter-c-sharp`) as optional dependencies. Feature flags: `lang-java`, `lang-c`, `lang-cpp`, `lang-ruby`, `lang-csharp`, `all-languages`. Each language has `.scm` query files. 15 feature-gated tests in `tests/languages.rs`. Visibility detection for Java/C# public modifiers.
-
-#### FR-058: Commit History Style Learning (Experimental) ✅ (v0.4.0)
-
-- **What**: Analyze existing commit history in the repository to learn the project's commit style, then align generated messages accordingly. This includes scope naming conventions, type usage patterns, subject phrasing style, and body conventions.
-- **Status**: **Implemented** (v0.4.0, experimental)
-- **Rationale**: GitHub Copilot does this implicitly. Making it explicit and configurable would be a differentiator. However, blindly mimicking a repository's history could produce non-compliant messages if the history is inconsistent.
-- **Acceptance**: Feature-gated behind `--experimental-history` or a config flag. Samples last N commits, extracts patterns, injects as additional context in the LLM prompt. Does not override conventional commits structure — only influences scope naming and subject phrasing style.
-- **Implemented**: `HistoryService` in `src/services/history.rs` — `analyze()` fetches last N commit subjects via `git log`, `analyze_subjects()` extracts type distribution, scope patterns, case style, conventional compliance ratio, and sample subjects. `HistoryContext::to_prompt_section()` formats as `PROJECT STYLE` block. Config: `learn_from_history` (bool, default false), `history_sample_size` (default 50). Deterministic sort order for equal-count entries.
+Run commitbee in CI to validate or rewrite commit messages. Key differentiator for team adoption.
 
 ## 5. Security Requirements
 
-### SR-001: Secret Scanning (Enhanced)
+### SR-001: Secret Scanning
 
 - Scan all content sent to LLM, not just `+` diff lines
-- Updated patterns for modern API key formats (OpenAI `sk-proj-`, GitHub `ghp_`/`gho_`/`ghs_`/`ghu_`/`github_pat_`, AWS `AKIA`, Stripe `sk_live_`/`pk_live_`)
+- 25 built-in patterns across 13 categories (see FR-037)
 - Configurable pattern allowlist/blocklist
-- Never send detected secrets to any LLM provider, regardless of provider type
-- Verify `ollama_host` resolves to localhost before treating as "local" (don't rely on provider enum alone)
-- **Proxy/forwarding protection**: Resolve `ollama_host` to an IP address and verify it is a loopback address (`127.0.0.0/8` or `::1`). Reject hostnames that resolve to non-loopback addresses even if the hostname looks local (e.g., `localhost` mapped to a remote IP via `/etc/hosts` or DNS). Log a warning when the resolved address is ambiguous.
+- Never send detected secrets to any LLM provider
+- **Proxy/forwarding protection**: Resolve `ollama_host` to IP, verify loopback (`127.0.0.0/8` or `::1`). Reject non-loopback even if hostname looks local. Log warning on ambiguous resolution.
 
 ### SR-002: API Key Management
 
-- System keychain integration via `keyring` crate (macOS Keychain, Linux Secret Service, Windows Credential Manager)
+- System keychain via `keyring` (macOS Keychain, Linux Secret Service, Windows Credential Manager)
 - Environment variable fallback
-- Never store API keys in plaintext config files
-- Warn if config file permissions are world-readable
+- Never stores keys in plaintext config
+- Warns if config file permissions are world-readable
 
 ### SR-003: Command Execution Safety
 
 - All subprocess calls via `Command::arg()` (never shell interpolation)
-- Use `--` separator before file paths in all git commands
-- Validate that LLM output is safe before using as commit message (no shell injection via commit message)
+- `--` separator before file paths in all git commands
+- LLM output validated before use as commit message
 - `#![forbid(unsafe_code)]` in `lib.rs`
 
 ### SR-004: Input Validation
@@ -601,81 +515,57 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 
 ### SR-005: Dependency Auditing
 
-- `cargo audit` in CI pipeline
+- `cargo audit` in CI
 - `cargo deny` for license compliance
-- Minimize dependency tree (remove unused crates)
+- Minimize dependency tree
 
 ## 6. Performance Requirements
 
 ### PR-001: Startup Time
 
-- Cold start to first output: < 200ms (excluding LLM generation)
-- Measured with `hyperfine` in CI
-- Lazy initialization for heavy subsystems (tracing-subscriber, tree-sitter grammars) — defer setup until first use
+Cold start to first output: < 200ms (excluding LLM generation). Measured with `hyperfine` in CI. Lazy initialization for tracing-subscriber and tree-sitter grammars.
 
 ### PR-002: Git Operations
 
-- Single `git diff --cached` call, parsed per-file (not N+1 calls)
-- Async process spawning (no blocking the tokio event loop)
-- Benchmark: 100 staged files processed in < 2s
+Single `git diff --cached` call parsed per-file. Async process spawning. Target: 100 staged files in < 2s.
 
 ### PR-003: Tree-sitter Parsing
 
-- Parallel parsing via rayon (one `Parser` instance per file per thread — `Parser` is not `Send`/`Sync`)
-- File size limit: skip tree-sitter for files > 100KB
-- Cancellation support via `parser.set_cancellation_flag()`
-- Lazy language grammar loading (don't load Python grammar if no Python files staged)
-- **Language detection**: Use file extension as primary signal, shebang line (`#!/usr/bin/env python3`) as fallback for extensionless scripts. Gracefully skip files with unrecognized languages (no error, just omit symbols from prompt).
+Parallel via rayon (one `Parser` per file per thread). Skip files > 100KB. Cancellation via `parser.set_cancellation_flag()`. Lazy grammar loading. Language detection: file extension primary, shebang fallback. Graceful skip for unrecognized languages.
 
 ### PR-004: LLM Generation
 
-- Streaming output (tokens displayed as they arrive)
-- Configurable timeout (default 300s)
-- Cancellation via Ctrl+C with clean resource cleanup
-- Connection health check before generation attempt
+Streaming output. Configurable timeout (default 300s). Ctrl+C cancellation with clean cleanup. Health check before generation.
 
 ### PR-005: Memory
 
-- Token budget system prevents unbounded growth (max_context_chars configurable, default 24K)
-- **Budget unit**: Characters (fast estimation, no tokenizer dependency). Internal budget is measured in chars, not tokens; the `max_context_chars` config name reflects this.
-- **Truncation priority** (highest to lowest): symbols > file list > diff hunks. When the budget is exceeded, diff hunks are truncated first, then file list entries, then symbols. Symbols are the most information-dense context and are preserved as long as possible.
-- Tree-sitter parse trees dropped after symbol extraction
-- Streaming response buffer bounded (`MAX_RESPONSE_BYTES` = 1 MB, enforced in all providers) ✅
-- Reduce tokio features to minimize binary bloat
+- Token budget: characters (no tokenizer dependency), `max_context_chars` configurable (default 24K)
+- Truncation priority (highest preserved first): symbols > file list > diff hunks
+- Parse trees dropped after symbol extraction
+- Streaming buffer bounded: `MAX_RESPONSE_BYTES` = 1 MB (all providers)
 
 ### PR-006: Binary Size
 
-- Feature-gated language support
-- `[profile.release]` with `lto = true`, `strip = true`, `codegen-units = 1`
-- Target: < 15MB release binary with default features
+Feature-gated language support. `[profile.release]` with `lto = true`, `strip = true`, `codegen-units = 1`. Target: < 15MB with default features.
 
 ### PR-007: Cancellation Contract
 
-- **Guarantee**: Cancellation via Ctrl+C (or `CancellationToken`) at any point in the pipeline results in **no partial commit** and **no leftover temp files**.
-- LLM streaming cancellation drops the response and returns to prompt (or exits in non-interactive mode).
-- Git commit is only called after the user confirms the complete message. No intermediate state is written to the repository.
-- Temp files (if any) are cleaned up via RAII (`Drop` impl or `tempfile` crate auto-cleanup).
+Ctrl+C at any pipeline point → no partial commit, no leftover temp files. Git commit only after user confirms complete message. Temp files cleaned via RAII.
 
 ## 7. UX Requirements
 
 ### UX-001: Error Messages
 
-Every error must include:
+Every error includes **what** went wrong, **why** it happened, and **how** to fix it:
 
-- **What** went wrong (clear, non-technical language)
-- **Why** it might have happened (context)
-- **How** to fix it (actionable suggestion)
-
-Examples:
-
-```bash
+```
 x Cannot connect to Ollama at http://localhost:11434
 
   help: Is Ollama running? Start it with:
         ollama serve
 ```
 
-```bash
+```
 x No staged changes found
 
   help: Stage your changes first:
@@ -684,22 +574,22 @@ x No staged changes found
 
 ### UX-002: Terminal Output
 
-- Respect `NO_COLOR` environment variable
-- Spinner during analysis and generation phases (suppressed in non-TTY)
-- Streaming LLM output displayed in real-time
-- Clear phase indicators: "Analyzing -> Generating -> Done"
-- ASCII fallback for terminals that don't support Unicode well
+- Respect `NO_COLOR`
+- Spinner during analysis/generation (suppressed non-TTY)
+- Streaming LLM output in real-time
+- Phase indicators: "Analyzing → Generating → Done"
+- ASCII fallback for limited terminals
 
 ### UX-003: Non-Interactive Mode
 
-- `--yes` flag auto-confirms
-- Non-TTY detection for git hooks and CI
-- All output goes to stderr except the commit message itself (for piping)
+- `--yes` auto-confirms
+- Non-TTY detection for hooks/CI
+- All output to stderr except commit message (for piping)
 - Exit codes: 0 success, 1 error, 2 usage error, 130 interrupted
 
 ### UX-004: CLI Design
 
-```bash
+```
 commitbee [OPTIONS]                    # Generate and commit (default)
 commitbee --dry-run                    # Generate, print, don't commit
 commitbee --yes                        # Generate and auto-commit
@@ -709,98 +599,96 @@ commitbee --verbose / -v               # Verbose output
 commitbee --no-split                   # Disable commit split suggestions
 commitbee --no-scope                   # Disable scope in commit messages
 commitbee --clipboard                  # Copy to clipboard
+commitbee --locale <lang>              # Commit message language (ISO 639-1)
+commitbee --find-renames=N%            # Rename detection threshold
+commitbee --experimental-history       # Enable commit history style learning
 
 commitbee init                         # Create config file
 commitbee config                       # Show configuration
 commitbee config check                 # Validate configuration
 commitbee config set-key <provider>    # Store API key in keychain
-commitbee doctor                       # Check Ollama connectivity, model availability
+commitbee doctor                       # Check Ollama connectivity + model
 
 commitbee hook install                 # Install git hook
 commitbee hook uninstall               # Remove git hook
 commitbee hook status                  # Check hook status
 
 commitbee completions <shell>          # Generate shell completions
-commitbee eval                         # Run evaluation harness (dev tool)
+commitbee eval                         # Run evaluation harness (dev, feature-gated)
 ```
 
 ### UX-005: First-Run Experience
 
-- If no config exists and Ollama is detected, work with zero configuration
-- If Ollama not found and no cloud provider configured, show helpful setup guidance
-- `commitbee init` creates a well-commented config file with all options documented
+- Zero config with Ollama detected
+- Helpful setup guidance if no Ollama and no cloud provider
+- `commitbee init` creates well-commented config with all options documented
 
 ### UX-006: Output Format Contracts
 
-Exact output behavior for key flags:
-
-- **`--dry-run`**: Prints the commit message to **stdout** (one line: `type(scope): description`). All other output (spinners, diagnostics, phase indicators) goes to stderr. Exit code 0.
-- **`--generate N`**: In TTY mode, displays N numbered options and a `dialoguer` selection prompt on stderr; prints the selected message to stdout. In non-TTY mode, prints all N messages to stdout separated by a blank line. `--yes` selects the first option.
-- **`--show-prompt`**: Prints the full LLM prompt to stderr (system prompt + user prompt). API keys and secret patterns are **redacted** (replaced with `[REDACTED]`). Does not call the LLM. Exit code 0.
-- **Default (interactive)**: Displays the generated message and a confirm/edit/cancel prompt on stderr. On confirm, commits and prints the commit hash to stdout.
+| Flag | stdout | stderr | Behavior |
+|------|--------|--------|----------|
+| `--dry-run` | Commit message (single line) | Spinners, diagnostics | Exit 0 |
+| `--generate N` (TTY) | Selected message | N numbered options + `dialoguer` prompt | `--yes` selects first |
+| `--generate N` (non-TTY) | All N messages, blank-line separated | Diagnostics | — |
+| `--show-prompt` | — | Full LLM prompt (keys redacted) | Does not call LLM. Exit 0 |
+| Default (interactive) | Commit hash on confirm | Message + confirm/edit/cancel prompt | — |
 
 ## 8. Testing Requirements
 
+**Current test count: 295**
+
 ### TR-001: Unit Tests
 
-| Module                      | Technique                   | Coverage Target                                     |
-| --------------------------- | --------------------------- | --------------------------------------------------- |
-| `CommitSanitizer`           | Snapshot (insta) + proptest | All code paths + never-panic guarantee              |
-| `DiffHunk::parse_from_diff` | Snapshot                    | Standard diffs, renames, binary, empty              |
-| `safety::scan_for_secrets`  | Unit + proptest             | Each pattern + false positive tests                 |
-| `ContextBuilder`            | Snapshot                    | Budget calculation, type inference, scope inference |
-| `FileCategory::from_path`   | Unit                        | All categories, edge cases                          |
-| `CommitType`                | Unit                        | Verify `ALL` matches enum variants                  |
+| Module | Technique | Coverage Target |
+|--------|-----------|-----------------|
+| `CommitSanitizer` | Snapshot (insta) + proptest | All code paths + never-panic guarantee |
+| `DiffHunk::parse_from_diff` | Snapshot | Standard diffs, renames, binary, empty |
+| `safety::scan_for_secrets` | Unit + proptest | Each pattern + false positive tests |
+| `ContextBuilder` | Snapshot | Budget calculation, type inference, scope inference |
+| `FileCategory::from_path` | Unit | All categories, edge cases |
+| `CommitType` | Unit | Verify `ALL` matches enum variants |
+| `CommitValidator` | Unit | All 7 rules, boundary cases, corrections formatting |
+| `TemplateService` | Unit | Custom/default templates, variable substitution |
+| `HistoryService` | Unit | Style analysis, prompt section formatting |
 
 #### Golden Semantic Fixtures
 
-A dedicated set of golden test fixtures in `tests/fixtures/golden/` that prove the semantic analysis advantage. Each fixture contains a before/after file pair, the expected diff, and the expected symbol extraction output. Scenarios include:
+Stored in `tests/fixtures/golden/` — before/after file pairs with expected diff and symbol extraction output:
 
-- **Moved function**: Function relocated within a file (diff shows delete + add, symbols show single move)
-- **Signature change**: Function parameter or return type modified
-- **Refactor extract**: Code extracted into a new function (symbols show new function + modified caller)
-- **Rename symbol**: Variable or function renamed across multiple sites
-- **Multi-file change**: Related changes spanning multiple files with shared symbol references
-
-These fixtures serve as regression tests for the tree-sitter analysis pipeline and document the semantic advantage over raw diff approaches.
+- Moved function (diff shows delete + add, symbols show single move)
+- Signature change (parameter/return type modified)
+- Refactor extract (new function + modified caller)
+- Rename symbol (across multiple sites)
+- Multi-file change (shared symbol references)
 
 ### TR-002: Integration Tests
 
-| Scenario                          | Setup                              | Mock                                  |
-| --------------------------------- | ---------------------------------- | ------------------------------------- |
-| Normal commit flow                | tempfile git repo                  | wiremock Ollama                       |
-| Empty staging area                | tempfile git repo                  | None                                  |
-| Binary files mixed with text      | tempfile git repo                  | wiremock Ollama                       |
-| Large diff (truncation)           | tempfile git repo                  | wiremock Ollama                       |
-| Unicode file paths                | tempfile git repo                  | wiremock Ollama                       |
-| LLM returns invalid JSON          | tempfile git repo                  | wiremock Ollama                       |
-| LLM returns error mid-stream      | tempfile git repo                  | wiremock Ollama                       |
-| Ollama not running                | None                               | No mock (real connection refused)     |
-| Secret detected                   | tempfile git repo                  | None                                  |
-| Non-TTY mode                      | tempfile git repo + piped stdin    | wiremock Ollama                       |
+| Scenario | Setup | Mock |
+|----------|-------|------|
+| Normal commit flow | tempfile git repo | wiremock Ollama |
+| Empty staging area | tempfile git repo | None |
+| Binary files mixed with text | tempfile git repo | wiremock Ollama |
+| Large diff (truncation) | tempfile git repo | wiremock Ollama |
+| Unicode file paths | tempfile git repo | wiremock Ollama |
+| LLM returns invalid JSON | tempfile git repo | wiremock Ollama |
+| LLM returns error mid-stream | tempfile git repo | wiremock Ollama |
+| Ollama not running | None | Real connection refused |
+| Secret detected | tempfile git repo | None |
+| Non-TTY mode | tempfile + piped stdin | wiremock Ollama |
 
 ### TR-003: CLI Tests
 
-- Snapshot tests with `insta-cmd` for all flag combinations
-- `--dry-run` output format
-- `--show-prompt` output format
-- `--help` output
-- Error message formatting
-- Exit codes
+Snapshot tests with `insta-cmd` for all flag combinations: `--dry-run`, `--show-prompt`, `--help`, error formatting, exit codes.
 
 ### TR-004: Property-Based Tests
 
 ```rust
-// Sanitizer never panics on any input
 proptest! {
     #[test]
     fn sanitizer_never_panics(s in "\\PC*") {
         let _ = CommitSanitizer::sanitize(&s);
     }
-}
 
-// Secret scanner never panics on any input
-proptest! {
     #[test]
     fn secret_scanner_never_panics(s in "\\PC*") {
         let _ = scan_for_secrets(&s);
@@ -810,55 +698,36 @@ proptest! {
 
 ### TR-005: CI Pipeline
 
-- `cargo check` (fast feedback)
-- `cargo clippy -- -D warnings`
-- `cargo test` (all tests)
-- `cargo audit` (dependency vulnerabilities)
-- `cargo deny check` (license compliance)
-- Run on: push to `development`, all PRs
-- Matrix: stable Rust + MSRV (1.94)
-- **Edition 2024**: Rust edition 2024 requires MSRV 1.94; let chains (Rust 1.94) raise the effective MSRV to 1.94. CI matrix explicitly tests both stable and 1.94 to verify compatibility.
+- `cargo check` → `cargo clippy -- -D warnings` → `cargo test` → `cargo audit` → `cargo deny check`
+- Triggers: push to `development`, all PRs
+- Matrix: stable Rust + MSRV 1.94
+- Edition 2024 (requires MSRV 1.94; let chains raise effective MSRV to 1.94)
 
-### TR-006: Evaluation Harness (`commitbee eval`) ✅ (v0.4.0)
+### TR-006: Evaluation Harness ✅
 
-A developer-facing command (`commitbee eval`) that runs the full pipeline against a set of fixture diffs and compares generated commit messages against expected style snapshots. Not shipped in release builds (feature-gated behind `dev` or `eval` feature flag).
+`commitbee eval` — fixture-based pipeline regression testing. Feature-gated. See §4.3.
 
-- **Fixtures**: Stored in `tests/fixtures/eval/`, each containing a staged diff, optional config overrides, and an expected output snapshot.
-- **Output**: Pass/fail report per fixture, with diff of expected vs. actual message.
-- **Purpose**: Regression testing for prompt engineering changes — ensures prompt template updates don't degrade quality across the fixture set.
-- **Status**: **Implemented** (v0.4.0)
+### TR-007: Fuzzing ✅
 
-### TR-007: Fuzzing ✅ (v0.4.0)
-
-`cargo fuzz` targets for the diff parser, sanitizer, and secret scanner. Fuzz targets in `fuzz/` directory following standard `cargo-fuzz` conventions.
-
-- **Status**: **Implemented** (v0.4.0) — 3 fuzz targets: `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`. `fuzz/Cargo.toml` with `libfuzzer-sys` dependency.
+3 `cargo-fuzz` targets. See §4.3.
 
 ## 9. Distribution Requirements
 
 ### DR-001: cargo install
 
-- `cargo install commitbee` works on all tier-1 platforms
-- Published on crates.io with complete metadata
+`cargo install commitbee` on all tier-1 platforms. Published on crates.io.
 
 ### DR-002: Prebuilt Binaries
 
-- GitHub Releases via `cargo-dist`
-- Platforms: macOS ARM64, macOS x86_64, Linux x86_64, Linux ARM64, Windows x86_64
-- Shell installer: `curl -sSfL https://... | sh`
-- Checksums and GitHub attestations
+GitHub Releases via `cargo-dist`. Platforms: macOS ARM64/x86_64, Linux x86_64/ARM64, Windows x86_64. Shell installer, checksums, GitHub attestations.
 
 ### DR-003: Homebrew
 
-- Homebrew tap: `brew install sephyi/tap/commitbee`
-- Generated automatically by `cargo-dist`
+`brew install sephyi/tap/commitbee` (generated by `cargo-dist`).
 
 ### DR-004: Shell Completions
 
-- bash, zsh, fish, powershell
-- Generated via `clap_complete`
-- `commitbee completions <shell>` command
-- Documented installation per shell in README
+bash, zsh, fish, powershell via `clap_complete`. Documented installation per shell in README.
 
 ### DR-005: Release Profile
 
@@ -875,164 +744,102 @@ opt-level = "z"  # or "s" — benchmark both
 ### PE-001: System Prompt
 
 - Defines persona, rules, and output format
-- Uses a JSON schema template with nullable fields and 2 micro few-shot examples (API replacement, style-only change) optimized for <4B parameter models
-- **Concrete entity rule**: Subject must name at least one concrete entity (function, struct, variable, file) from the diff — integrated directly into the Subject rule line
-- Negative examples (BAD/GOOD pairs): flags vague subjects ("update code and improve things") and multi-concern subjects ("refactor code for better performance and add validation") alongside positive examples
-- Explicitly states what NOT to do (no conversational tone, no file-by-file listing, no business language)
-- Anti-hallucination rules: "Never copy labels, field names, or evidence tags from the prompt into your output"
-- API replacement rule: "If public APIs are both added and removed, this is an API replacement (refactor), not a new feature"
-- Requests JSON output with explicit schema; includes breaking change guidance (only set when existing users or dependents must change their code, config, or scripts)
-- Single shared constant (`pub(crate) SYSTEM_PROMPT` in `llm/mod.rs`) used by all providers; commit type list kept in sync with `CommitType::ALL` via compile-time test
+- JSON schema template with nullable fields and 2 micro few-shot examples (API replacement, style-only change) optimized for <4B parameter models
+- **Concrete entity rule**: Subject must name at least one concrete entity from the diff
+- Negative examples (BAD/GOOD pairs): flags vague and multi-concern subjects
+- Anti-hallucination rules: "Never copy labels, field names, or evidence tags from the prompt"
+- API replacement rule: added + removed public APIs → `refactor`
+- Breaking change guidance: only when existing users/dependents must change code, config, or scripts
+- Single shared `SYSTEM_PROMPT` constant in `llm/mod.rs`; type list synced with `CommitType::ALL` via compile-time test
 
 ### PE-002: User Prompt
 
-- Includes: file list with change status, semantic symbols (functions/classes changed), truncated diff
-- Symbols section with tri-state: "Added", "Removed", and "Modified (signature changed)" categories — modified public symbols contribute to breaking risk
-- Suggested type and scope from heuristics (as hints, not requirements)
-- **Evidence flags**: Natural language labels (not snake_case identifiers) to prevent small models from copying internal names. Questions like "Is this a mechanical/formatting change? yes/no" instead of `mechanical_transform: true`
-- **Subject budget**: Computes remaining characters for subject after `type(scope): ` prefix, tells model the exact limit (e.g., "under 55 chars")
-- **Primary change detection**: `PRIMARY_CHANGE:` line anchors subject to the most significant change, ranked: new public API > removed public API > largest file by lines changed
-- **CONSTRAINTS section**: Dynamically generated rules based on evidence (e.g., "No bug-fix comments found — do not use type fix" when `has_bug_evidence=false`), includes metadata breaking constraints when detected
-- **PUBLIC API REMOVED warning**: When public symbols are removed, a dedicated warning section lists them and instructs the model to describe removals in `breaking_change` field
-- **Metadata breaking signals**: When MSRV, engines.node, or requires-python changes detected, a dedicated warning section lists them
-- **Group rationale**: Per-group prompts include `GROUP_REASON:` explaining why files were grouped together
-- **Focus instruction**: Groups with >5 files get explicit instruction to focus subject on the single most significant change
-- Clear structure with headers for each section
+- File list with change status, semantic symbols, truncated diff
+- Symbols with tri-state: "Added", "Removed", "Modified (signature changed)"
+- Suggested type/scope from heuristics (hints, not requirements)
+- **Evidence flags**: Natural language labels (not snake_case) to prevent model copying
+- **Subject budget**: Exact remaining characters after `type(scope): ` prefix
+- **PRIMARY_CHANGE**: Anchors subject to most significant change (new public API > removed > largest file)
+- **CONSTRAINTS**: Dynamic rules from evidence (e.g., "No bug-fix comments — do not use type fix")
+- **PUBLIC API REMOVED** warning with listed symbols
+- **Metadata breaking signals** (MSRV, engines.node, requires-python)
+- **GROUP_REASON** per split group
+- **Focus instruction** for >5-file groups
 
 ### PE-003: Multi-Stage for Large Diffs
 
-- When diff exceeds 50% of token budget: two-stage approach
-- Stage 1: Per-file summary (fast model or heuristic)
-- Stage 2: Commit message from summaries
-- Fallback: single-stage with aggressive truncation (current approach)
+When diff exceeds 50% of token budget: two-stage (per-file summary → commit message). Fallback: single-stage with aggressive truncation.
 
 ### PE-004: Model-Specific Tuning
 
-- Temperature: 0.0-0.3 (configurable)
+- Temperature: 0.0–0.3 (configurable)
 - `num_predict` / `max_tokens`: 256 default (configurable)
-- Stop sequences appropriate to model family
+- Model-appropriate stop sequences
 - System prompt complexity scaled to model size
 
 ### PE-005: Binary File Handling
 
-- Binary files (images, compiled assets, archives) are **never** included as diff content in the prompt.
-- Binary files **are** listed in the file list with their change status and size delta (e.g., `+ assets/logo.png (binary, +24KB)`).
-- This provides the LLM enough context to mention binary changes without wasting budget on unreadable content.
+Binary files never included as diff content. Listed in file list with change status and size delta (e.g., `+ assets/logo.png (binary, +24KB)`).
 
 ### PE-006: JSON Parse Failure Recovery
 
-- If the LLM returns invalid JSON, retry **once** with a repair prompt: "Your previous response was not valid JSON. Please respond with only valid JSON matching the schema."
-- If the retry also fails, fall back to heuristic extraction: infer commit type from the diff header and file categories, extract the first coherent sentence as the commit message description.
-- Never retry more than once (avoid infinite loops with models that consistently produce invalid output).
+Invalid JSON → retry once with repair prompt. Second failure → heuristic extraction (type from file categories, first coherent sentence as description). Never retry more than once.
 
-## 11. Phased Roadmap
+## 11. Roadmap Summary
 
-### Phase 1: Shipped (v0.2.0)
-
-**Goal**: Stability, correctness, rich providers, developer experience. All features below shipped in v0.2.0.
-
-- FR-001: Fix UTF-8 panics ✅
-- FR-002: Include symbols in prompt (with fallback ladder) ✅
-- FR-003: Unit test suite (188 tests) ✅
-- FR-004: Remove unused dependencies ✅
-- FR-005: Fix dead code ✅
-- FR-006: Reduce tokio features ✅
-- FR-007: CommitType single source of truth ✅
-- FR-010: miette diagnostics ✅
-- FR-011: OpenAI-compatible provider (with streaming) ✅
-- FR-012: Anthropic provider (with streaming) ✅
-- FR-013: Ollama hardening (with streaming) ✅
-- FR-014: Git hook integration (with edge case handling) ✅
-- FR-015: Shell completions ✅
-- FR-016: Multiple message generation (with `dialoguer`) ✅
-- FR-017: figment configuration (with platform-specific paths) ✅
-- FR-018: tracing logging ✅
-- FR-019: Secure API key storage ✅ (feature-gated)
-- FR-020: Async git operations ✅
-- FR-021: Single-pass diff parsing ✅
-- FR-022: Integration test suite ✅ (188 tests)
-- FR-023: Commit splitting ✅
-- FR-039: Config validation & doctor command ✅ (shipped in v0.2.0)
-- TR-005: CI pipeline ✅
-
-### Phase 2: Differentiation (v0.3.0)
-
-**Goal**: Features that set commitbee apart from competitors.
-
-- FR-040: Conventional Commits 1.0.0 spec anchoring ✅ (already implemented, enhanced with cross-project support)
-- FR-041: Post-generation validation ✅ (already implemented)
-- FR-034: Improved commit type heuristics ✅ (fully implemented — evidence flags, API replacement, mechanical detection, metadata breaking, symbol tri-state)
-- FR-030: Custom prompt templates ✅
-- FR-031: Exclude files
-- FR-032: Multi-language commit messages ✅
-- FR-033: Copy to clipboard
-- FR-035: Rename detection ✅
-- FR-036: Tree-sitter query patterns ✅
-- FR-037: Expanded secret scanning ✅
-- FR-038: Progress indicators ✅
-- FR-057: Additional language support ✅ (moved from Phase 3)
-- FR-058: Commit history style learning ✅ (moved from Phase 3)
-- TR-006: Evaluation harness ✅
-- TR-007: Fuzzing targets ✅
-
-### Phase 3: Market Leadership (v0.4.0+)
-
-**Goal**: Features that make commitbee the definitive tool in the category.
-
-- FR-050: MCP server mode
-- FR-051: Changelog generation
-- FR-052: Multi-provider concurrent generation
-- FR-053: Interactive regeneration with feedback
-- FR-054: Monorepo support
-- FR-055: Version bumping
-- FR-056: GitHub Action
+| Phase | Version | Status | Focus |
+|-------|---------|--------|-------|
+| 1 | v0.2.0 | ✅ Shipped | Stability, correctness, providers, developer experience |
+| 2 | v0.3.x | ✅ Shipped | Differentiation — heuristics, validation, spec compliance |
+| 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
+| 4 | v0.4.x | 🔧 In progress | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
+| 5 | v0.5.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
 
-| Metric                                | Target                              | How to Measure                                               |
-| ------------------------------------- | ----------------------------------- | ------------------------------------------------------------ |
-| Runtime panics                        | 0                                   | proptest + fuzzing, no `unwrap()` on user-facing paths       |
-| Test coverage                         | > 80% on services/                  | `cargo tarpaulin`                                            |
-| CI green rate                         | > 99%                               | GitHub Actions dashboard                                     |
-| Cold startup time                     | < 200ms                             | `hyperfine` in CI                                            |
-| Binary size (default features)        | < 15MB                              | CI artifact size tracking                                    |
-| Commit message quality                | > 80% "good enough" on first try    | Manual evaluation on sample repos + `commitbee eval` harness |
-| Secret leak rate                      | 0 (no secrets sent to cloud LLMs)   | Integration tests with known secret patterns                 |
-| MSRV                                  | Rust 1.94 (edition 2024)            | CI matrix build (stable + 1.94)                              |
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Runtime panics | 0 | proptest + fuzzing, no `unwrap()` on user-facing paths |
+| Test coverage | > 80% on services/ | `cargo tarpaulin` |
+| CI green rate | > 99% | GitHub Actions dashboard |
+| Cold startup | < 200ms | `hyperfine` in CI |
+| Binary size (default features) | < 15MB | CI artifact size tracking |
+| Commit message quality | > 80% "good enough" first try | Manual evaluation + `commitbee eval` |
+| Secret leak rate | 0 | Integration tests with known patterns |
+| MSRV | Rust 1.94 (edition 2024) | CI matrix (stable + 1.94) |
+| Test count | ≥ 295 | `cargo test` (current: 295) |
 
-## 13. Non-Goals (Explicit Scope Exclusions)
+## 13. Non-Goals
 
-- **GUI/TUI application** — CommitBee is CLI-first. Editor integration happens via MCP server mode, not a built-in UI.
-- **General-purpose code review** — CommitBee generates commit messages. Code review is a different tool.
-- **Git client replacement** — CommitBee wraps git for commit generation. It doesn't replace `git add`, `git push`, etc.
-- **WASM plugin system** — Over-engineering for current scale. Configuration-driven extensibility first.
-- **Non-git VCS** — Jujutsu/Mercurial support is not a priority. Git covers > 95% of the market.
-- **Shell snippet detection** — Commit messages are never executed by git; shell injection via commit message content is not a real attack vector. Standard sanitization (FR-001, FR-007) is sufficient.
+- **GUI/TUI** — CLI-first. Editor integration via MCP server mode.
+- **General-purpose code review** — Commit messages only.
+- **Git client replacement** — Wraps git for commits, doesn't replace add/push/etc.
+- **WASM plugin system** — Configuration-driven extensibility first.
+- **Non-git VCS** — Git covers > 95% of the market.
+- **Shell snippet detection** — Commit messages never executed by git; standard sanitization sufficient.
 
 ## Appendix A: Competitive Feature Matrix
 
-| Feature               | commitbee  | opencommit | aicommits | aicommit2 | rusty-commit | cocogitto |
-| --------------------- | ---------- | ---------- | --------- | --------- | ------------ | --------- |
-| **Tree-sitter AST**   | **Yes**    | No         | No        | No        | No           | No        |
-| **Commit splitting**  | **Yes**    | No         | No        | No        | No           | No        |
-| **Secret scanning**   | **Yes**    | No         | No        | No        | No           | No        |
-| **Token budget**      | **Yes**    | No         | No        | No        | No           | N/A       |
-| **Streaming**         | **Yes**    | No         | No        | No        | No           | N/A       |
-| **Local LLM**         | Yes        | Yes        | Yes       | Yes       | Yes          | N/A       |
-| **OpenAI**            | **Yes**    | Yes        | Yes       | Yes       | Yes          | N/A       |
-| **Anthropic**         | **Yes**    | Yes        | No        | Yes       | Yes          | N/A       |
-| **Git hooks**         | **Yes**    | Yes        | Yes       | No        | Yes          | Yes       |
-| **Multi-generate**    | **Yes**    | Yes        | Yes       | No        | No           | No        |
-| **Shell completions** | **Yes**    | No         | No        | No        | No           | Yes       |
-| **MCP server**        | Planned    | No         | No        | No        | Yes          | No        |
-| **Changelog**         | Future     | No         | No        | No        | No           | Yes       |
-| **Version bumping**   | Future     | No         | No        | No        | No           | Yes       |
-| **Monorepo**          | Future     | No         | No        | No        | No           | Yes       |
+| Feature | commitbee | opencommit | aicommits | aicommit2 | rusty-commit | cocogitto |
+|---------|-----------|------------|-----------|-----------|--------------|-----------|
+| **Tree-sitter AST** | ✅ | — | — | — | — | — |
+| **Commit splitting** | ✅ | — | — | — | — | — |
+| **Secret scanning** | ✅ | — | — | — | — | — |
+| **Token budget** | ✅ | — | — | — | — | N/A |
+| **Streaming** | ✅ | — | — | — | — | N/A |
+| **Local LLM** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
+| **OpenAI** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
+| **Anthropic** | ✅ | ✅ | — | ✅ | ✅ | N/A |
+| **Git hooks** | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| **Multi-generate** | ✅ | ✅ | ✅ | — | — | — |
+| **Shell completions** | ✅ | — | — | — | — | ✅ |
+| **MCP server** | Planned | — | — | — | ✅ | — |
+| **Changelog** | Future | — | — | — | — | ✅ |
+| **Version bumping** | Future | — | — | — | — | ✅ |
+| **Monorepo** | Future | — | — | — | — | ✅ |
 
 ## Appendix B: Research Sources
 
-This PRD was informed by:
-
-1. **Codebase analysis** — Line-by-line review of all 2,422 lines across 17 source files
-2. **Competitor analysis** — 30+ tools across TypeScript, Rust, Python, Go reviewed
-3. **Best practices research** — State-of-the-art Rust CLI patterns, LLM prompt engineering, tree-sitter techniques, security practices, testing strategies, distribution approaches
+1. **Codebase analysis** — Line-by-line review of all source files
+2. **Competitor analysis** — 30+ tools across TypeScript, Rust, Python, Go
+3. **Best practices** — Rust CLI patterns, LLM prompt engineering, tree-sitter techniques, security, testing, distribution
