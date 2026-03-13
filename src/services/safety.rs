@@ -14,51 +14,202 @@ pub struct SecretMatch {
     pub line: Option<usize>,
 }
 
-static SECRET_PATTERNS: LazyLock<Vec<(&str, Regex)>> = LazyLock::new(|| {
-    vec![
-        (
-            "API Key",
-            Regex::new(r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*["']?[a-zA-Z0-9_-]{20,}"#).unwrap(),
-        ),
-        ("AWS Key", Regex::new(r"AKIA[0-9A-Z]{16}").unwrap()),
-        (
-            "Private Key",
-            Regex::new(r"-----BEGIN .* PRIVATE KEY-----").unwrap(),
-        ),
-        (
-            "OpenAI Key",
-            Regex::new(r"sk-[a-zA-Z0-9]{48}|sk-proj-[a-zA-Z0-9\-_]{40,}").unwrap(),
-        ),
-        (
-            "Anthropic Key",
-            Regex::new(r"sk-ant-[a-zA-Z0-9-]{80,}").unwrap(),
-        ),
-        (
-            "GitHub Token",
-            Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").unwrap(),
-        ),
-        (
-            "Generic Secret",
-            Regex::new(r#"(?i)(password|secret|token)\s*[:=]\s*["'][^"']{8,}["']"#).unwrap(),
-        ),
-        (
-            "Generic Secret (unquoted)",
-            Regex::new(r#"(?i)(password|secret|token)\s*[:=]\s*[^\s'"]{16,}"#).unwrap(),
-        ),
-        (
-            "Connection String",
-            Regex::new(r"(?i)(mongodb|postgres|mysql|redis)://[^\s]+").unwrap(),
-        ),
-    ]
-});
+/// A named secret detection pattern with description.
+#[allow(dead_code)]
+pub struct SecretPattern {
+    pub name: &'static str,
+    pub regex: Regex,
+    pub description: &'static str,
+}
 
-/// Scan per-file truncated diffs for secrets.
+/// Build the full set of secret patterns, applying custom additions and disabled names.
+///
+/// Custom patterns are compiled from user-provided regex strings. Invalid regexes
+/// are silently skipped (logged at warn level in the caller).
+pub fn build_patterns(custom: &[String], disabled: &[String]) -> Vec<SecretPattern> {
+    let mut patterns = builtin_patterns();
+
+    // Remove disabled patterns by name (case-insensitive match)
+    if !disabled.is_empty() {
+        let disabled_lower: Vec<String> = disabled.iter().map(|s| s.to_lowercase()).collect();
+        patterns.retain(|p| !disabled_lower.contains(&p.name.to_lowercase()));
+    }
+
+    // Add custom patterns
+    for (i, raw) in custom.iter().enumerate() {
+        if let Ok(regex) = Regex::new(raw) {
+            patterns.push(SecretPattern {
+                name: Box::leak(format!("Custom Pattern {}", i + 1).into_boxed_str()),
+                regex,
+                description: Box::leak(format!("User-defined: {}", raw).into_boxed_str()),
+            });
+        }
+    }
+
+    patterns
+}
+
+fn builtin_patterns() -> Vec<SecretPattern> {
+    vec![
+        // ── Cloud Provider API Keys ──
+        SecretPattern {
+            name: "AWS Access Key",
+            regex: Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
+            description: "AWS IAM access key ID",
+        },
+        SecretPattern {
+            name: "AWS Secret Key",
+            regex: Regex::new(
+                r#"(?i)aws[_-]?secret[_-]?access[_-]?key\s*[:=]\s*["']?[A-Za-z0-9/+=]{40}"#,
+            )
+            .unwrap(),
+            description: "AWS secret access key",
+        },
+        SecretPattern {
+            name: "GCP Service Account",
+            regex: Regex::new(r#""type"\s*:\s*"service_account""#).unwrap(),
+            description: "Google Cloud service account JSON key",
+        },
+        SecretPattern {
+            name: "GCP API Key",
+            regex: Regex::new(r"AIza[0-9A-Za-z_-]{35}").unwrap(),
+            description: "Google API key",
+        },
+        SecretPattern {
+            name: "Azure Storage Key",
+            regex: Regex::new(r#"(?i)AccountKey\s*=\s*[A-Za-z0-9+/=]{44,}"#).unwrap(),
+            description: "Azure storage account key",
+        },
+        // ── AI/ML Provider Keys ──
+        SecretPattern {
+            name: "OpenAI Key",
+            regex: Regex::new(r"sk-[a-zA-Z0-9]{48}|sk-proj-[a-zA-Z0-9\-_]{40,}").unwrap(),
+            description: "OpenAI API key (legacy or project-scoped)",
+        },
+        SecretPattern {
+            name: "Anthropic Key",
+            regex: Regex::new(r"sk-ant-[a-zA-Z0-9-]{80,}").unwrap(),
+            description: "Anthropic API key",
+        },
+        SecretPattern {
+            name: "HuggingFace Token",
+            regex: Regex::new(r"hf_[a-zA-Z0-9]{34,}").unwrap(),
+            description: "HuggingFace access token",
+        },
+        // ── Source Control & CI ──
+        SecretPattern {
+            name: "GitHub Token",
+            regex: Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").unwrap(),
+            description: "GitHub personal access or OAuth token",
+        },
+        SecretPattern {
+            name: "GitHub Fine-Grained Token",
+            regex: Regex::new(r"github_pat_[a-zA-Z0-9_]{22,}").unwrap(),
+            description: "GitHub fine-grained personal access token",
+        },
+        SecretPattern {
+            name: "GitLab Token",
+            regex: Regex::new(r"glpat-[a-zA-Z0-9_-]{20,}").unwrap(),
+            description: "GitLab personal access token",
+        },
+        // ── Communication Platforms ──
+        SecretPattern {
+            name: "Slack Token",
+            regex: Regex::new(r"xox[bpras]-[0-9]{10,}-[a-zA-Z0-9-]+").unwrap(),
+            description: "Slack bot, user, or app token",
+        },
+        SecretPattern {
+            name: "Slack Webhook",
+            regex: Regex::new(
+                r"https://hooks\.slack\.com/services/T[0-9A-Z]+/B[0-9A-Z]+/[a-zA-Z0-9]+",
+            )
+            .unwrap(),
+            description: "Slack incoming webhook URL",
+        },
+        SecretPattern {
+            name: "Discord Webhook",
+            regex: Regex::new(r"https://discord(?:app)?\.com/api/webhooks/\d+/[a-zA-Z0-9_-]+")
+                .unwrap(),
+            description: "Discord webhook URL",
+        },
+        // ── Payment & SaaS ──
+        SecretPattern {
+            name: "Stripe Key",
+            regex: Regex::new(r"[sr]k_(live|test)_[a-zA-Z0-9]{24,}").unwrap(),
+            description: "Stripe secret or restricted API key",
+        },
+        SecretPattern {
+            name: "Twilio Key",
+            regex: Regex::new(r"SK[a-f0-9]{32}").unwrap(),
+            description: "Twilio API key SID",
+        },
+        SecretPattern {
+            name: "SendGrid Key",
+            regex: Regex::new(r"SG\.[a-zA-Z0-9_-]{22,}\.[a-zA-Z0-9_-]{43,}").unwrap(),
+            description: "SendGrid API key",
+        },
+        SecretPattern {
+            name: "Mailgun Key",
+            regex: Regex::new(r"key-[a-f0-9]{32}").unwrap(),
+            description: "Mailgun API key",
+        },
+        // ── Database & Infrastructure ──
+        SecretPattern {
+            name: "Connection String",
+            regex: Regex::new(r"(?i)(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp)://[^\s]+")
+                .unwrap(),
+            description: "Database or message broker connection URI",
+        },
+        // ── Cryptographic Material ──
+        SecretPattern {
+            name: "Private Key",
+            regex: Regex::new(r"-----BEGIN .* PRIVATE KEY-----").unwrap(),
+            description: "PEM-encoded private key (RSA, EC, etc.)",
+        },
+        SecretPattern {
+            name: "JWT Token",
+            regex: Regex::new(r"eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+")
+                .unwrap(),
+            description: "JSON Web Token (three-part Base64)",
+        },
+        // ── Generic Patterns ──
+        SecretPattern {
+            name: "Generic API Key",
+            regex: Regex::new(r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*["']?[a-zA-Z0-9_-]{20,}"#)
+                .unwrap(),
+            description: "Generic API key assignment",
+        },
+        SecretPattern {
+            name: "Generic Secret",
+            regex: Regex::new(r#"(?i)(password|secret|token)\s*[:=]\s*["'][^"']{8,}["']"#).unwrap(),
+            description: "Quoted password, secret, or token assignment",
+        },
+        SecretPattern {
+            name: "Generic Secret (unquoted)",
+            regex: Regex::new(r#"(?i)(password|secret|token)\s*[:=]\s*[^\s'"]{16,}"#).unwrap(),
+            description: "Unquoted password, secret, or token assignment",
+        },
+    ]
+}
+
+/// Default patterns (no custom, no disabled) for use by the legacy API.
+static DEFAULT_PATTERNS: LazyLock<Vec<SecretPattern>> = LazyLock::new(builtin_patterns);
+
+/// Scan per-file truncated diffs for secrets using default patterns.
 ///
 /// Prefer `scan_full_diff_for_secrets` in the main binary — it catches
 /// secrets beyond `max_file_lines` truncation. This function is retained
 /// for library consumers who only have `StagedChanges`.
 #[allow(dead_code)]
 pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
+    scan_for_secrets_with_patterns(changes, &DEFAULT_PATTERNS)
+}
+
+/// Scan per-file truncated diffs for secrets using the given pattern set.
+pub fn scan_for_secrets_with_patterns(
+    changes: &StagedChanges,
+    patterns: &[SecretPattern],
+) -> Vec<SecretMatch> {
     let mut found = Vec::new();
 
     for file in &changes.files {
@@ -75,10 +226,10 @@ pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
                 continue;
             }
 
-            for (name, pattern) in SECRET_PATTERNS.iter() {
-                if pattern.is_match(line) {
+            for pat in patterns {
+                if pat.regex.is_match(line) {
                     found.push(SecretMatch {
-                        pattern_name: name.to_string(),
+                        pattern_name: pat.name.to_string(),
                         file: file.path.display().to_string(),
                         line: Some(line_num),
                     });
@@ -91,12 +242,21 @@ pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
     found
 }
 
-/// Scan the full unified diff for secrets (before per-file truncation).
+/// Scan the full unified diff for secrets using default patterns.
+#[allow(dead_code)]
+pub fn scan_full_diff_for_secrets(full_diff: &str) -> Vec<SecretMatch> {
+    scan_full_diff_with_patterns(full_diff, &DEFAULT_PATTERNS)
+}
+
+/// Scan the full unified diff for secrets using the given pattern set.
 ///
 /// This catches secrets that would be missed by `scan_for_secrets` when
 /// file diffs are truncated to `max_file_lines`. Parses the raw `git diff`
 /// output directly, tracking file paths from diff headers.
-pub fn scan_full_diff_for_secrets(full_diff: &str) -> Vec<SecretMatch> {
+pub fn scan_full_diff_with_patterns(
+    full_diff: &str,
+    patterns: &[SecretPattern],
+) -> Vec<SecretMatch> {
     let mut found = Vec::new();
     let mut current_file = String::new();
     let mut line_num: usize = 0;
@@ -133,10 +293,10 @@ pub fn scan_full_diff_for_secrets(full_diff: &str) -> Vec<SecretMatch> {
             continue;
         }
 
-        for (name, pattern) in SECRET_PATTERNS.iter() {
-            if pattern.is_match(line) {
+        for pat in patterns {
+            if pat.regex.is_match(line) {
                 found.push(SecretMatch {
-                    pattern_name: name.to_string(),
+                    pattern_name: pat.name.to_string(),
                     file: current_file.clone(),
                     line: Some(line_num),
                 });

@@ -6,7 +6,8 @@ mod helpers;
 
 use commitbee::domain::ChangeStatus;
 use commitbee::services::safety::{
-    check_for_conflicts, scan_for_secrets, scan_full_diff_for_secrets,
+    build_patterns, check_for_conflicts, scan_for_secrets, scan_for_secrets_with_patterns,
+    scan_full_diff_for_secrets, scan_full_diff_with_patterns,
 };
 use helpers::{make_file_change, make_staged_changes};
 
@@ -25,7 +26,7 @@ fn detects_api_key_pattern() {
 
     let matches = scan_for_secrets(&changes);
     assert!(!matches.is_empty(), "expected at least one secret match");
-    assert_eq!(matches[0].pattern_name, "API Key");
+    assert_eq!(matches[0].pattern_name, "Generic API Key");
 }
 
 #[test]
@@ -41,7 +42,7 @@ fn detects_aws_key() {
 
     let matches = scan_for_secrets(&changes);
     assert!(!matches.is_empty(), "expected at least one secret match");
-    assert_eq!(matches[0].pattern_name, "AWS Key");
+    assert_eq!(matches[0].pattern_name, "AWS Access Key");
 }
 
 #[test]
@@ -302,8 +303,14 @@ fn multiple_secrets_same_file() {
     );
 
     let names: Vec<&str> = matches.iter().map(|m| m.pattern_name.as_str()).collect();
-    assert!(names.contains(&"API Key"), "should detect API Key");
-    assert!(names.contains(&"AWS Key"), "should detect AWS Key");
+    assert!(
+        names.contains(&"Generic API Key"),
+        "should detect Generic API Key"
+    );
+    assert!(
+        names.contains(&"AWS Access Key"),
+        "should detect AWS Access Key"
+    );
     assert!(
         names.contains(&"Generic Secret"),
         "should detect Generic Secret"
@@ -348,7 +355,7 @@ diff --git a/src/config.rs b/src/config.rs
 ";
     let matches = scan_full_diff_for_secrets(full_diff);
     assert!(!matches.is_empty(), "expected secret in full diff");
-    assert_eq!(matches[0].pattern_name, "API Key");
+    assert_eq!(matches[0].pattern_name, "Generic API Key");
     assert_eq!(matches[0].file, "src/config.rs");
 }
 
@@ -391,7 +398,7 @@ fn full_diff_catches_secret_beyond_truncation() {
         !matches.is_empty(),
         "secret after truncation point should be caught"
     );
-    assert_eq!(matches[0].pattern_name, "AWS Key");
+    assert_eq!(matches[0].pattern_name, "AWS Access Key");
     assert_eq!(matches[0].file, "src/big.rs");
 }
 
@@ -415,6 +422,193 @@ diff --git a/src/b.rs b/src/b.rs
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0].file, "src/b.rs");
     assert_eq!(matches[0].pattern_name, "OpenAI Key");
+}
+
+// ─── New pattern detection tests ──────────────────────────────────────────────
+
+#[test]
+fn detects_github_fine_grained_token() {
+    let diff = "+github_pat_abcdefghijklmnopqrstuvwx\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/ci.rs",
+        ChangeStatus::Modified,
+        diff,
+        1,
+        0,
+    )]);
+    let matches = scan_for_secrets(&changes);
+    assert!(!matches.is_empty(), "should detect GitHub fine-grained PAT");
+    assert_eq!(matches[0].pattern_name, "GitHub Fine-Grained Token");
+}
+
+#[test]
+fn detects_gitlab_token() {
+    let diff = "+glpat-abcdefghijklmnopqrstuvwxyz\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/ci.rs",
+        ChangeStatus::Modified,
+        diff,
+        1,
+        0,
+    )]);
+    let matches = scan_for_secrets(&changes);
+    assert!(!matches.is_empty(), "should detect GitLab PAT");
+    assert_eq!(matches[0].pattern_name, "GitLab Token");
+}
+
+#[test]
+fn detects_slack_token() {
+    let diff = "+xoxb-1234567890-abcdefghijklmnop\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/notify.rs",
+        ChangeStatus::Modified,
+        diff,
+        1,
+        0,
+    )]);
+    let matches = scan_for_secrets(&changes);
+    assert!(!matches.is_empty(), "should detect Slack token");
+    assert_eq!(matches[0].pattern_name, "Slack Token");
+}
+
+#[test]
+fn detects_stripe_key() {
+    let diff = "+sk_live_abcdefghijklmnopqrstuvwxyz\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/billing.rs",
+        ChangeStatus::Modified,
+        diff,
+        1,
+        0,
+    )]);
+    let matches = scan_for_secrets(&changes);
+    assert!(!matches.is_empty(), "should detect Stripe key");
+    assert_eq!(matches[0].pattern_name, "Stripe Key");
+}
+
+#[test]
+fn detects_gcp_api_key() {
+    let diff = "+AIzaSyA1234567890abcdefghijklmnopqrstuv\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/gcp.rs",
+        ChangeStatus::Modified,
+        diff,
+        1,
+        0,
+    )]);
+    let matches = scan_for_secrets(&changes);
+    assert!(!matches.is_empty(), "should detect GCP API key");
+    assert_eq!(matches[0].pattern_name, "GCP API Key");
+}
+
+#[test]
+fn detects_huggingface_token() {
+    let diff = "+hf_abcdefghijklmnopqrstuvwxyz12345678\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/ml.rs",
+        ChangeStatus::Modified,
+        diff,
+        1,
+        0,
+    )]);
+    let matches = scan_for_secrets(&changes);
+    assert!(!matches.is_empty(), "should detect HuggingFace token");
+    assert_eq!(matches[0].pattern_name, "HuggingFace Token");
+}
+
+#[test]
+fn detects_sendgrid_key() {
+    let key = format!("+SG.{}.{}\n", "a".repeat(22), "b".repeat(43));
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/email.rs",
+        ChangeStatus::Modified,
+        &key,
+        1,
+        0,
+    )]);
+    let matches = scan_for_secrets(&changes);
+    assert!(!matches.is_empty(), "should detect SendGrid key");
+    assert_eq!(matches[0].pattern_name, "SendGrid Key");
+}
+
+// ─── build_patterns tests ────────────────────────────────────────────────────
+
+#[test]
+fn build_patterns_default_has_all_builtins() {
+    let patterns = build_patterns(&[], &[]);
+    assert!(
+        patterns.len() >= 20,
+        "expected at least 20 built-in patterns, got {}",
+        patterns.len()
+    );
+}
+
+#[test]
+fn build_patterns_disable_removes_pattern() {
+    let patterns = build_patterns(&[], &["AWS Access Key".to_string()]);
+    assert!(
+        !patterns.iter().any(|p| p.name == "AWS Access Key"),
+        "disabled pattern should be removed"
+    );
+}
+
+#[test]
+fn build_patterns_disable_case_insensitive() {
+    let patterns = build_patterns(&[], &["aws access key".to_string()]);
+    assert!(
+        !patterns.iter().any(|p| p.name == "AWS Access Key"),
+        "case-insensitive disable should work"
+    );
+}
+
+#[test]
+fn build_patterns_custom_adds_pattern() {
+    let patterns = build_patterns(&["CUSTOM_[a-z]{10}".to_string()], &[]);
+    let has_custom = patterns
+        .iter()
+        .any(|p| p.name.starts_with("Custom Pattern"));
+    assert!(has_custom, "custom pattern should be added");
+}
+
+#[test]
+fn build_patterns_custom_invalid_regex_skipped() {
+    // Invalid regex should not cause panic, just be skipped
+    let patterns = build_patterns(&["[invalid".to_string()], &[]);
+    let custom_count = patterns
+        .iter()
+        .filter(|p| p.name.starts_with("Custom"))
+        .count();
+    assert_eq!(custom_count, 0, "invalid regex should be silently skipped");
+}
+
+#[test]
+fn custom_pattern_detects_match() {
+    let patterns = build_patterns(&["MYTOKEN_[A-Z]{20}".to_string()], &[]);
+    let diff = "+MYTOKEN_ABCDEFGHIJKLMNOPQRST\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/custom.rs",
+        ChangeStatus::Modified,
+        diff,
+        1,
+        0,
+    )]);
+    let matches = scan_for_secrets_with_patterns(&changes, &patterns);
+    assert!(!matches.is_empty(), "custom pattern should detect match");
+    assert!(matches[0].pattern_name.starts_with("Custom Pattern"));
+}
+
+#[test]
+fn disabled_pattern_not_detected() {
+    let patterns = build_patterns(&[], &["Generic API Key".to_string()]);
+    let diff = "+API_KEY=abcdefghijklmnopqrstuvwxyz1234567890abcdef\n";
+    let full_diff = format!(
+        "diff --git a/src/x.rs b/src/x.rs\n--- a/src/x.rs\n+++ b/src/x.rs\n@@ -1,1 +1,2 @@\n fn x() {{}}\n{diff}"
+    );
+    let matches = scan_full_diff_with_patterns(&full_diff, &patterns);
+    assert!(
+        !matches.iter().any(|m| m.pattern_name == "Generic API Key"),
+        "disabled pattern should not trigger"
+    );
 }
 
 // ─── Proptest: never-panic guarantees ─────────────────────────────────────────

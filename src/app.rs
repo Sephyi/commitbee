@@ -91,7 +91,11 @@ impl App {
         }
 
         // Scan the full untruncated diff for secrets (not the per-file truncated diffs)
-        let secrets = safety::scan_full_diff_for_secrets(&full_diff);
+        let secret_patterns = safety::build_patterns(
+            &self.config.custom_secret_patterns,
+            &self.config.disabled_secret_patterns,
+        );
+        let secrets = safety::scan_full_diff_with_patterns(&full_diff, &secret_patterns);
         if !secrets.is_empty() {
             warn!(
                 count = secrets.len(),

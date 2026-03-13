@@ -119,6 +119,14 @@ pub struct Config {
     #[serde(default = "default_rename_threshold")]
     pub rename_threshold: u8,
 
+    /// Additional custom secret patterns (regex strings)
+    #[serde(default)]
+    pub custom_secret_patterns: Vec<String>,
+
+    /// Built-in secret pattern names to disable
+    #[serde(default)]
+    pub disabled_secret_patterns: Vec<String>,
+
     /// Commit message format options
     #[serde(default)]
     pub format: CommitFormat,
@@ -170,6 +178,8 @@ impl Default for Config {
             openai_base_url: None,
             anthropic_base_url: None,
             rename_threshold: default_rename_threshold(),
+            custom_secret_patterns: Vec::new(),
+            disabled_secret_patterns: Vec::new(),
             format: CommitFormat::default(),
         }
     }
@@ -192,6 +202,8 @@ impl std::fmt::Debug for Config {
             .field("openai_base_url", &self.openai_base_url)
             .field("anthropic_base_url", &self.anthropic_base_url)
             .field("rename_threshold", &self.rename_threshold)
+            .field("custom_secret_patterns", &self.custom_secret_patterns)
+            .field("disabled_secret_patterns", &self.disabled_secret_patterns)
             .field("format", &self.format)
             .finish()
     }
@@ -433,6 +445,12 @@ max_file_lines = 100
 # Rename detection similarity threshold (0-100, default 70)
 # Set to 0 to disable rename detection
 # rename_threshold = 70
+
+# Custom secret patterns (additional regex patterns for secret scanning)
+# custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]
+
+# Disable built-in secret patterns by name
+# disabled_secret_patterns = ["Generic Secret (unquoted)"]
 
 # Commit message format options
 [format]
