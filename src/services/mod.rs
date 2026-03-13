@@ -6,6 +6,7 @@ pub mod analyzer;
 pub mod context;
 pub mod git;
 pub mod llm;
+pub mod progress;
 pub mod safety;
 pub mod sanitizer;
 pub mod splitter;

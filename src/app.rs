@@ -21,7 +21,9 @@ use crate::services::{
     analyzer::AnalyzerService,
     context::ContextBuilder,
     git::GitService,
-    llm, safety,
+    llm,
+    progress::Progress,
+    safety,
     sanitizer::{CommitSanitizer, CommitValidator},
     splitter::{CommitSplitter, SplitSuggestion},
 };
@@ -71,14 +73,15 @@ impl App {
         }
 
         // Step 1: Discover repo and get changes
-        self.print_status("Analyzing staged changes...");
+        let progress = Progress::new();
+        progress.phase("Analyzing staged changes...");
 
         let git = GitService::discover()?;
         let (changes, full_diff) = git
             .get_staged_changes(self.config.max_file_lines, self.config.rename_threshold)
             .await?;
 
-        self.print_info(&format!(
+        progress.info(&format!(
             "{} files with changes detected (+{} -{})",
             changes.files.len(),
             changes.stats.insertions,
@@ -101,7 +104,7 @@ impl App {
                 count = secrets.len(),
                 "potential secrets detected in staged changes"
             );
-            self.print_warning("Potential secrets detected:");
+            progress.warning("Potential secrets detected:");
             for s in &secrets {
                 eprintln!(
                     "  {} in {} (line ~{})",
@@ -131,7 +134,7 @@ impl App {
                 });
             }
 
-            self.print_info("Proceeding with local Ollama (data stays local)");
+            progress.info("Proceeding with local Ollama (data stays local)");
         }
 
         if self.cancel_token.is_cancelled() {
@@ -139,7 +142,7 @@ impl App {
         }
 
         // Step 3: Pre-fetch file content and analyze with tree-sitter
-        self.print_status("Extracting code symbols...");
+        progress.phase("Extracting code symbols...");
 
         let analyzer = AnalyzerService::new()?;
 
@@ -170,7 +173,7 @@ impl App {
                     if split_confirm {
                         return self.run_split_flow(&git, groups, &changes, &symbols).await;
                     }
-                    self.print_info("Proceeding with single commit");
+                    progress.info("Proceeding with single commit");
                 }
             }
         }
@@ -195,10 +198,13 @@ impl App {
         // Step 5: Generate commit message(s)
         let num_candidates = self.cli.generate;
 
-        self.print_status(&format!(
+        progress.phase(&format!(
             "Contacting {} ({})...",
             self.config.provider, self.config.model
         ));
+
+        // Finish spinner before streaming output begins
+        progress.finish();
 
         let provider = llm::create_provider(&self.config)?;
         debug!(provider = provider.name(), "verifying provider");
@@ -465,19 +471,27 @@ impl App {
         // Safety: check for files with both staged and unstaged changes
         let overlap = git.has_unstaged_overlap().await?;
         if !overlap.is_empty() {
-            self.print_warning("Cannot split: some staged files also have unstaged changes:");
+            eprintln!(
+                "{} Cannot split: some staged files also have unstaged changes:",
+                style("warning:").yellow().bold()
+            );
             for path in &overlap {
                 eprintln!("  {}", path.display());
             }
-            self.print_info("Stash or commit unstaged changes first, or use --no-split");
+            eprintln!(
+                "{} Stash or commit unstaged changes first, or use --no-split",
+                style("info:").cyan()
+            );
             return Err(Error::SplitAborted);
         }
 
+        let progress = Progress::new();
         // Generate messages for each group
-        self.print_status(&format!(
+        progress.phase(&format!(
             "Contacting {} ({})...",
             self.config.provider, self.config.model
         ));
+        progress.finish();
 
         let provider = llm::create_provider(&self.config)?;
         provider.verify().await?;
@@ -1158,17 +1172,4 @@ fi
         matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
     }
 
-    // ─── Output Helpers ───
-
-    fn print_status(&self, msg: &str) {
-        eprintln!("{} {}", style("→").cyan(), msg);
-    }
-
-    fn print_info(&self, msg: &str) {
-        eprintln!("{} {}", style("info:").cyan(), msg);
-    }
-
-    fn print_warning(&self, msg: &str) {
-        eprintln!("{} {}", style("warning:").yellow().bold(), msg);
-    }
 }
