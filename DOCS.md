@@ -179,6 +179,10 @@ rename_threshold = 70
 # Disable built-in secret patterns by name (case-insensitive).
 # disabled_secret_patterns = ["Generic Secret (unquoted)"]
 
+# Exclude files matching glob patterns from analysis and diff context.
+# Excluded files are listed in output but not sent to the LLM.
+# exclude_patterns = ["*.lock", "**/*.generated.*"]
+
 # Commit message format options
 [format]
 # Include body/description in commit message
@@ -234,6 +238,8 @@ When run without a command, CommitBee generates a commit message for your staged
 | `--generate N` | `-n N` | Generate N candidates (1-5), pick interactively |
 | `--no-split` | | Disable commit split suggestions |
 | `--no-scope` | | Disable scope in commit messages |
+| `--clipboard` | | Copy message to clipboard instead of committing |
+| `--exclude <GLOB>` | | Exclude files matching glob pattern (repeatable) |
 | `--allow-secrets` | | Allow committing with detected secrets (Ollama only) |
 | `--show-prompt` | | Display the full prompt sent to the LLM |
 | `--verbose` | `-v` | Show symbol extraction details |
@@ -267,6 +273,13 @@ COMMITBEE_LOG=debug commitbee    # Full debug logging
 
 # Multiple candidates
 commitbee -n 3                   # Generate 3 options, pick the best
+
+# Clipboard
+commitbee --clipboard            # Copy message to clipboard (no commit)
+
+# Exclude files
+commitbee --exclude "*.lock"     # Skip lock files from analysis
+commitbee --exclude "*.lock" --exclude "vendor/**"  # Multiple patterns
 
 # Scripting / CI
 commitbee --yes --dry-run        # Generate message, print to stdout, exit
@@ -679,7 +692,7 @@ No panics in user-facing code paths. The sanitizer and validator are tested with
 
 ### Testing Strategy
 
-CommitBee has 295 tests across multiple strategies:
+CommitBee has 308 tests across multiple strategies:
 
 | Strategy | What It Covers |
 | --- | --- |
@@ -692,7 +705,7 @@ CommitBee has 295 tests across multiple strategies:
 Run them:
 
 ```bash
-cargo test                    # All 295 tests
+cargo test                    # All 308 tests
 cargo test --test sanitizer   # Just sanitizer tests
 cargo test --test integration # LLM provider mocks
 COMMITBEE_LOG=debug cargo test -- --nocapture  # With logging

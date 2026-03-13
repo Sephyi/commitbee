@@ -46,6 +46,8 @@ commitbee --verbose          # Show symbol extraction details
 commitbee --show-prompt      # Debug: show the LLM prompt
 commitbee --no-split         # Disable commit split suggestions
 commitbee --no-scope         # Disable scope in commit messages
+commitbee --clipboard        # Copy message to clipboard (no commit)
+commitbee --exclude "*.lock" # Exclude files matching glob pattern
 commitbee --locale de        # Generate message in German (type/scope stay English)
 commitbee init               # Create config file
 commitbee config             # Show current configuration
@@ -75,6 +77,7 @@ rename_threshold = 70
 learn_from_history = false
 history_sample_size = 50
 # locale = "de"
+# exclude_patterns = ["*.lock", "**/*.generated.*"]
 # system_prompt_path = "/path/to/system.txt"
 # template_path = "/path/to/template.txt"
 
@@ -184,7 +187,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (295 tests)
+cargo test                    # All tests (308 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -297,4 +300,4 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 
 ### Documentation Sync
 
-Keep README.md test count in sync (currently 295).
+Keep README.md test count in sync (currently 308).

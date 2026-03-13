@@ -96,7 +96,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 - **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
 - **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
 - **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
-- **🧪 295 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
+- **🧪 308 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -175,6 +175,8 @@ commitbee [OPTIONS] [COMMAND]
 | `-n, --generate` | Generate N candidates (1-5, default 1) |
 | `--no-split` | Disable commit split suggestions |
 | `--no-scope` | Disable scope in commit messages |
+| `--clipboard` | Copy message to clipboard instead of committing |
+| `--exclude <GLOB>` | Exclude files matching glob pattern (repeatable) |
 | `--allow-secrets` | Allow committing with detected secrets |
 | `--verbose` | Show symbol extraction details |
 | `--show-prompt` | Debug: display the full LLM prompt |
@@ -217,7 +219,7 @@ The default provider (Ollama) runs entirely on your machine. No data leaves your
 ## 🧪 Testing
 
 ```bash
-cargo test   # 295 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
+cargo test   # 308 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
 See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.

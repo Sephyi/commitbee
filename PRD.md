@@ -6,10 +6,10 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 4.0
-**Date**: 2026-03-13
-**Status**: Active
-**Author**: Sephyi + Claude
+**Version**: 4.0  
+**Date**: 2026-03-13  
+**Status**: Active  
+**Author**: [Sephyi](https://github.com/Sephyi) + [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)  
 
 ## Changelog
 
@@ -18,8 +18,8 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 | Version | Date       | Summary |
 |---------|------------|---------|
-| 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 295, removed dead cross-references. |
-| 3.3     | 2026-03-13 | v0.4.0 full feature completion — FR-030 (Custom Prompt Templates), FR-032 (Multi-Language), FR-036 (Tree-sitter Query Patterns), FR-057 (Additional Languages), FR-058 (History Learning), TR-006 (Eval Harness), TR-007 (Fuzzing). 295 tests. |
+| 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. |
+| 3.3     | 2026-03-13 | v0.4.0 full feature completion — FR-030 (Custom Prompt Templates), FR-032 (Multi-Language), FR-036 (Tree-sitter Query Patterns), FR-057 (Additional Languages), FR-058 (History Learning), TR-006 (Eval Harness), TR-007 (Fuzzing). 308 tests. |
 | 3.2     | 2026-03-13 | FR-035 (Rename Detection), FR-037 (Expanded Secret Scanning), FR-038 (Progress Indicators). 202 tests. |
 | 3.1     | 2026-03-13 | Deep codebase audit + streaming hardening: `Provider::new()` returns `Result`, 1 MB response cap, EOF buffer parsing, zero-allocation streaming, HTTP error body propagation. 188 tests. |
 | 3.0     | 2026-03-08 | v0.3.1 multi-pass retry + prompt enforcement. FR-041 expanded to 7 rules. 182 tests. |
@@ -90,7 +90,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Multiple message generation (pick from N)          | Common (aicommits, aicommit2) | ✅ v0.2.0       |
 | Commit splitting (multi-concern detection)         | No competitor has this        | ✅ v0.2.0       |
 | Custom prompt/instruction files                    | Growing (Copilot, aicommit2)  | ✅ v0.4.0       |
-| Unit/integration tests                             | Non-negotiable for quality    | ✅ 295 tests    |
+| Unit/integration tests                             | Non-negotiable for quality    | ✅ 308 tests    |
 
 ## 3. Architecture
 
@@ -443,15 +443,13 @@ Config: `learn_from_history` (default `false`), `history_sample_size` (default 5
 
 3 `cargo-fuzz` targets: `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`. `fuzz/Cargo.toml` with `libfuzzer-sys`.
 
-### 4.4 Unshipped — Remaining v0.4.x Scope
+#### FR-031: Exclude Files ✅
 
-#### FR-031: Exclude Files
+`--exclude` CLI flag (repeatable) and `exclude_patterns` config option. Glob patterns via `globset` (e.g., `*.lock`, `**/*.generated.*`, `vendor/**`). Excluded files listed in output but not analyzed or included in diff context. CLI patterns additive with config patterns. Returns `NoStagedChanges` if all files excluded. 4 glob matching tests + 3 TOML tests + 3 CLI parsing tests.
 
-`--exclude` CLI flag and `exclude_patterns` config option. Glob patterns (e.g., `*.lock`, `**/*.generated.*`). Excluded files listed but not analyzed or included in diff context.
+#### FR-033: Copy to Clipboard ✅
 
-#### FR-033: Copy to Clipboard
-
-`--clipboard` flag copies generated message to clipboard instead of committing. Uses system clipboard (pbcopy/xclip/xsel/clip). Works with `--dry-run`.
+`--clipboard` flag copies generated message to system clipboard and prints to stdout. Skips commit confirmation prompt. Uses platform-specific commands: `pbcopy` (macOS), `clip` (Windows), `xclip -selection clipboard` (Linux). Descriptive error if clipboard command unavailable. 3 CLI parsing tests.
 
 ### 4.5 Future — v0.5.0+ (Market Leadership)
 
@@ -635,7 +633,7 @@ commitbee eval                         # Run evaluation harness (dev, feature-ga
 
 ## 8. Testing Requirements
 
-**Current test count: 295**
+**Current test count: 308**
 
 ### TR-001: Unit Tests
 
@@ -792,7 +790,7 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | 1 | v0.2.0 | ✅ Shipped | Stability, correctness, providers, developer experience |
 | 2 | v0.3.x | ✅ Shipped | Differentiation — heuristics, validation, spec compliance |
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
-| 4 | v0.4.x | 🔧 In progress | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
+| 4 | v0.4.x | ✅ Shipped | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
 | 5 | v0.5.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
@@ -807,7 +805,7 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | Commit message quality | > 80% "good enough" first try | Manual evaluation + `commitbee eval` |
 | Secret leak rate | 0 | Integration tests with known patterns |
 | MSRV | Rust 1.94 (edition 2024) | CI matrix (stable + 1.94) |
-| Test count | ≥ 295 | `cargo test` (current: 295) |
+| Test count | ≥ 308 | `cargo test` (current: 308) |
 
 ## 13. Non-Goals
 
