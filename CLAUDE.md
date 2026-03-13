@@ -46,6 +46,7 @@ commitbee --verbose          # Show symbol extraction details
 commitbee --show-prompt      # Debug: show the LLM prompt
 commitbee --no-split         # Disable commit split suggestions
 commitbee --no-scope         # Disable scope in commit messages
+commitbee --locale de        # Generate message in German (type/scope stay English)
 commitbee init               # Create config file
 commitbee config             # Show current configuration
 commitbee doctor             # Check configuration and connectivity
@@ -71,6 +72,11 @@ num_predict = 256
 timeout_secs = 30
 think = false
 rename_threshold = 70
+learn_from_history = false
+history_sample_size = 50
+# locale = "de"
+# system_prompt_path = "/path/to/system.txt"
+# template_path = "/path/to/template.txt"
 
 [format]
 include_body = true
@@ -91,7 +97,9 @@ lowercase_subject = true
 
 ## Supported Languages (tree-sitter)
 
-Rust, TypeScript, JavaScript, Python, Go
+Built-in: Rust, TypeScript, JavaScript, Python, Go
+
+Feature-gated (optional): Java (`lang-java`), C (`lang-c`), C++ (`lang-cpp`), Ruby (`lang-ruby`), C# (`lang-csharp`). Enable with `--features lang-java` or `--features all-languages`.
 
 ## File Structure
 
@@ -112,11 +120,13 @@ src/
 └── services/
     ├── mod.rs
     ├── git.rs           # GitService (gix + git CLI, concurrent content fetching)
-    ├── analyzer.rs      # AnalyzerService (tree-sitter, parallel via rayon)
+    ├── analyzer.rs      # AnalyzerService (tree-sitter queries, parallel via rayon)
     ├── context.rs       # ContextBuilder (token budget)
+    ├── history.rs       # HistoryService (commit style learning)
     ├── safety.rs        # Secret scanning (25 patterns), conflict detection
     ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
     ├── splitter.rs      # CommitSplitter (multi-commit detection)
+    ├── template.rs      # TemplateService (custom prompt templates)
     ├── progress.rs      # Progress indicators (indicatif spinners, TTY-aware)
     └── llm/
         ├── mod.rs       # LlmProvider trait + enum dispatch + shared SYSTEM_PROMPT
@@ -174,7 +184,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (202 tests)
+cargo test                    # All tests (280 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -284,4 +294,4 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 
 ### Documentation Sync
 
-Keep README.md test count in sync (currently 202).
+Keep README.md test count in sync (currently 280).

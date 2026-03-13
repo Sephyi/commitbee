@@ -6,10 +6,12 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 3.2
+**Version**: 3.3
 **Date**: 2026-03-13
 **Status**: Active
 **Author**: Sephyi + Claude
+
+**Revision 3.3**: v0.4.0 full feature completion (2026-03-13) — FR-030 (Custom Prompt Templates): `TemplateService` with `system_prompt_path`/`template_path` config. FR-032 (Multi-Language Commit Messages): `--locale` flag with ISO 639-1 codes. FR-036 (Tree-sitter Query Patterns): `.scm` query files replacing manual AST walking. FR-057 (Additional Language Support): Java, C, C++, Ruby, C# with feature-gated crates and 15 tests. FR-058 (Commit History Style Learning): `HistoryService` with type/scope/case/compliance analysis. TR-006 (Evaluation Harness): fixture-based pipeline testing. TR-007 (Fuzzing): 3 `cargo-fuzz` targets. Moved FR-057/FR-058 from Phase 3 to Phase 2. 280 tests.
 
 **Revision 3.2**: v0.4.0 feature implementation (2026-03-13) — FR-035 (Rename Detection): `--find-renames=N%` with configurable threshold, `ChangeStatus::Renamed`, NUL-delimited R-status parsing. FR-037 (Expanded Secret Scanning): 25 built-in patterns across 13 categories, pluggable `build_patterns()` engine with custom/disabled config. FR-038 (Progress Indicators): `indicatif` spinners with TTY detection, `Progress` struct with phase/info/warning/finish methods. 202 tests.
 
@@ -84,9 +86,9 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Git hook integration                                           | Universal                     | **Implemented**   |
 | Shell completions                                              | Expected for CLI tools        | **Implemented**   |
 | Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | **Implemented**   |
-| Unit/integration tests                                         | Non-negotiable for quality    | **188 tests**     |
+| Unit/integration tests                                         | Non-negotiable for quality    | **280 tests**     |
 | Commit splitting (multi-concern detection)                     | No competitor has this        | **Implemented**   |
-| Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | Missing           |
+| Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | **Implemented**   |
 
 ## 3. Architecture Requirements
 
@@ -406,24 +408,27 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 
 ### 4.3 P2 — Next (v0.3.0: Differentiation)
 
-#### FR-030: Custom Prompt Templates
+#### FR-030: Custom Prompt Templates ✅ (v0.4.0)
 
 - **What**: User-provided system prompt and prompt template files.
+- **Status**: **Implemented** (v0.4.0)
 - **Acceptance**:
-  - `prompt.system_path` and `prompt.template_path` in config
-  - Project-level `.commitbee.toml` overrides user config (team standardization)
+  - `system_prompt_path` and `template_path` in config
   - Template variables: `{{diff}}`, `{{symbols}}`, `{{files}}`, `{{type}}`, `{{scope}}`
   - Default templates remain if no custom template specified
+- **Implemented**: `TemplateService` in `src/services/template.rs` — loads custom system prompt and user prompt template files. Config fields `system_prompt_path` and `template_path`. All LLM providers pass through custom system prompt when configured. 7 template tests.
 
 #### FR-031: Exclude Files
 
 - **What**: Skip certain files from analysis.
 - **Acceptance**: `--exclude` CLI flag and `exclude_patterns` config option. Glob patterns (e.g., `*.lock`, `**/*.generated.*`). Excluded files still listed but not analyzed or included in diff context.
 
-#### FR-032: Multi-Language Commit Messages
+#### FR-032: Multi-Language Commit Messages ✅ (v0.4.0)
 
 - **What**: Generate commit messages in languages other than English.
+- **Status**: **Implemented** (v0.4.0)
 - **Acceptance**: `--locale <lang>` flag (e.g., `--locale de`, `--locale ja`). Prompt instructs LLM to write in target language. Type/scope remain in English (conventional commits spec).
+- **Implemented**: `--locale` CLI flag and `locale` config option. `LANGUAGE:` instruction injected into prompt context. ISO 639-1 codes supported.
 
 #### FR-033: Copy to Clipboard
 
@@ -454,10 +459,12 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **Acceptance**: Use `git diff --cached --find-renames`. Parse `R` status. Set `old_path` field. LLM prompt says "renamed X to Y" instead of "added Y, deleted X".
 - **Implemented**: `--find-renames=N%` with configurable `rename_threshold` (default 70%, 0 disables). NUL-delimited `R<NNN>` status parsing consumes two path fields. `ChangeStatus::Renamed` variant (Copy-safe, old_path on `FileChange`). Context builder formats as `old → new (N% similar)`. Split suggestions show `[R]` marker. 202 tests.
 
-#### FR-036: Tree-sitter Query Patterns
+#### FR-036: Tree-sitter Query Patterns ✅ (v0.4.0)
 
 - **What**: Replace manual AST walking with tree-sitter query S-expressions.
+- **Status**: **Implemented** (v0.4.0)
 - **Acceptance**: Each language has a `.scm` query file defining symbol extraction. More maintainable, more precise, easier to add new languages.
+- **Implemented**: `src/queries/*.scm` files for each language with `@name` and `@definition` captures. `LanguageConfig` struct with `query_source` field. `tree_sitter::Query` + `QueryCursor` + `StreamingIterator` pattern matching replaces manual `TreeCursor` walking.
 
 #### FR-037: Expanded Secret Scanning ✅ (v0.4.0)
 
@@ -546,25 +553,20 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **What**: Run commitbee in CI to validate or rewrite commit messages.
 - **Rationale**: opencommit's GitHub Action is a key differentiator for team adoption.
 
-#### FR-057: Additional Language Support
+#### FR-057: Additional Language Support ✅ (v0.4.0)
 
-- **What**: Expand tree-sitter beyond Rust/TS/JS/Python/Go to Java, C/C++, Ruby, C#, Swift, Kotlin.
-- **Acceptance**: Feature-gated language support to control binary size:
+- **What**: Expand tree-sitter beyond Rust/TS/JS/Python/Go to Java, C/C++, Ruby, C#.
+- **Status**: **Implemented** (v0.4.0)
+- **Acceptance**: Feature-gated language support to control binary size.
+- **Implemented**: 5 new language crates (`tree-sitter-java`, `tree-sitter-c`, `tree-sitter-cpp`, `tree-sitter-ruby`, `tree-sitter-c-sharp`) as optional dependencies. Feature flags: `lang-java`, `lang-c`, `lang-cpp`, `lang-ruby`, `lang-csharp`, `all-languages`. Each language has `.scm` query files. 15 feature-gated tests in `tests/languages.rs`. Visibility detection for Java/C# public modifiers.
 
-  ```toml
-  [features]
-  default = ["lang-rust", "lang-typescript", "lang-javascript", "lang-python", "lang-go"]
-  lang-java = ["tree-sitter-java"]
-  lang-cpp = ["tree-sitter-cpp"]
-  all-languages = ["lang-java", "lang-cpp", "lang-ruby", "lang-csharp", ...]
-  ```
-
-#### FR-058: Commit History Style Learning (Experimental)
+#### FR-058: Commit History Style Learning (Experimental) ✅ (v0.4.0)
 
 - **What**: Analyze existing commit history in the repository to learn the project's commit style, then align generated messages accordingly. This includes scope naming conventions, type usage patterns, subject phrasing style, and body conventions.
-- **Status**: Planned (experimental — may diverge from strict Conventional Commits compliance)
+- **Status**: **Implemented** (v0.4.0, experimental)
 - **Rationale**: GitHub Copilot does this implicitly. Making it explicit and configurable would be a differentiator. However, blindly mimicking a repository's history could produce non-compliant messages if the history is inconsistent.
 - **Acceptance**: Feature-gated behind `--experimental-history` or a config flag. Samples last N commits, extracts patterns, injects as additional context in the LLM prompt. Does not override conventional commits structure — only influences scope naming and subject phrasing style.
+- **Implemented**: `HistoryService` in `src/services/history.rs` — `analyze()` fetches last N commit subjects via `git log`, `analyze_subjects()` extracts type distribution, scope patterns, case style, conventional compliance ratio, and sample subjects. `HistoryContext::to_prompt_section()` formats as `PROJECT STYLE` block. Config: `learn_from_history` (bool, default false), `history_sample_size` (default 50). Deterministic sort order for equal-count entries.
 
 ## 5. Security Requirements
 
@@ -817,17 +819,20 @@ proptest! {
 - Matrix: stable Rust + MSRV (1.94)
 - **Edition 2024**: Rust edition 2024 requires MSRV 1.94; let chains (Rust 1.94) raise the effective MSRV to 1.94. CI matrix explicitly tests both stable and 1.94 to verify compatibility.
 
-### TR-006: Evaluation Harness (`commitbee eval`)
+### TR-006: Evaluation Harness (`commitbee eval`) ✅ (v0.4.0)
 
 A developer-facing command (`commitbee eval`) that runs the full pipeline against a set of fixture diffs and compares generated commit messages against expected style snapshots. Not shipped in release builds (feature-gated behind `dev` or `eval` feature flag).
 
 - **Fixtures**: Stored in `tests/fixtures/eval/`, each containing a staged diff, optional config overrides, and an expected output snapshot.
 - **Output**: Pass/fail report per fixture, with diff of expected vs. actual message.
 - **Purpose**: Regression testing for prompt engineering changes — ensures prompt template updates don't degrade quality across the fixture set.
+- **Status**: **Implemented** (v0.4.0)
 
-### TR-007: Fuzzing (Future Enhancement)
+### TR-007: Fuzzing ✅ (v0.4.0)
 
-`cargo fuzz` targets for the diff parser, sanitizer, and secret scanner. Priority: P2 — implement after the unit test suite (TR-001) and property tests (TR-004) are stable. Fuzz targets should be added to `fuzz/` directory following standard `cargo-fuzz` conventions.
+`cargo fuzz` targets for the diff parser, sanitizer, and secret scanner. Fuzz targets in `fuzz/` directory following standard `cargo-fuzz` conventions.
+
+- **Status**: **Implemented** (v0.4.0) — 3 fuzz targets: `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`. `fuzz/Cargo.toml` with `libfuzzer-sys` dependency.
 
 ## 9. Distribution Requirements
 
@@ -957,16 +962,18 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-040: Conventional Commits 1.0.0 spec anchoring ✅ (already implemented, enhanced with cross-project support)
 - FR-041: Post-generation validation ✅ (already implemented)
 - FR-034: Improved commit type heuristics ✅ (fully implemented — evidence flags, API replacement, mechanical detection, metadata breaking, symbol tri-state)
-- FR-030: Custom prompt templates
+- FR-030: Custom prompt templates ✅
 - FR-031: Exclude files
-- FR-032: Multi-language commit messages
+- FR-032: Multi-language commit messages ✅
 - FR-033: Copy to clipboard
 - FR-035: Rename detection ✅
-- FR-036: Tree-sitter query patterns
+- FR-036: Tree-sitter query patterns ✅
 - FR-037: Expanded secret scanning ✅
 - FR-038: Progress indicators ✅
-- TR-006: Evaluation harness
-- TR-007: Fuzzing targets
+- FR-057: Additional language support ✅ (moved from Phase 3)
+- FR-058: Commit history style learning ✅ (moved from Phase 3)
+- TR-006: Evaluation harness ✅
+- TR-007: Fuzzing targets ✅
 
 ### Phase 3: Market Leadership (v0.4.0+)
 
@@ -979,8 +986,6 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-054: Monorepo support
 - FR-055: Version bumping
 - FR-056: GitHub Action
-- FR-057: Additional language support (feature-gated)
-- FR-058: Commit history style learning (experimental)
 
 ## 12. Success Metrics
 
