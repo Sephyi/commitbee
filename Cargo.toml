@@ -85,6 +85,7 @@ regex = "1.12"
 [features]
 default = []
 secure-storage = ["keyring"]
+eval = []
 
 [profile.release]
 lto = true

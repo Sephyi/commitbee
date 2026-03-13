@@ -98,4 +98,15 @@ pub enum Commands {
         /// Provider to check key for (openai, anthropic)
         provider: String,
     },
+    /// Run evaluation against fixture diffs (dev only)
+    #[cfg(feature = "eval")]
+    Eval {
+        /// Directory containing evaluation fixtures
+        #[arg(long, default_value = "tests/fixtures/eval")]
+        fixtures_dir: std::path::PathBuf,
+
+        /// Only run fixtures matching this pattern
+        #[arg(long)]
+        filter: Option<String>,
+    },
 }

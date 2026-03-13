@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "style-only"
+description = "Whitespace-only changes should produce style type"
+expected_type = "style"

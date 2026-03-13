@@ -379,6 +379,14 @@ impl App {
             Commands::SetKey { provider } => self.set_api_key(provider),
             #[cfg(feature = "secure-storage")]
             Commands::GetKey { provider } => self.get_api_key(provider),
+            #[cfg(feature = "eval")]
+            Commands::Eval {
+                fixtures_dir,
+                filter,
+            } => {
+                let runner = crate::eval::EvalRunner::new(fixtures_dir.clone(), filter.clone());
+                runner.run().await
+            }
         }
     }
 

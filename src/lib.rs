@@ -14,6 +14,8 @@ pub mod cli;
 pub mod config;
 pub mod domain;
 pub mod error;
+#[cfg(feature = "eval")]
+pub mod eval;
 pub mod services;
 
 pub use app::App;

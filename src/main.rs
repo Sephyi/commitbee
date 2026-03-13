@@ -10,6 +10,8 @@ mod cli;
 mod config;
 mod domain;
 mod error;
+#[cfg(feature = "eval")]
+mod eval;
 mod services;
 
 use app::App;

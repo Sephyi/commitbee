@@ -23,3 +23,24 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
 SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
 SPDX-FileComment = "GitHub issue templates"
+
+[[annotations]]
+path = "tests/fixtures/eval/**/*.patch"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
+SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
+SPDX-FileComment = "Evaluation fixture diff files"
+
+[[annotations]]
+path = "tests/fixtures/eval/**/*.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
+SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
+SPDX-FileComment = "Evaluation fixture expected output"
+
+[[annotations]]
+path = "tests/fixtures/eval/**/*.json"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
+SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
+SPDX-FileComment = "Evaluation fixture mock LLM responses"

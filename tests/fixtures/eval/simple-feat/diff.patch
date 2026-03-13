@@ -1,0 +1,31 @@
+diff --git a/src/services/validator.rs b/src/services/validator.rs
+new file mode 100644
+index 0000000..a1b2c3d
+--- /dev/null
++++ b/src/services/validator.rs
+@@ -0,0 +1,25 @@
++use crate::error::Result;
++
++/// Validates commit messages against project conventions.
++pub struct CommitValidator {
++    max_subject_len: usize,
++}
++
++impl CommitValidator {
++    pub fn new(max_subject_len: usize) -> Self {
++        Self { max_subject_len }
++    }
++
++    /// Check if a commit message subject line is within the length limit.
++    pub fn validate_subject(&self, subject: &str) -> Result<()> {
++        if subject.len() > self.max_subject_len {
++            return Err(crate::error::Error::InvalidCommitMessage(
++                format!("Subject too long: {} chars (max {})", subject.len(), self.max_subject_len),
++            ));
++        }
++        Ok(())
++    }
++}
++
++#[cfg(test)]
++mod tests {}
