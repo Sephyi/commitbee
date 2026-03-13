@@ -97,9 +97,9 @@ lowercase_subject = true
 
 ## Supported Languages (tree-sitter)
 
-Built-in: Rust, TypeScript, JavaScript, Python, Go
+Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, Ruby, C#
 
-Feature-gated (optional): Java (`lang-java`), C (`lang-c`), C++ (`lang-cpp`), Ruby (`lang-ruby`), C# (`lang-csharp`). Enable with `--features lang-java` or `--features all-languages`.
+All 10 languages enabled by default. To build with only the core 5, use `--no-default-features`. Individual languages can be toggled via feature flags: `lang-java`, `lang-c`, `lang-cpp`, `lang-ruby`, `lang-csharp`.
 
 ## File Structure
 
@@ -184,7 +184,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (280 tests)
+cargo test                    # All tests (295 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -294,4 +294,4 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 
 ### Documentation Sync
 
-Keep README.md test count in sync (currently 280).
+Keep README.md test count in sync (currently 295).

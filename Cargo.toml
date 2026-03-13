@@ -63,7 +63,7 @@ tree-sitter-python = "0.25"
 tree-sitter-go = "0.25"
 tree-sitter-javascript = "0.25"
 
-# Optional language grammars (feature-gated)
+# Additional language grammars (optional, enabled by default)
 tree-sitter-java = { version = "0.23", optional = true }
 tree-sitter-c = { version = "0.23", optional = true }
 tree-sitter-cpp = { version = "0.23", optional = true }
@@ -90,7 +90,7 @@ keyring = { version = "3", optional = true }
 regex = "1.12"
 
 [features]
-default = []
+default = ["lang-java", "lang-c", "lang-cpp", "lang-ruby", "lang-csharp"]
 secure-storage = ["keyring"]
 eval = []
 lang-java = ["tree-sitter-java"]
