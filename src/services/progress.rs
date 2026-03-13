@@ -80,6 +80,12 @@ impl Progress {
             bar.finish_and_clear();
         }
     }
+
+    /// Take ownership of the underlying progress bar (for sending to spawned tasks).
+    /// After calling this, the `Progress` struct will no longer display or clear the bar.
+    pub fn take_bar(&mut self) -> Option<ProgressBar> {
+        self.bar.take()
+    }
 }
 
 impl Drop for Progress {

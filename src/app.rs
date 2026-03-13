@@ -157,6 +157,9 @@ impl App {
 
         debug!(count = symbols.len(), "symbols extracted");
 
+        // Finish analysis spinner before any interactive prompts
+        progress.finish();
+
         // Step 3.5: Split detection
         if !self.cli.no_split {
             let is_interactive = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
@@ -225,13 +228,12 @@ impl App {
         // Step 5: Generate commit message(s)
         let num_candidates = self.cli.generate;
 
+        // Restart spinner for LLM generation phase
+        let mut progress = Progress::new(self.cli.verbose);
         progress.phase(&format!(
             "Contacting {} ({})...",
             self.config.provider, self.config.model
         ));
-
-        // Finish spinner before streaming output begins
-        progress.finish();
 
         let provider = llm::create_provider(&self.config)?;
         debug!(provider = provider.name(), "verifying provider");
@@ -245,14 +247,13 @@ impl App {
             }
 
             if num_candidates > 1 {
-                eprintln!(
-                    "{} Generating candidate {}/{}...",
-                    style("info:").cyan(),
+                progress.phase(&format!(
+                    "Generating candidate {}/{}...",
                     i + 1,
                     num_candidates
-                );
+                ));
             } else {
-                eprintln!("{} Generating...\n", style("info:").cyan());
+                progress.phase("Generating...");
             }
 
             let (tx, mut rx) = mpsc::channel::<String>(64);
@@ -260,13 +261,24 @@ impl App {
             // Only stream output for single generation
             let show_stream = num_candidates == 1;
             let cancel_for_printer = self.cancel_token.clone();
+            let spinner = progress.take_bar();
+
             let print_handle = tokio::spawn(async move {
+                let mut first = true;
                 loop {
                     tokio::select! {
                         _ = cancel_for_printer.cancelled() => break,
                         token = rx.recv() => {
                             match token {
-                                Some(t) if show_stream => eprint!("{}", t),
+                                Some(t) if show_stream => {
+                                    if first {
+                                        if let Some(ref bar) = spinner {
+                                            bar.finish_and_clear();
+                                        }
+                                        first = false;
+                                    }
+                                    eprint!("{}", t);
+                                }
                                 Some(_) => {} // Suppress streaming for multi-gen
                                 None => break,
                             }
