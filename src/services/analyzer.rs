@@ -23,8 +23,10 @@ pub struct DiffHunk {
 }
 
 // Robust regex for parsing unified diff hunk headers
-static HUNK_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@").unwrap());
+static HUNK_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@")
+        .expect("static hunk header regex is valid")
+});
 
 impl DiffHunk {
     /// Parse hunks from unified diff format

@@ -240,7 +240,9 @@ impl App {
                 .generate(&prompt, tx, self.cancel_token.clone())
                 .await?;
 
-            let _ = print_handle.await;
+            if let Err(e) = print_handle.await {
+                warn!("print task panicked: {e}");
+            }
 
             if num_candidates == 1 {
                 eprintln!(); // Newline after streaming
@@ -531,7 +533,9 @@ impl App {
                 .generate(&prompt, tx, self.cancel_token.clone())
                 .await?;
 
-            let _ = print_handle.await;
+            if let Err(e) = print_handle.await {
+                warn!("print task panicked: {e}");
+            }
 
             if raw_message.trim().is_empty() {
                 return Err(Error::Provider {
@@ -576,7 +580,10 @@ impl App {
             return Err(Error::Cancelled);
         }
 
-        // Execute: unstage all, then stage+commit per group
+        // Execute: unstage all, then stage+commit per group.
+        // NOTE: This is non-atomic — if an intermediate commit fails, earlier
+        // commits are already applied with no automatic rollback. The index
+        // state between unstage_all() and stage_files() is also a TOCTOU window.
         for (i, (message, files)) in commit_messages.iter().enumerate() {
             git.unstage_all().await?;
             git.stage_files(files).await?;
@@ -1068,10 +1075,13 @@ fi
                 };
             }
 
+            for v in &violations {
+                debug!(attempt, violation = %v, "validation failed");
+            }
             debug!(
                 attempt,
                 violations = violations.len(),
-                "violations detected, retrying with corrections"
+                "retrying with corrections"
             );
 
             let corrections = CommitValidator::format_corrections(&violations);
