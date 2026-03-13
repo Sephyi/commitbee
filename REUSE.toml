@@ -25,22 +25,15 @@ SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
 SPDX-FileComment = "GitHub issue templates"
 
 [[annotations]]
-path = "tests/fixtures/eval/**/*.patch"
+path = "tests/fixtures/eval/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
 SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
-SPDX-FileComment = "Evaluation fixture diff files"
+SPDX-FileComment = "Evaluation test fixtures"
 
 [[annotations]]
-path = "tests/fixtures/eval/**/*.txt"
+path = "fuzz/Cargo.toml"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
 SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
-SPDX-FileComment = "Evaluation fixture expected output"
-
-[[annotations]]
-path = "tests/fixtures/eval/**/*.json"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
-SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
-SPDX-FileComment = "Evaluation fixture mock LLM responses"
+SPDX-FileComment = "Fuzz testing crate manifest"
