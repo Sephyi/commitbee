@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
-use super::SYSTEM_PROMPT;
+use super::{MAX_RESPONSE_BYTES, SYSTEM_PROMPT};
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com/v1";
 const API_VERSION: &str = "2023-06-01";
@@ -187,6 +187,12 @@ impl AnthropicProvider {
                                     {
                                         let _ = token_tx.send(text.clone()).await;
                                         full_response.push_str(text);
+                                    }
+                                    if full_response.len() > MAX_RESPONSE_BYTES {
+                                        return Err(Error::Provider {
+                                            provider: "anthropic".into(),
+                                            message: "response exceeded 1 MB limit".into(),
+                                        });
                                     }
                                 }
                                 "message_stop" => {

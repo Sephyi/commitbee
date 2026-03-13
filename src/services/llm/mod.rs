@@ -5,6 +5,10 @@
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+/// Maximum bytes for streaming response buffers. Prevents unbounded memory
+/// growth from a misbehaving or malicious LLM server.
+pub(crate) const MAX_RESPONSE_BYTES: usize = 1_024 * 1_024; // 1 MB
+
 // SYNC: commit type list must match CommitType::ALL in src/domain/commit.rs
 pub(crate) const SYSTEM_PROMPT: &str = r#"You generate Conventional Commit messages from git diffs.
 

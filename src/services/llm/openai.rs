@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
-use super::SYSTEM_PROMPT;
+use super::{MAX_RESPONSE_BYTES, SYSTEM_PROMPT};
 
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 
@@ -201,6 +201,12 @@ impl OpenAiProvider {
                                 if let Some(ref content) = choice.delta.content {
                                     let _ = token_tx.send(content.clone()).await;
                                     full_response.push_str(content);
+                                }
+                                if full_response.len() > MAX_RESPONSE_BYTES {
+                                    return Err(Error::Provider {
+                                        provider: "openai".into(),
+                                        message: "response exceeded 1 MB limit".into(),
+                                    });
                                 }
                                 if choice.finish_reason.is_some() {
                                     return Ok(full_response.trim().to_string());

@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
-use super::SYSTEM_PROMPT;
+use super::{MAX_RESPONSE_BYTES, SYSTEM_PROMPT};
 
 pub struct OllamaProvider {
     client: Client,
@@ -219,6 +219,13 @@ impl OllamaProvider {
                         if let Some(resp) = result {
                             let _ = token_tx.send(resp.response.clone()).await;
                             full_response.push_str(&resp.response);
+
+                            if full_response.len() > MAX_RESPONSE_BYTES {
+                                return Err(Error::Provider {
+                                    provider: "ollama".into(),
+                                    message: "response exceeded 1 MB limit".into(),
+                                });
+                            }
 
                             if resp.done {
                                 return Ok(full_response.trim().to_string());
