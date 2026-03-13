@@ -6,10 +6,12 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 3.1
+**Version**: 3.2
 **Date**: 2026-03-13
 **Status**: Active
 **Author**: Sephyi + Claude
+
+**Revision 3.2**: v0.4.0 feature implementation (2026-03-13) — FR-035 (Rename Detection): `--find-renames=N%` with configurable threshold, `ChangeStatus::Renamed`, NUL-delimited R-status parsing. FR-037 (Expanded Secret Scanning): 25 built-in patterns across 13 categories, pluggable `build_patterns()` engine with custom/disabled config. FR-038 (Progress Indicators): `indicatif` spinners with TTY detection, `Progress` struct with phase/info/warning/finish methods. 202 tests.
 
 **Revision 3.1**: Deep codebase audit + streaming hardening (2026-03-13) — LLM provider hardening: `Provider::new()` returns `Result`, 1 MB response cap (`MAX_RESPONSE_BYTES`), EOF buffer parsing for all SSE providers, zero-allocation streaming (slice + drain), HTTP error body propagation. Security: full untruncated diff scanning for secrets, `sk-proj-` pattern support. Performance: HashSet symbol dedup, single-pass evidence detection, `String::with_capacity` pre-allocation. Error handling: hardened observability in analyzer and app orchestrator. 188 tests.
 
@@ -446,17 +448,18 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
   - Bug evidence detection: explicit `has_bug_evidence` check early in inference chain → `fix` type when bug-fix comments found ✅
   - Default fallback is `Refactor` (safer than `Feat` for ambiguous changes) ✅
 
-#### FR-035: Rename Detection
+#### FR-035: Rename Detection ✅ (v0.4.0)
 
 - **What**: Detect file renames instead of showing as add + delete.
 - **Acceptance**: Use `git diff --cached --find-renames`. Parse `R` status. Set `old_path` field. LLM prompt says "renamed X to Y" instead of "added Y, deleted X".
+- **Implemented**: `--find-renames=N%` with configurable `rename_threshold` (default 70%, 0 disables). NUL-delimited `R<NNN>` status parsing consumes two path fields. `ChangeStatus::Renamed` variant (Copy-safe, old_path on `FileChange`). Context builder formats as `old → new (N% similar)`. Split suggestions show `[R]` marker. 202 tests.
 
 #### FR-036: Tree-sitter Query Patterns
 
 - **What**: Replace manual AST walking with tree-sitter query S-expressions.
 - **Acceptance**: Each language has a `.scm` query file defining symbol extraction. More maintainable, more precise, easier to add new languages.
 
-#### FR-037: Expanded Secret Scanning
+#### FR-037: Expanded Secret Scanning ✅ (v0.4.0)
 
 - **What**: Current patterns are incomplete.
 - **Acceptance**:
@@ -467,11 +470,13 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
   - Generic high-entropy string detection in assignment contexts
   - Configurable: users can add custom patterns or disable checks
   - Scan context lines sent to LLM, not just `+` lines
+- **Implemented**: 25 built-in `SecretPattern` structs across 13 categories (Cloud: AWS access/secret, GCP service account/API key, Azure storage; AI/ML: OpenAI, Anthropic, HuggingFace; Source Control: GitHub PAT/fine-grained/OAuth, GitLab; Communication: Slack token/webhook, Discord webhook; Payment: Stripe, Twilio, SendGrid, Mailgun; Database: connection strings; Crypto: private keys, JWT; Generic: API key, quoted/unquoted secrets). Pluggable engine via `build_patterns(custom, disabled)` with `custom_secret_patterns` and `disabled_secret_patterns` config fields. `Box::leak` for custom pattern names (`&'static str`). `LazyLock` for default pattern set. 202 tests.
 
-#### FR-038: Progress Indicators
+#### FR-038: Progress Indicators ✅ (v0.4.0)
 
 - **What**: No visual feedback during tree-sitter analysis or LLM model loading.
 - **Acceptance**: Spinner during "Analyzing code..." and "Generating message..." phases using `indicatif`. Suppressed in non-TTY mode. Respects `NO_COLOR`.
+- **Implemented**: `Progress` struct wrapping `Option<ProgressBar>` with TTY detection via `std::io::stderr().is_terminal()`. Methods: `phase()` (spinner message), `info()` (suspended info line), `warning()` (suspended warning), `finish()` (clear). `Drop` impl auto-clears. Non-TTY falls back to plain `eprintln!` with `console::style()`. Replaces old `print_status`/`print_info`/`print_warning` helpers in app.rs. 202 tests.
 
 #### FR-040: Conventional Commits 1.0.0 Spec Anchoring ✅ (implemented post-v0.2.0)
 
@@ -956,10 +961,10 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-031: Exclude files
 - FR-032: Multi-language commit messages
 - FR-033: Copy to clipboard
-- FR-035: Rename detection
+- FR-035: Rename detection ✅
 - FR-036: Tree-sitter query patterns
-- FR-037: Expanded secret scanning
-- FR-038: Progress indicators
+- FR-037: Expanded secret scanning ✅
+- FR-038: Progress indicators ✅
 - TR-006: Evaluation harness
 - TR-007: Fuzzing targets
 
