@@ -17,16 +17,17 @@ pub struct Progress {
 
 impl Default for Progress {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
 impl Progress {
     /// Create a new progress indicator. Only shows spinners in interactive terminals.
-    pub fn new() -> Self {
+    /// If verbose is true, spinners are disabled to avoid conflict with debug logs.
+    pub fn new(verbose: bool) -> Self {
         let is_tty = std::io::stderr().is_terminal();
         Self {
-            bar: if is_tty {
+            bar: if is_tty && !verbose {
                 let pb = ProgressBar::new_spinner();
                 pb.set_style(
                     ProgressStyle::default_spinner()

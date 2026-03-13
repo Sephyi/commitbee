@@ -75,7 +75,7 @@ impl App {
         }
 
         // Step 1: Discover repo and get changes
-        let progress = Progress::new();
+        let progress = Progress::new(self.cli.verbose);
         progress.phase("Analyzing staged changes...");
 
         let git = GitService::discover()?;
@@ -524,7 +524,7 @@ impl App {
             return Err(Error::SplitAborted);
         }
 
-        let progress = Progress::new();
+        let progress = Progress::new(self.cli.verbose);
         // Generate messages for each group
         progress.phase(&format!(
             "Contacting {} ({})...",
