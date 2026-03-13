@@ -133,6 +133,16 @@ pub struct Config {
     #[serde(default)]
     pub locale: Option<String>,
 
+    /// Enable experimental commit history style learning (default: false)
+    /// Analyzes recent commits to learn scope naming, type patterns, and
+    /// subject phrasing conventions for the repository.
+    #[serde(default)]
+    pub learn_from_history: bool,
+
+    /// Number of recent commits to sample for style learning (default: 50)
+    #[serde(default = "default_history_sample_size")]
+    pub history_sample_size: usize,
+
     /// Commit message format options
     #[serde(default)]
     pub format: CommitFormat,
@@ -166,6 +176,9 @@ fn default_num_predict() -> u32 {
 fn default_rename_threshold() -> u8 {
     70
 }
+fn default_history_sample_size() -> usize {
+    50
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -187,6 +200,8 @@ impl Default for Config {
             custom_secret_patterns: Vec::new(),
             disabled_secret_patterns: Vec::new(),
             locale: None,
+            learn_from_history: false,
+            history_sample_size: default_history_sample_size(),
             format: CommitFormat::default(),
         }
     }
@@ -212,6 +227,8 @@ impl std::fmt::Debug for Config {
             .field("custom_secret_patterns", &self.custom_secret_patterns)
             .field("disabled_secret_patterns", &self.disabled_secret_patterns)
             .field("locale", &self.locale)
+            .field("learn_from_history", &self.learn_from_history)
+            .field("history_sample_size", &self.history_sample_size)
             .field("format", &self.format)
             .finish()
     }
@@ -466,6 +483,14 @@ max_file_lines = 100
 
 # Disable built-in secret patterns by name
 # disabled_secret_patterns = ["Generic Secret (unquoted)"]
+
+# Experimental: learn commit style from repository history (default: false)
+# Analyzes recent commits to learn scope naming, type patterns, and
+# subject phrasing conventions for the repository.
+# learn_from_history = false
+
+# Number of recent commits to sample for style learning (default: 50)
+# history_sample_size = 50
 
 # Commit message format options
 [format]

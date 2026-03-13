@@ -155,6 +155,7 @@ impl ContextBuilder {
             group_rationale: None, // Set by splitter when generating per-group prompts
             metadata_breaking_signals: Self::detect_metadata_breaking(changes),
             locale: config.locale.clone(),
+            history_context: None, // Set by App when learn_from_history is enabled
         }
     }
 

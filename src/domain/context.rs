@@ -31,6 +31,8 @@ pub struct PromptContext {
     pub metadata_breaking_signals: Vec<String>,
     /// ISO 639-1 locale code for non-English commit messages (e.g., "de", "ja")
     pub locale: Option<String>,
+    /// Optional project style context learned from commit history
+    pub history_context: Option<String>,
 }
 
 impl PromptContext {
@@ -80,6 +82,12 @@ impl PromptContext {
             })
             .unwrap_or_default();
 
+        let history_section = self
+            .history_context
+            .as_ref()
+            .map(|h| format!("\n{}\n", h))
+            .unwrap_or_default();
+
         let metadata_breaking_section = if self.metadata_breaking_signals.is_empty() {
             String::new()
         } else {
@@ -102,7 +110,7 @@ SUGGESTED TYPE: {commit_type}{scope}
 {group_rationale}{evidence}{primary_change}{symbols}
 DIFF:
 {diff}
-{constraints}{breaking}{metadata_breaking}{locale}{focus}
+{constraints}{breaking}{metadata_breaking}{locale}{focus}{history}
 HARD LIMIT: subject must be under {subject_budget} chars (count carefully). Name at least one concrete entity (function, struct, variable) from the diff.
 Body: 1-3 sentences on WHY, or null if trivial. breaking_change: only if existing users must change code/config to stay compatible, else null.
 
@@ -125,6 +133,7 @@ Respond with ONLY this JSON:
             group_rationale = group_rationale_line,
             metadata_breaking = metadata_breaking_section,
             locale = locale_instruction,
+            history = history_section,
             subject_budget = subject_budget,
             scope_json = self
                 .suggested_scope

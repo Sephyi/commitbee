@@ -21,6 +21,7 @@ use crate::services::{
     analyzer::AnalyzerService,
     context::ContextBuilder,
     git::GitService,
+    history::HistoryService,
     llm,
     progress::Progress,
     safety,
@@ -178,8 +179,32 @@ impl App {
             }
         }
 
+        // Step 3.7: History style learning (experimental)
+        let history_prompt = if self.config.learn_from_history {
+            debug!("learning commit style from history");
+            match HistoryService::analyze(git.work_dir(), self.config.history_sample_size).await {
+                Some(ctx) => {
+                    let section = ctx.to_prompt_section(self.config.history_sample_size);
+                    debug!(
+                        conventional_ratio = ctx.conventional_ratio,
+                        types = ctx.type_distribution.len(),
+                        scopes = ctx.scope_patterns.len(),
+                        "history analysis complete"
+                    );
+                    Some(section)
+                }
+                None => {
+                    debug!("history analysis skipped (too few commits or git log failed)");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         // Step 4: Build context
-        let context = ContextBuilder::build(&changes, &symbols, &self.config);
+        let mut context = ContextBuilder::build(&changes, &symbols, &self.config);
+        context.history_context = history_prompt;
         debug!(prompt_chars = context.to_prompt().len(), "context built");
 
         let prompt = context.to_prompt();
@@ -358,6 +383,10 @@ impl App {
                 println!("Max tokens: {}", self.config.num_predict);
                 println!("Think: {}", self.config.think);
                 println!("Rename threshold: {}%", self.config.rename_threshold);
+                println!(
+                    "Learn from history: {} (sample: {})",
+                    self.config.learn_from_history, self.config.history_sample_size
+                );
                 println!();
                 println!("[format]");
                 println!("  include_body: {}", self.config.format.include_body);

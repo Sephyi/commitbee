@@ -28,6 +28,12 @@ impl GitService {
         Ok(Self { repo, work_dir })
     }
 
+    /// Returns the working directory of the repository.
+    #[must_use]
+    pub fn work_dir(&self) -> &Path {
+        &self.work_dir
+    }
+
     pub fn check_state(&self) -> Result<()> {
         let state = self.repo.state();
         if matches!(state, Some(gix::state::InProgress::Merge)) {
