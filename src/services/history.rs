@@ -211,11 +211,11 @@ impl HistoryService {
 
         // Sort type distribution by count descending
         let mut type_distribution: Vec<(String, usize)> = type_counts.into_iter().collect();
-        type_distribution.sort_by(|a, b| b.1.cmp(&a.1));
+        type_distribution.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
         // Sort scope patterns by count descending, take top 10
         let mut scope_patterns: Vec<(String, usize)> = scope_counts.into_iter().collect();
-        scope_patterns.sort_by(|a, b| b.1.cmp(&a.1));
+        scope_patterns.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         scope_patterns.truncate(10);
 
         HistoryContext {
