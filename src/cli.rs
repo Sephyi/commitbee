@@ -45,6 +45,14 @@ pub struct Cli {
     #[arg(long)]
     pub no_scope: bool,
 
+    /// Copy generated message to clipboard instead of committing
+    #[arg(long)]
+    pub clipboard: bool,
+
+    /// Exclude files matching glob pattern (repeatable)
+    #[arg(long = "exclude", value_name = "GLOB")]
+    pub exclude: Vec<String>,
+
     /// Generate commit message in specified language (e.g., de, ja, fr)
     #[arg(long)]
     pub locale: Option<String>,

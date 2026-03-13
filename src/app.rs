@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use console::style;
 use dialoguer::Confirm;
+use globset::{Glob, GlobSetBuilder};
 use tokio::signal;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -89,6 +90,9 @@ impl App {
             changes.stats.insertions,
             changes.stats.deletions
         ));
+
+        // Step 1.5: Exclude files matching glob patterns
+        let changes = self.apply_exclude_patterns(changes, &progress)?;
 
         // Step 2: Check for safety issues
         if safety::check_for_conflicts(&changes) {
@@ -338,7 +342,14 @@ impl App {
             self.select_candidate(&candidates)?
         };
 
-        // Step 7: Confirm and commit
+        // Step 7: Clipboard / dry-run / confirm and commit
+        if self.cli.clipboard {
+            Self::copy_to_clipboard(&message)?;
+            eprintln!("{} Copied to clipboard!", style("✓").green().bold());
+            println!("{}", message);
+            return Ok(());
+        }
+
         if self.cli.dry_run {
             println!("{}", message);
             return Ok(());
@@ -401,6 +412,12 @@ impl App {
                     "Learn from history: {} (sample: {})",
                     self.config.learn_from_history, self.config.history_sample_size
                 );
+                if !self.config.exclude_patterns.is_empty() {
+                    println!(
+                        "Exclude patterns: {}",
+                        self.config.exclude_patterns.join(", ")
+                    );
+                }
                 println!();
                 println!("[format]");
                 println!("  include_body: {}", self.config.format.include_body);
@@ -1263,6 +1280,108 @@ fi
             ));
         }
         parts.join("\n")
+    }
+
+    // ─── Exclude Helpers ───
+
+    /// Filter staged changes by removing files matching exclude glob patterns.
+    /// Returns the filtered changes. Excluded files are listed in output.
+    fn apply_exclude_patterns(
+        &self,
+        mut changes: StagedChanges,
+        progress: &Progress,
+    ) -> Result<StagedChanges> {
+        if self.config.exclude_patterns.is_empty() {
+            return Ok(changes);
+        }
+
+        let mut builder = GlobSetBuilder::new();
+        for pattern in &self.config.exclude_patterns {
+            let glob = Glob::new(pattern).map_err(|e| {
+                Error::Config(format!("Invalid exclude pattern '{}': {}", pattern, e))
+            })?;
+            builder.add(glob);
+        }
+        let glob_set = builder
+            .build()
+            .map_err(|e| Error::Config(format!("Failed to build exclude patterns: {}", e)))?;
+
+        let original_count = changes.files.len();
+        let mut excluded: Vec<PathBuf> = Vec::new();
+
+        changes.files.retain(|f| {
+            if glob_set.is_match(&f.path) {
+                excluded.push(f.path.clone());
+                false
+            } else {
+                true
+            }
+        });
+
+        if !excluded.is_empty() {
+            // Recalculate stats from remaining files
+            changes.stats.files_changed = changes.files.len();
+            changes.stats.insertions = changes.files.iter().map(|f| f.additions).sum();
+            changes.stats.deletions = changes.files.iter().map(|f| f.deletions).sum();
+
+            progress.info(&format!(
+                "Excluded {}/{} files matching patterns:",
+                excluded.len(),
+                original_count,
+            ));
+            for path in &excluded {
+                debug!(path = %path.display(), "excluded by pattern");
+            }
+        }
+
+        if changes.files.is_empty() {
+            return Err(Error::NoStagedChanges);
+        }
+
+        Ok(changes)
+    }
+
+    // ─── Clipboard Helpers ───
+
+    /// Copy text to the system clipboard using platform-specific commands.
+    fn copy_to_clipboard(text: &str) -> Result<()> {
+        let (cmd, args): (&str, &[&str]) = if cfg!(target_os = "macos") {
+            ("pbcopy", &[])
+        } else if cfg!(target_os = "windows") {
+            ("clip", &[])
+        } else {
+            // Linux: try xclip first, fall back to xsel
+            ("xclip", &["-selection", "clipboard"])
+        };
+
+        let mut child = std::process::Command::new(cmd)
+            .args(args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| {
+                Error::Config(format!(
+                    "Failed to run clipboard command '{}': {}. Install it or use --dry-run instead.",
+                    cmd, e
+                ))
+            })?;
+
+        if let Some(ref mut stdin) = child.stdin {
+            use std::io::Write;
+            stdin.write_all(text.as_bytes())?;
+        }
+
+        let status = child.wait()?;
+        if !status.success() {
+            return Err(Error::Config(format!(
+                "Clipboard command '{}' failed with exit code {}",
+                cmd,
+                status.code().unwrap_or(-1)
+            )));
+        }
+
+        Ok(())
     }
 
     // ─── Security Helpers ───

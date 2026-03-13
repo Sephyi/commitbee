@@ -143,6 +143,11 @@ pub struct Config {
     #[serde(default = "default_history_sample_size")]
     pub history_sample_size: usize,
 
+    /// Glob patterns for files to exclude from analysis and diff context
+    /// Excluded files are listed in output but not sent to the LLM.
+    #[serde(default)]
+    pub exclude_patterns: Vec<String>,
+
     /// Path to custom system prompt file (overrides built-in SYSTEM_PROMPT)
     #[serde(default)]
     pub system_prompt_path: Option<PathBuf>,
@@ -210,6 +215,7 @@ impl Default for Config {
             locale: None,
             learn_from_history: false,
             history_sample_size: default_history_sample_size(),
+            exclude_patterns: Vec::new(),
             system_prompt_path: None,
             template_path: None,
             format: CommitFormat::default(),
@@ -239,6 +245,7 @@ impl std::fmt::Debug for Config {
             .field("locale", &self.locale)
             .field("learn_from_history", &self.learn_from_history)
             .field("history_sample_size", &self.history_sample_size)
+            .field("exclude_patterns", &self.exclude_patterns)
             .field("system_prompt_path", &self.system_prompt_path)
             .field("template_path", &self.template_path)
             .field("format", &self.format)
@@ -354,6 +361,9 @@ impl Config {
         }
         if let Some(ref l) = cli.locale {
             self.locale = Some(l.clone());
+        }
+        if !cli.exclude.is_empty() {
+            self.exclude_patterns.extend(cli.exclude.iter().cloned());
         }
         Ok(())
     }
@@ -503,6 +513,10 @@ max_file_lines = 100
 
 # Number of recent commits to sample for style learning (default: 50)
 # history_sample_size = 50
+
+# Exclude files matching glob patterns from analysis and diff context
+# Excluded files are listed in output but not sent to the LLM.
+# exclude_patterns = ["*.lock", "**/*.generated.*"]
 
 # Custom system prompt file (overrides built-in prompt)
 # system_prompt_path = "/path/to/system_prompt.txt"
