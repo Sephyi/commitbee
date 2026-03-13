@@ -67,9 +67,9 @@ ollama_host = "http://localhost:11434"
 max_diff_lines = 500
 max_file_lines = 100
 max_context_chars = 24000
-temperature = 0.7
+temperature = 0.3
 num_predict = 256
-timeout_secs = 30
+timeout_secs = 300
 think = false
 rename_threshold = 70
 learn_from_history = false
@@ -140,7 +140,7 @@ src/
 - **PRD & Roadmap**: `PRD.md`
 - **Conventional Commits spec anchoring**: `.claude/plans/PLAN_CONVENTIONAL_COMMITS_SPEC.md`
 - **v0.3.0 enhancement plan**: `.claude/plans/PLAN_V030_ENHANCEMENTS.md`
-- **Hunk-level splitting discussion**: `DISCUSSION_HUNK_LEVEL_SPLITTING.md`
+- **Hunk-level splitting discussion**: [GitHub Discussion #2](https://github.com/Sephyi/commitbee/discussions/2)
 
 ## Project Skills
 
@@ -190,6 +190,9 @@ cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
 cargo test --test commit_type # CommitType tests
 cargo test --test integration # LLM provider integration tests (wiremock)
+cargo test --test languages  # Language-specific tree-sitter tests
+cargo test --test history    # Commit history style learning tests
+cargo test --test template   # Custom prompt template tests
 cargo test -- --nocapture     # Show println output
 ```
 
@@ -286,7 +289,7 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 
 ### Known Issues
 
-- **Non-atomic split commits**: The split flow uses `unstage_all → stage_files → commit` per group with no rollback. If an intermediate commit fails, earlier commits remain. Documented via TOCTOU comment in `app.rs`. Future improvement: index snapshot with full rollback (see `DISCUSSION_HUNK_LEVEL_SPLITTING.md`).
+- **Non-atomic split commits**: The split flow uses `unstage_all → stage_files → commit` per group with no rollback. If an intermediate commit fails, earlier commits remain. Documented via TOCTOU comment in `app.rs`. Future improvement: index snapshot with full rollback (see [GitHub Discussion #2](https://github.com/Sephyi/commitbee/discussions/2)).
 - **No streaming during split generation**: When commit splitting generates per-group messages, LLM output is not streamed to the terminal (tokens are consumed silently). Single-commit generation streams normally. Low priority — split generation is fast since each sub-prompt is smaller.
 - **Thinking model output**: Models with thinking enabled prepend `<think>...</think>` blocks before their JSON response. The sanitizer strips both `<think>` and `<thought>` blocks (closed and unclosed) during parsing. The `think` config option (default: `false`) controls whether Ollama's thinking separation is used. The default model `qwen3.5:4b` does not use thinking mode and works well with the default `num_predict: 256`.
 - **No think-then-compress**: Explicit `<thought>` prompting is not used — small models (<10B) exhaust their token budget on analysis instead of JSON output. The pre-computed EVIDENCE/CONSTRAINTS/SYMBOLS sections serve this role. Revisit for 70B+/cloud APIs.
