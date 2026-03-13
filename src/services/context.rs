@@ -323,13 +323,25 @@ impl ContextBuilder {
             .iter()
             .filter(|f| f.status == ChangeStatus::Deleted)
             .count();
+        let renamed = changes
+            .files
+            .iter()
+            .filter(|f| f.status == ChangeStatus::Renamed)
+            .count();
+
+        let mut parts = vec![
+            format!("{} added", added),
+            format!("{} modified", modified),
+            format!("{} deleted", deleted),
+        ];
+        if renamed > 0 {
+            parts.push(format!("{} renamed", renamed));
+        }
 
         format!(
-            "{} files ({} added, {} modified, {} deleted) | +{} -{}",
+            "{} files ({}) | +{} -{}",
             changes.files.len(),
-            added,
-            modified,
-            deleted,
+            parts.join(", "),
             changes.stats.insertions,
             changes.stats.deletions
         )
@@ -343,19 +355,39 @@ impl ContextBuilder {
                 continue;
             }
 
-            let status = match file.status {
-                ChangeStatus::Added => "[+]",
-                ChangeStatus::Modified => "[M]",
-                ChangeStatus::Deleted => "[-]",
-            };
-
-            output.push_str(&format!(
-                "{} {} (+{} -{})\n",
-                status,
-                file.path.display(),
-                file.additions,
-                file.deletions
-            ));
+            match file.status {
+                ChangeStatus::Renamed => {
+                    let old = file
+                        .old_path
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| "?".into());
+                    let sim = file.rename_similarity.unwrap_or(0);
+                    output.push_str(&format!(
+                        "[R] {} -> {} ({}% similar, +{} -{})\n",
+                        old,
+                        file.path.display(),
+                        sim,
+                        file.additions,
+                        file.deletions
+                    ));
+                }
+                _ => {
+                    let status = match file.status {
+                        ChangeStatus::Added => "[+]",
+                        ChangeStatus::Modified => "[M]",
+                        ChangeStatus::Deleted => "[-]",
+                        ChangeStatus::Renamed => unreachable!(),
+                    };
+                    output.push_str(&format!(
+                        "{} {} (+{} -{})\n",
+                        status,
+                        file.path.display(),
+                        file.additions,
+                        file.deletions
+                    ));
+                }
+            }
         }
 
         output

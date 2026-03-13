@@ -74,7 +74,9 @@ impl App {
         self.print_status("Analyzing staged changes...");
 
         let git = GitService::discover()?;
-        let (changes, full_diff) = git.get_staged_changes(self.config.max_file_lines).await?;
+        let (changes, full_diff) = git
+            .get_staged_changes(self.config.max_file_lines, self.config.rename_threshold)
+            .await?;
 
         self.print_info(&format!(
             "{} files with changes detected (+{} -{})",
@@ -345,6 +347,7 @@ impl App {
                 println!("Temperature: {}", self.config.temperature);
                 println!("Max tokens: {}", self.config.num_predict);
                 println!("Think: {}", self.config.think);
+                println!("Rename threshold: {}%", self.config.rename_threshold);
                 println!();
                 println!("[format]");
                 println!("  include_body: {}", self.config.format.include_body);
@@ -692,6 +695,7 @@ impl App {
                         ChangeStatus::Added => "[+]",
                         ChangeStatus::Modified => "[M]",
                         ChangeStatus::Deleted => "[-]",
+                        ChangeStatus::Renamed => "[R]",
                     };
                     eprintln!(
                         "    {} {} (+{} -{})",

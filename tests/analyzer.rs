@@ -20,6 +20,8 @@ fn make_file_change(path: &str, diff: &str, additions: usize, deletions: usize) 
         deletions,
         category: FileCategory::from_path(&PathBuf::from(path)),
         is_binary: false,
+        old_path: None,
+        rename_similarity: None,
     }
 }
 

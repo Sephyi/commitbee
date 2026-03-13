@@ -11,6 +11,7 @@ pub enum ChangeStatus {
     Added,
     Modified,
     Deleted,
+    Renamed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,6 +185,10 @@ pub struct FileChange {
     pub deletions: usize,
     pub category: FileCategory,
     pub is_binary: bool,
+    /// Original path before rename (only set when status is Renamed)
+    pub old_path: Option<PathBuf>,
+    /// Similarity percentage for renames (0-100)
+    pub rename_similarity: Option<u8>,
 }
 
 #[derive(Debug, Default)]

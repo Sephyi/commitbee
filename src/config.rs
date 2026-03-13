@@ -114,6 +114,11 @@ pub struct Config {
     #[serde(default)]
     pub anthropic_base_url: Option<String>,
 
+    /// Rename detection similarity threshold (0-100, default 70)
+    /// Set to 0 to disable rename detection.
+    #[serde(default = "default_rename_threshold")]
+    pub rename_threshold: u8,
+
     /// Commit message format options
     #[serde(default)]
     pub format: CommitFormat,
@@ -144,6 +149,9 @@ fn default_temperature() -> f32 {
 fn default_num_predict() -> u32 {
     256
 }
+fn default_rename_threshold() -> u8 {
+    70
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -161,6 +169,7 @@ impl Default for Config {
             think: false,
             openai_base_url: None,
             anthropic_base_url: None,
+            rename_threshold: default_rename_threshold(),
             format: CommitFormat::default(),
         }
     }
@@ -182,6 +191,7 @@ impl std::fmt::Debug for Config {
             .field("think", &self.think)
             .field("openai_base_url", &self.openai_base_url)
             .field("anthropic_base_url", &self.anthropic_base_url)
+            .field("rename_threshold", &self.rename_threshold)
             .field("format", &self.format)
             .finish()
     }
@@ -340,6 +350,13 @@ impl Config {
             )));
         }
 
+        if self.rename_threshold > 100 {
+            return Err(Error::Config(format!(
+                "rename_threshold must be 0–100, got {}",
+                self.rename_threshold
+            )));
+        }
+
         if self.ollama_host.is_empty() {
             return Err(Error::Config("ollama_host cannot be empty".into()));
         }
@@ -412,6 +429,10 @@ max_file_lines = 100
 # Maximum context characters for LLM prompt (~4 chars per token)
 # Increase for larger models (e.g., 48000 for 16K context)
 # max_context_chars = 24000
+
+# Rename detection similarity threshold (0-100, default 70)
+# Set to 0 to disable rename detection
+# rename_threshold = 70
 
 # Commit message format options
 [format]

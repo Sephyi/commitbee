@@ -60,19 +60,30 @@ impl GitService {
     pub async fn get_staged_changes(
         &self,
         max_file_lines: usize,
+        rename_threshold: u8,
     ) -> Result<(StagedChanges, String)> {
         self.check_state()?;
 
+        let use_renames = rename_threshold > 0;
+        let rename_arg = format!("--find-renames={}%", rename_threshold);
+
         // Two calls total: name-status (NUL delimited) + unified diff
+        let rename_flag: &str = if use_renames {
+            &rename_arg
+        } else {
+            "--no-renames"
+        };
+        let status_args = ["diff", "-z", "--cached", "--name-status", rename_flag];
+        let diff_args = [
+            "diff",
+            "--cached",
+            "--no-ext-diff",
+            "--unified=3",
+            rename_flag,
+        ];
         let (status_output, diff_output) = tokio::try_join!(
-            self.run_git(&["diff", "-z", "--cached", "--name-status", "--no-renames"]),
-            self.run_git(&[
-                "diff",
-                "--cached",
-                "--no-ext-diff",
-                "--unified=3",
-                "--no-renames"
-            ]),
+            self.run_git(&status_args),
+            self.run_git(&diff_args),
         )?;
 
         let file_diffs = Self::split_unified_diff(&diff_output);
@@ -83,25 +94,44 @@ impl GitService {
         let mut parts = status_output.split('\0').filter(|s| !s.is_empty());
 
         while let Some(status_code) = parts.next() {
-            let path_str = match parts.next() {
-                Some(p) => p,
-                None => break, // Should not happen with well-formed git output
+            // Parse status: A, M, D are simple; R<NNN> means rename with similarity
+            let (status, old_path, rename_similarity) = if let Some(sim_str) =
+                status_code.strip_prefix('R')
+            {
+                // Rename: R<NNN>\0<old_path>\0<new_path>
+                let similarity = sim_str.parse::<u8>().unwrap_or(0);
+                let old = match parts.next() {
+                    Some(p) => p,
+                    None => break,
+                };
+                (
+                    ChangeStatus::Renamed,
+                    Some(PathBuf::from(old)),
+                    Some(similarity),
+                )
+            } else {
+                let s = match status_code {
+                    "A" => ChangeStatus::Added,
+                    "M" => ChangeStatus::Modified,
+                    "D" => ChangeStatus::Deleted,
+                    _ => {
+                        // Skip unknown status codes; consume path to stay aligned
+                        let _ = parts.next();
+                        continue;
+                    }
+                };
+                (s, None, None)
             };
 
-            let status = match status_code {
-                "A" => ChangeStatus::Added,
-                "M" => ChangeStatus::Modified,
-                "D" => ChangeStatus::Deleted,
-                _ => continue,
+            let path_str = match parts.next() {
+                Some(p) => p,
+                None => break,
             };
 
             let file_path = PathBuf::from(path_str);
             let category = FileCategory::from_path(&file_path);
             let is_binary = Self::is_binary_path(&file_path);
 
-            // For lookups in file_diffs, we need the string key.
-            // Note: split_unified_diff currently uses paths from "diff --git a/... b/..." headers which are usually standard strings.
-            // Complex unicode paths might mismatch if git output encoding differs, but -z guarantees strict bytes for status.
             let diff_key = file_path.to_string_lossy();
 
             // Count stats from full diff BEFORE truncation to get accurate numbers
@@ -127,6 +157,8 @@ impl GitService {
                 deletions,
                 category,
                 is_binary,
+                old_path,
+                rename_similarity,
             });
 
             stats.files_changed += 1;

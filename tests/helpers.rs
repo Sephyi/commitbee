@@ -24,6 +24,8 @@ pub fn make_file_change(
         deletions,
         category: FileCategory::from_path(&PathBuf::from(path)),
         is_binary: false,
+        old_path: None,
+        rename_similarity: None,
     }
 }
 
