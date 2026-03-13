@@ -70,11 +70,16 @@ temperature = 0.7
 num_predict = 256
 timeout_secs = 30
 think = false
+rename_threshold = 70
 
 [format]
 include_body = true
 include_scope = true
 lowercase_subject = true
+
+[safety]
+# custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]
+# disabled_secret_patterns = ["Generic Secret (unquoted)"]
 ```
 
 ## Environment Variables
@@ -109,9 +114,10 @@ src/
     ├── git.rs           # GitService (gix + git CLI, concurrent content fetching)
     ├── analyzer.rs      # AnalyzerService (tree-sitter, parallel via rayon)
     ├── context.rs       # ContextBuilder (token budget)
-    ├── safety.rs        # Secret scanning, conflict detection
+    ├── safety.rs        # Secret scanning (25 patterns), conflict detection
     ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
     ├── splitter.rs      # CommitSplitter (multi-commit detection)
+    ├── progress.rs      # Progress indicators (indicatif spinners, TTY-aware)
     └── llm/
         ├── mod.rs       # LlmProvider trait + enum dispatch + shared SYSTEM_PROMPT
         ├── ollama.rs    # OllamaProvider (streaming NDJSON)
@@ -168,7 +174,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (188 tests)
+cargo test                    # All tests (202 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -278,4 +284,4 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 
 ### Documentation Sync
 
-Keep README.md test count in sync (currently 188).
+Keep README.md test count in sync (currently 202).

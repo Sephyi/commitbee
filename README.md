@@ -86,7 +86,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 ### And there's more
 
 - **🏠 Local-first** — Ollama by default. Your code never leaves your machine. No API keys needed.
-- **🔒 Secret scanning** — Catches API keys, private keys, and connection strings before anything reaches the LLM.
+- **🔒 Secret scanning** — 25 built-in patterns across 13 categories (cloud keys, AI/ML tokens, payment, database, crypto). Add custom patterns or disable built-ins via config.
 - **⚡ Streaming** — Real-time token display from all 3 providers (Ollama, OpenAI, Anthropic) with Ctrl+C cancellation.
 - **📊 Token budget** — Smart truncation that prioritizes the most important files within ~6K tokens.
 - **🎯 Multi-candidate** — Generate up to 5 messages and pick the best one interactively.
@@ -96,7 +96,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 - **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
 - **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
 - **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
-- **🧪 182 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
+- **🧪 202 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -193,26 +193,44 @@ commitbee [OPTIONS] [COMMAND]
 
 ## 🔒 Security
 
-CommitBee scans all content before it's sent to any LLM provider:
+CommitBee scans all content before it's sent to any LLM provider with **25 built-in patterns** across 13 categories:
 
-- 🔑 **API key detection** — AWS keys, OpenAI keys, generic secrets
-- 🔐 **Private key detection** — PEM-encoded private keys
-- 🔗 **Connection string detection** — Database URLs with credentials
+- ☁️ **Cloud providers** — AWS access/secret keys, GCP service accounts & API keys, Azure storage keys
+- 🤖 **AI/ML** — OpenAI, Anthropic, HuggingFace tokens
+- 🔧 **Source control** — GitHub (PAT, fine-grained, OAuth), GitLab tokens
+- 💬 **Communication** — Slack tokens & webhooks, Discord webhooks
+- 💳 **Payment & SaaS** — Stripe, Twilio, SendGrid, Mailgun keys
+- 🗄️ **Database** — MongoDB, PostgreSQL, MySQL, Redis, AMQP connection strings
+- 🔐 **Cryptographic** — PEM private keys, JWT tokens
+- 🔑 **Generic** — API key assignments, quoted/unquoted secrets
 - ⚠️ **Merge conflict detection** — Prevents committing unresolved conflicts
+
+Add custom patterns or disable built-ins in your config:
+
+```toml
+custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]
+disabled_secret_patterns = ["Generic Secret (unquoted)"]
+```
 
 The default provider (Ollama) runs entirely on your machine. No data leaves your network unless you explicitly configure a cloud provider.
 
 ## 🧪 Testing
 
 ```bash
-cargo test   # 182 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
+cargo test   # 202 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
 See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
 ## 🗺️ Changelog
 
-### 🔬 `v0.3.1` — Trust, but Verify (current)
+### 🔎 `v0.4.0` — See Everything (current)
+
+- **Rename detection** — Detects file renames with similarity percentage via `git diff --find-renames`, displayed as `old → new (N% similar)` in prompts and split suggestions. Configurable threshold (default 70%, set to 0 to disable).
+- **Expanded secret scanning** — 25 built-in patterns across 13 categories (cloud providers, AI/ML, source control, communication, payment, database, cryptographic, generic). Pluggable engine: add custom regex patterns or disable built-ins by name via config.
+- **Progress indicators** — Contextual `indicatif` spinners during pipeline phases (analyzing, scanning, generating). Auto-suppressed in non-TTY environments (git hooks, pipes).
+
+### 🔬 `v0.3.1` — Trust, but Verify
 
 - **Multi-pass corrective retry** — Validator checks LLM output against 7 rules and retries up to 3 times with targeted correction instructions
 - **Subject length enforcement** — Rejects subjects exceeding 72-char first line with a clear error instead of silent truncation

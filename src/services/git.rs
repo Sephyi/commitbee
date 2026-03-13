@@ -81,10 +81,8 @@ impl GitService {
             "--unified=3",
             rename_flag,
         ];
-        let (status_output, diff_output) = tokio::try_join!(
-            self.run_git(&status_args),
-            self.run_git(&diff_args),
-        )?;
+        let (status_output, diff_output) =
+            tokio::try_join!(self.run_git(&status_args), self.run_git(&diff_args),)?;
 
         let file_diffs = Self::split_unified_diff(&diff_output);
 
@@ -95,33 +93,32 @@ impl GitService {
 
         while let Some(status_code) = parts.next() {
             // Parse status: A, M, D are simple; R<NNN> means rename with similarity
-            let (status, old_path, rename_similarity) = if let Some(sim_str) =
-                status_code.strip_prefix('R')
-            {
-                // Rename: R<NNN>\0<old_path>\0<new_path>
-                let similarity = sim_str.parse::<u8>().unwrap_or(0);
-                let old = match parts.next() {
-                    Some(p) => p,
-                    None => break,
+            let (status, old_path, rename_similarity) =
+                if let Some(sim_str) = status_code.strip_prefix('R') {
+                    // Rename: R<NNN>\0<old_path>\0<new_path>
+                    let similarity = sim_str.parse::<u8>().unwrap_or(0);
+                    let old = match parts.next() {
+                        Some(p) => p,
+                        None => break,
+                    };
+                    (
+                        ChangeStatus::Renamed,
+                        Some(PathBuf::from(old)),
+                        Some(similarity),
+                    )
+                } else {
+                    let s = match status_code {
+                        "A" => ChangeStatus::Added,
+                        "M" => ChangeStatus::Modified,
+                        "D" => ChangeStatus::Deleted,
+                        _ => {
+                            // Skip unknown status codes; consume path to stay aligned
+                            let _ = parts.next();
+                            continue;
+                        }
+                    };
+                    (s, None, None)
                 };
-                (
-                    ChangeStatus::Renamed,
-                    Some(PathBuf::from(old)),
-                    Some(similarity),
-                )
-            } else {
-                let s = match status_code {
-                    "A" => ChangeStatus::Added,
-                    "M" => ChangeStatus::Modified,
-                    "D" => ChangeStatus::Deleted,
-                    _ => {
-                        // Skip unknown status codes; consume path to stay aligned
-                        let _ = parts.next();
-                        continue;
-                    }
-                };
-                (s, None, None)
-            };
 
             let path_str = match parts.next() {
                 Some(p) => p,

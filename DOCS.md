@@ -169,6 +169,16 @@ num_predict = 256
 # Requires higher num_predict (8192+) to accommodate thinking tokens.
 think = false
 
+# Rename detection similarity threshold (0-100, default 70)
+# Set to 0 to disable rename detection
+rename_threshold = 70
+
+# Custom secret patterns (regex). Added to the 25 built-in patterns.
+# custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]
+
+# Disable built-in secret patterns by name (case-insensitive).
+# disabled_secret_patterns = ["Generic Secret (unquoted)"]
+
 # Commit message format options
 [format]
 # Include body/description in commit message
@@ -427,16 +437,28 @@ If the sanitizer can't produce a valid commit message, you get a clear error exp
 
 ### Secret Scanning
 
-Before anything is sent to an LLM, CommitBee scans all staged content for:
+Before anything is sent to an LLM, CommitBee scans all staged content with **25 built-in patterns** across 13 categories:
 
-| Pattern | Examples |
+| Category | Patterns |
 | --- | --- |
-| AWS access keys | `AKIA...` |
-| OpenAI API keys | `sk-...` (48 chars) |
-| Anthropic API keys | `sk-ant-api...` |
-| Generic API keys | `api_key = "..."`, `API_KEY=...` |
-| Private keys | `-----BEGIN RSA PRIVATE KEY-----` |
-| Connection strings | `postgres://user:pass@host/db` |
+| Cloud Providers | AWS access key, AWS secret key, GCP service account, GCP API key, Azure storage key |
+| AI/ML | OpenAI key, Anthropic key, HuggingFace token |
+| Source Control | GitHub token, GitHub fine-grained token, GitLab token |
+| Communication | Slack token, Slack webhook, Discord webhook |
+| Payment & SaaS | Stripe key, Twilio key, SendGrid key, Mailgun key |
+| Database | Connection strings (MongoDB, PostgreSQL, MySQL, Redis, AMQP) |
+| Cryptographic | Private keys (PEM), JWT tokens |
+| Generic | API key assignments, quoted secrets, unquoted secrets |
+
+You can extend or customize the pattern set via config:
+
+```toml
+# Add custom regex patterns
+custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]
+
+# Disable built-in patterns by name (case-insensitive)
+disabled_secret_patterns = ["Generic Secret (unquoted)"]
+```
 
 If secrets are found:
 
@@ -603,9 +625,10 @@ src/
     ├── git.rs           # GitService — gix for discovery, git CLI for diffs
     ├── analyzer.rs      # AnalyzerService — tree-sitter parsing via rayon
     ├── context.rs       # ContextBuilder — evidence flags, token budget
-    ├── safety.rs        # Secret scanning, conflict detection
+    ├── safety.rs        # Secret scanning (25 patterns), conflict detection
     ├── sanitizer.rs     # CommitSanitizer + CommitValidator
     ├── splitter.rs      # CommitSplitter — diff-shape + Jaccard clustering
+    ├── progress.rs      # Progress indicators (indicatif spinners, TTY-aware)
     └── llm/
         ├── mod.rs       # LlmBackend enum dispatch, SYSTEM_PROMPT
         ├── ollama.rs    # OllamaProvider — streaming NDJSON
@@ -639,7 +662,7 @@ No panics in user-facing code paths. The sanitizer and validator are tested with
 
 ### Testing Strategy
 
-CommitBee has 182 tests across multiple strategies:
+CommitBee has 202 tests across multiple strategies:
 
 | Strategy | What It Covers |
 | --- | --- |
@@ -652,7 +675,7 @@ CommitBee has 182 tests across multiple strategies:
 Run them:
 
 ```bash
-cargo test                    # All 182 tests
+cargo test                    # All 202 tests
 cargo test --test sanitizer   # Just sanitizer tests
 cargo test --test integration # LLM provider mocks
 COMMITBEE_LOG=debug cargo test -- --nocapture  # With logging
