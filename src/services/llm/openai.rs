@@ -218,6 +218,22 @@ impl OpenAiProvider {
             }
         }
 
+        // Handle any remaining content in buffer after stream ends
+        if !line_buffer.is_empty() {
+            let line = line_buffer.trim();
+            if !line.is_empty()
+                && line != "data: [DONE]"
+                && let Some(data) = line.strip_prefix("data: ")
+                && let Ok(chunk) = serde_json::from_str::<ChatChunk>(data)
+            {
+                for choice in &chunk.choices {
+                    if let Some(ref content) = choice.delta.content {
+                        full_response.push_str(content);
+                    }
+                }
+            }
+        }
+
         Ok(full_response.trim().to_string())
     }
 

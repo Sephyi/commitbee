@@ -206,6 +206,21 @@ impl AnthropicProvider {
             }
         }
 
+        // Handle any remaining content in buffer after stream ends
+        if !line_buffer.is_empty() {
+            let line = line_buffer.trim();
+            if !line.is_empty()
+                && !line.starts_with("event:")
+                && let Some(data) = line.strip_prefix("data: ")
+                && let Ok(event) = serde_json::from_str::<StreamEvent>(data)
+                && event.event_type == "content_block_delta"
+                && let Some(delta) = &event.delta
+                && let Some(text) = &delta.text
+            {
+                full_response.push_str(text);
+            }
+        }
+
         Ok(full_response.trim().to_string())
     }
 
