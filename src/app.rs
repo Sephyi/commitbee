@@ -810,7 +810,13 @@ impl App {
 
         // Back up existing hook if present and not ours
         if hook_path.exists() {
-            let content = std::fs::read_to_string(&hook_path).unwrap_or_default();
+            let content = match std::fs::read_to_string(&hook_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    warn!(path = %hook_path.display(), error = %e, "failed to read existing hook");
+                    String::new()
+                }
+            };
             if content.contains("# commitbee hook") {
                 eprintln!(
                     "{} Hook already installed at {}",
@@ -892,7 +898,13 @@ fi
         }
 
         // Verify it's our hook before removing
-        let content = std::fs::read_to_string(&hook_path).unwrap_or_default();
+        let content = match std::fs::read_to_string(&hook_path) {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(path = %hook_path.display(), error = %e, "failed to read hook file");
+                String::new()
+            }
+        };
         if !content.contains("# commitbee hook") {
             return Err(Error::Git(format!(
                 "Hook at {} was not installed by commitbee. Remove manually if intended.",
@@ -934,7 +946,13 @@ fi
             return Ok(());
         }
 
-        let content = std::fs::read_to_string(&hook_path).unwrap_or_default();
+        let content = match std::fs::read_to_string(&hook_path) {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(path = %hook_path.display(), error = %e, "failed to read hook file");
+                String::new()
+            }
+        };
         if content.contains("# commitbee hook") {
             eprintln!(
                 "{} CommitBee hook is installed at {}",
