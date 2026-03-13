@@ -168,7 +168,10 @@ impl OllamaProvider {
 
         if !response.status().is_success() {
             let status = response.status();
-            let body = response.text().await.unwrap_or_default();
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|e| format!("(failed to read body: {e})"));
             return Err(Error::Provider {
                 provider: "ollama".into(),
                 message: format!("HTTP {}: {}", status, body),
