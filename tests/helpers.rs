@@ -19,7 +19,7 @@ pub fn make_file_change(
     FileChange {
         path: PathBuf::from(path),
         status,
-        diff: Arc::new(diff.to_string()),
+        diff: Arc::from(diff),
         additions,
         deletions,
         category: FileCategory::from_path(&PathBuf::from(path)),

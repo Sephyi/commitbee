@@ -122,7 +122,7 @@ impl GitService {
             files.push(FileChange {
                 path: file_path,
                 status,
-                diff: Arc::new(diff),
+                diff: Arc::from(diff),
                 additions,
                 deletions,
                 category,
@@ -194,9 +194,10 @@ impl GitService {
         paths: &[PathBuf],
     ) -> (HashMap<PathBuf, String>, HashMap<PathBuf, String>) {
         let mut set = tokio::task::JoinSet::new();
+        let work_dir: Arc<PathBuf> = Arc::new(self.work_dir.clone());
 
         for path in paths {
-            let work_dir = self.work_dir.clone();
+            let work_dir = Arc::clone(&work_dir);
             let path = path.clone();
             set.spawn(async move {
                 let staged =

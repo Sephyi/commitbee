@@ -15,7 +15,7 @@ fn make_file_change(path: &str, diff: &str, additions: usize, deletions: usize) 
     FileChange {
         path: PathBuf::from(path),
         status: ChangeStatus::Added,
-        diff: Arc::new(diff.to_string()),
+        diff: Arc::from(diff),
         additions,
         deletions,
         category: FileCategory::from_path(&PathBuf::from(path)),
