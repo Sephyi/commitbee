@@ -57,13 +57,13 @@ gix = { version = "0.80", default-features = false, features = ["revision"] }
 
 # Code analysis
 tree-sitter = "0.26"
-tree-sitter-rust = "0.24"
-tree-sitter-typescript = "0.23"
-tree-sitter-python = "0.25"
-tree-sitter-go = "0.25"
-tree-sitter-javascript = "0.25"
 
-# Additional language grammars (optional, enabled by default)
+# Language grammars (all optional, all enabled by default)
+tree-sitter-rust = { version = "0.24", optional = true }
+tree-sitter-typescript = { version = "0.23", optional = true }
+tree-sitter-python = { version = "0.25", optional = true }
+tree-sitter-go = { version = "0.25", optional = true }
+tree-sitter-javascript = { version = "0.25", optional = true }
 tree-sitter-java = { version = "0.23", optional = true }
 tree-sitter-c = { version = "0.23", optional = true }
 tree-sitter-cpp = { version = "0.23", optional = true }
@@ -90,15 +90,26 @@ keyring = { version = "3", optional = true }
 regex = "1.12"
 
 [features]
-default = ["lang-java", "lang-c", "lang-cpp", "lang-ruby", "lang-csharp"]
+default = [
+  "lang-rust", "lang-typescript", "lang-javascript", "lang-python", "lang-go",
+  "lang-java", "lang-c", "lang-cpp", "lang-ruby", "lang-csharp",
+]
 secure-storage = ["keyring"]
 eval = []
+lang-rust = ["tree-sitter-rust"]
+lang-typescript = ["tree-sitter-typescript"]
+lang-javascript = ["tree-sitter-javascript"]
+lang-python = ["tree-sitter-python"]
+lang-go = ["tree-sitter-go"]
 lang-java = ["tree-sitter-java"]
 lang-c = ["tree-sitter-c"]
 lang-cpp = ["tree-sitter-cpp"]
 lang-ruby = ["tree-sitter-ruby"]
 lang-csharp = ["tree-sitter-c-sharp"]
-all-languages = ["lang-java", "lang-c", "lang-cpp", "lang-ruby", "lang-csharp"]
+all-languages = [
+  "lang-rust", "lang-typescript", "lang-javascript", "lang-python", "lang-go",
+  "lang-java", "lang-c", "lang-cpp", "lang-ruby", "lang-csharp",
+]
 
 [profile.release]
 lto = true

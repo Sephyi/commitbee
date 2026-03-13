@@ -15,10 +15,15 @@ use crate::error::Result;
 
 // ─── Embedded query patterns ────────────────────────────────────────────────
 
+#[cfg(feature = "lang-rust")]
 const RUST_QUERY: &str = include_str!("../queries/rust.scm");
+#[cfg(feature = "lang-typescript")]
 const TYPESCRIPT_QUERY: &str = include_str!("../queries/typescript.scm");
+#[cfg(feature = "lang-javascript")]
 const JAVASCRIPT_QUERY: &str = include_str!("../queries/javascript.scm");
+#[cfg(feature = "lang-python")]
 const PYTHON_QUERY: &str = include_str!("../queries/python.scm");
+#[cfg(feature = "lang-go")]
 const GO_QUERY: &str = include_str!("../queries/go.scm");
 
 #[cfg(feature = "lang-java")]
@@ -131,40 +136,35 @@ impl AnalyzerService {
                     .unwrap_or("");
 
                 let config = match ext {
+                    #[cfg(feature = "lang-rust")]
                     "rs" => Some(LanguageConfig {
                         language: tree_sitter_rust::LANGUAGE.into(),
                         query_source: RUST_QUERY,
                         file_ext: "rs",
                     }),
-                    "ts" => Some(LanguageConfig {
+                    #[cfg(feature = "lang-typescript")]
+                    "ts" | "tsx" => Some(LanguageConfig {
                         language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
                         query_source: TYPESCRIPT_QUERY,
                         file_ext: "ts",
                     }),
-                    "tsx" => Some(LanguageConfig {
-                        language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-                        query_source: TYPESCRIPT_QUERY,
-                        file_ext: "tsx",
-                    }),
+                    #[cfg(feature = "lang-python")]
                     "py" => Some(LanguageConfig {
                         language: tree_sitter_python::LANGUAGE.into(),
                         query_source: PYTHON_QUERY,
                         file_ext: "py",
                     }),
+                    #[cfg(feature = "lang-go")]
                     "go" => Some(LanguageConfig {
                         language: tree_sitter_go::LANGUAGE.into(),
                         query_source: GO_QUERY,
                         file_ext: "go",
                     }),
-                    "js" => Some(LanguageConfig {
+                    #[cfg(feature = "lang-javascript")]
+                    "js" | "jsx" => Some(LanguageConfig {
                         language: tree_sitter_javascript::LANGUAGE.into(),
                         query_source: JAVASCRIPT_QUERY,
                         file_ext: "js",
-                    }),
-                    "jsx" => Some(LanguageConfig {
-                        language: tree_sitter_javascript::LANGUAGE.into(),
-                        query_source: JAVASCRIPT_QUERY,
-                        file_ext: "jsx",
                     }),
                     #[cfg(feature = "lang-java")]
                     "java" => Some(LanguageConfig {

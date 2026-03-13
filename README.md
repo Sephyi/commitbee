@@ -25,7 +25,7 @@ Most tools in this space pipe raw `git diff` to an LLM and hope for the best. Co
 
 CommitBee uses tree-sitter to parse both the staged and HEAD versions of every changed file — in parallel across CPU cores. It extracts 10 symbol types (functions, methods, structs, enums, traits, impls, classes, interfaces, constants, type aliases) and maps diff hunks to their spans. The LLM doesn't see "lines 42-58 changed" — it sees "the `validate()` function in `sanitizer.rs` was modified, and a new `retry()` method was added." Symbols are tracked in three states: **added**, **removed**, and **modified-signature**.
 
-Supported languages: **Rust, TypeScript, JavaScript, Python, Go**. Files in other languages still get full diff context — just without symbol extraction.
+Supported languages: **Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, Ruby, C#** — all enabled by default, individually toggleable via Cargo feature flags. Files in other languages still get full diff context — just without symbol extraction.
 
 ### 🧠 It reasons about what changed
 
@@ -96,7 +96,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 - **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
 - **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
 - **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
-- **🧪 202 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
+- **🧪 295 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -217,7 +217,7 @@ The default provider (Ollama) runs entirely on your machine. No data leaves your
 ## 🧪 Testing
 
 ```bash
-cargo test   # 202 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
+cargo test   # 295 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
 See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
@@ -226,9 +226,15 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
 ### 🔎 `v0.4.0` — See Everything (current)
 
+- **10-language tree-sitter support** — Added Java, C, C++, Ruby, and C# to the existing Rust, TypeScript, JavaScript, Python, and Go. All languages are individually feature-gated and enabled by default. Disable any with `--no-default-features` + selective `--features lang-rust,lang-go,...`.
+- **Custom prompt templates** — User-defined templates with `{{type}}`, `{{scope}}`, `{{subject}}`, `{{body}}` variables via `template_path` config.
+- **Multi-language commit messages** — Generate messages in any language with `--locale` flag or `locale` config (e.g., `--locale de` for German).
+- **Commit history style learning** — Learns from recent commit history to match your project's style (`learn_from_history`, `history_sample_size` config).
 - **Rename detection** — Detects file renames with similarity percentage via `git diff --find-renames`, displayed as `old → new (N% similar)` in prompts and split suggestions. Configurable threshold (default 70%, set to 0 to disable).
 - **Expanded secret scanning** — 25 built-in patterns across 13 categories (cloud providers, AI/ML, source control, communication, payment, database, cryptographic, generic). Pluggable engine: add custom regex patterns or disable built-ins by name via config.
 - **Progress indicators** — Contextual `indicatif` spinners during pipeline phases (analyzing, scanning, generating). Auto-suppressed in non-TTY environments (git hooks, pipes).
+- **Evaluation harness** — `cargo test --features eval` for structured LLM output quality benchmarking.
+- **Fuzz testing** — `cargo-fuzz` targets for sanitizer and diff parser robustness.
 
 ### 🔬 `v0.3.1` — Trust, but Verify
 

@@ -2,16 +2,110 @@
 //
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+use commitbee::services::analyzer::DiffHunk;
+
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
 use std::collections::HashMap;
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
 use std::path::PathBuf;
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
 use std::sync::Arc;
 
-use commitbee::domain::{ChangeStatus, FileCategory, FileChange, SymbolKind};
-use commitbee::services::analyzer::{AnalyzerService, DiffHunk};
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
+use commitbee::domain::SymbolKind;
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
+use commitbee::domain::{ChangeStatus, FileCategory, FileChange};
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
+use commitbee::services::analyzer::AnalyzerService;
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+))]
 use tree_sitter::{Language, Query};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
 fn make_file_change(path: &str, diff: &str, additions: usize, deletions: usize) -> FileChange {
     FileChange {
         path: PathBuf::from(path),
@@ -157,6 +251,7 @@ fn intersects_old_boundary() {
 
 // ─── AnalyzerService tests ──────────────────────────────────────────────────
 
+#[cfg(feature = "lang-rust")]
 #[test]
 fn extract_symbols_rust_function() {
     let diff = "@@ -0,0 +1,3 @@\n+pub fn my_function() {\n+    println!(\"hello\");\n+}\n";
@@ -185,6 +280,7 @@ fn extract_symbols_rust_function() {
     assert!(func.is_added, "expected is_added=true for staged content");
 }
 
+#[cfg(feature = "lang-rust")]
 #[test]
 fn extract_symbols_rust_struct() {
     let diff = "@@ -0,0 +1,4 @@\n+pub struct MyConfig {\n+    pub name: String,\n+    pub value: i32,\n+}\n";
@@ -213,6 +309,18 @@ fn extract_symbols_rust_struct() {
     assert!(strct.is_added, "expected is_added=true for staged content");
 }
 
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
 #[test]
 fn extract_symbols_no_grammar() {
     let diff = "@@ -0,0 +1,2 @@\n+some data\n+more data\n";
@@ -234,6 +342,18 @@ fn extract_symbols_no_grammar() {
     );
 }
 
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
 #[test]
 fn extract_symbols_binary_skipped() {
     let diff = "@@ -0,0 +1,3 @@\n+pub fn hidden() {}\n";
@@ -258,6 +378,7 @@ fn extract_symbols_binary_skipped() {
 
 // ─── Query compilation tests ────────────────────────────────────────────────
 
+#[cfg(feature = "lang-rust")]
 #[test]
 fn query_compiles_for_rust() {
     let lang: Language = tree_sitter_rust::LANGUAGE.into();
@@ -270,6 +391,7 @@ fn query_compiles_for_rust() {
     );
 }
 
+#[cfg(feature = "lang-typescript")]
 #[test]
 fn query_compiles_for_typescript() {
     let lang: Language = tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into();
@@ -282,6 +404,7 @@ fn query_compiles_for_typescript() {
     );
 }
 
+#[cfg(feature = "lang-javascript")]
 #[test]
 fn query_compiles_for_javascript() {
     let lang: Language = tree_sitter_javascript::LANGUAGE.into();
@@ -294,6 +417,7 @@ fn query_compiles_for_javascript() {
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn query_compiles_for_python() {
     let lang: Language = tree_sitter_python::LANGUAGE.into();
@@ -306,6 +430,7 @@ fn query_compiles_for_python() {
     );
 }
 
+#[cfg(feature = "lang-go")]
 #[test]
 fn query_compiles_for_go() {
     let lang: Language = tree_sitter_go::LANGUAGE.into();
@@ -316,6 +441,7 @@ fn query_compiles_for_go() {
 
 // ─── Language-specific extraction tests ─────────────────────────────────────
 
+#[cfg(feature = "lang-typescript")]
 #[test]
 fn extract_symbols_typescript_function() {
     let diff =
@@ -339,6 +465,7 @@ fn extract_symbols_typescript_function() {
     assert!(func.is_added, "expected is_added=true for staged content");
 }
 
+#[cfg(feature = "lang-typescript")]
 #[test]
 fn extract_symbols_typescript_class_and_method() {
     let diff =
@@ -366,6 +493,7 @@ fn extract_symbols_typescript_class_and_method() {
     assert_eq!(method.kind, SymbolKind::Method, "expected Method kind");
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn extract_symbols_python_function_and_class() {
     let diff = "@@ -0,0 +1,5 @@\n+def greet():\n+    pass\n+\n+class Greeter:\n+    pass\n";
@@ -396,6 +524,7 @@ fn extract_symbols_python_function_and_class() {
     assert_eq!(cls.kind, SymbolKind::Class, "expected Class kind");
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn extract_symbols_python_private_function() {
     let diff = "@@ -0,0 +1,2 @@\n+def _helper():\n+    pass\n";
@@ -419,6 +548,7 @@ fn extract_symbols_python_private_function() {
     );
 }
 
+#[cfg(feature = "lang-go")]
 #[test]
 fn extract_symbols_go_function() {
     let diff = "@@ -0,0 +1,5 @@\n+package main\n+\n+func Greet() {\n+}\n+\n";
@@ -443,6 +573,7 @@ fn extract_symbols_go_function() {
     );
 }
 
+#[cfg(feature = "lang-go")]
 #[test]
 fn extract_symbols_go_unexported_function() {
     let diff = "@@ -0,0 +1,5 @@\n+package main\n+\n+func greet() {\n+}\n+\n";
@@ -466,6 +597,7 @@ fn extract_symbols_go_unexported_function() {
     );
 }
 
+#[cfg(feature = "lang-javascript")]
 #[test]
 fn extract_symbols_javascript_class() {
     let diff = "@@ -0,0 +1,3 @@\n+class MyComponent {\n+  render() {}\n+}\n";
@@ -492,6 +624,7 @@ fn extract_symbols_javascript_class() {
     assert_eq!(method.kind, SymbolKind::Method, "expected Method kind");
 }
 
+#[cfg(feature = "lang-rust")]
 #[test]
 fn extract_symbols_rust_private_function() {
     let diff = "@@ -0,0 +1,3 @@\n+fn private_helper() {\n+    // internal\n+}\n";
@@ -516,6 +649,7 @@ fn extract_symbols_rust_private_function() {
     );
 }
 
+#[cfg(feature = "lang-rust")]
 #[test]
 fn extract_symbols_rust_enum() {
     let diff = "@@ -0,0 +1,4 @@\n+pub enum Color {\n+    Red,\n+    Blue,\n+}\n";
@@ -537,6 +671,7 @@ fn extract_symbols_rust_enum() {
     assert!(enm.is_public, "expected is_public=true for pub enum");
 }
 
+#[cfg(feature = "lang-rust")]
 #[test]
 fn extract_symbols_rust_trait() {
     let diff = "@@ -0,0 +1,3 @@\n+pub trait Drawable {\n+    fn draw(&self);\n+}\n";
@@ -558,6 +693,7 @@ fn extract_symbols_rust_trait() {
     assert!(trt.is_public, "expected is_public=true for pub trait");
 }
 
+#[cfg(feature = "lang-rust")]
 #[test]
 fn extract_symbols_rust_impl() {
     let diff = "@@ -0,0 +1,5 @@\n+impl MyStruct {\n+    pub fn new() -> Self {\n+        Self\n+    }\n+}\n";

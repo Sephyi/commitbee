@@ -99,7 +99,7 @@ lowercase_subject = true
 
 Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, Ruby, C#
 
-All 10 languages enabled by default. To build with only the core 5, use `--no-default-features`. Individual languages can be toggled via feature flags: `lang-java`, `lang-c`, `lang-cpp`, `lang-ruby`, `lang-csharp`.
+All 10 languages are individually feature-gated (`lang-rust`, `lang-typescript`, `lang-javascript`, `lang-python`, `lang-go`, `lang-java`, `lang-c`, `lang-cpp`, `lang-ruby`, `lang-csharp`) and enabled by default. Build with `--no-default-features --features lang-rust,lang-go` to include only specific languages.
 
 ## File Structure
 

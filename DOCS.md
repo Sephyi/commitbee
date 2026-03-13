@@ -518,17 +518,34 @@ CommitBee detects whether it's running in an interactive terminal. In non-intera
 
 ## 🌳 Supported Languages
 
-CommitBee uses tree-sitter to parse source files and extract semantic symbols. Currently supported:
+CommitBee uses tree-sitter to parse source files and extract semantic symbols. All 10 languages are enabled by default and individually toggleable via Cargo feature flags.
 
-| Language | Parser | What It Extracts |
-| --- | --- | --- |
-| Rust | `tree-sitter-rust` | Functions, structs, enums, impls, traits, methods |
-| TypeScript | `tree-sitter-typescript` | Functions, classes, interfaces, methods, types |
-| JavaScript | `tree-sitter-javascript` | Functions, classes, methods, arrow functions |
-| Python | `tree-sitter-python` | Functions, classes, methods, decorators |
-| Go | `tree-sitter-go` | Functions, types, methods, interfaces |
+| Language | Feature Flag | Parser | What It Extracts |
+| --- | --- | --- | --- |
+| Rust | `lang-rust` | `tree-sitter-rust` | Functions, structs, enums, impls, traits, methods |
+| TypeScript | `lang-typescript` | `tree-sitter-typescript` | Functions, classes, interfaces, methods, types |
+| JavaScript | `lang-javascript` | `tree-sitter-javascript` | Functions, classes, methods, arrow functions |
+| Python | `lang-python` | `tree-sitter-python` | Functions, classes, methods, decorators |
+| Go | `lang-go` | `tree-sitter-go` | Functions, types, methods, interfaces |
+| Java | `lang-java` | `tree-sitter-java` | Classes, methods, constructors, interfaces, enums |
+| C | `lang-c` | `tree-sitter-c` | Functions, structs, enums, typedefs |
+| C++ | `lang-cpp` | `tree-sitter-cpp` | Functions, classes, structs, enums, methods |
+| Ruby | `lang-ruby` | `tree-sitter-ruby` | Classes, modules, methods, singleton methods |
+| C# | `lang-csharp` | `tree-sitter-c-sharp` | Classes, methods, constructors, interfaces, enums |
 
-**Files in unsupported languages still work** — they're included in the diff context, they just don't get semantic symbol extraction. The commit message will still be based on the actual diff content; it just won't know which specific functions or types changed.
+### Custom Language Builds
+
+To build with only the languages you need (reduces binary size):
+
+```bash
+# Only Rust and TypeScript support
+cargo install commitbee --no-default-features --features lang-rust,lang-typescript
+
+# All languages except C++ and C#
+cargo install commitbee --no-default-features --features lang-rust,lang-typescript,lang-javascript,lang-python,lang-go,lang-java,lang-c,lang-ruby
+```
+
+**Files in unsupported or disabled languages still work** — they're included in the diff context, they just don't get semantic symbol extraction. The commit message will still be based on the actual diff content; it just won't know which specific functions or types changed.
 
 ### Symbol Tracking
 
@@ -662,7 +679,7 @@ No panics in user-facing code paths. The sanitizer and validator are tested with
 
 ### Testing Strategy
 
-CommitBee has 202 tests across multiple strategies:
+CommitBee has 295 tests across multiple strategies:
 
 | Strategy | What It Covers |
 | --- | --- |
@@ -675,7 +692,7 @@ CommitBee has 202 tests across multiple strategies:
 Run them:
 
 ```bash
-cargo test                    # All 202 tests
+cargo test                    # All 295 tests
 cargo test --test sanitizer   # Just sanitizer tests
 cargo test --test integration # LLM provider mocks
 COMMITBEE_LOG=debug cargo test -- --nocapture  # With logging
