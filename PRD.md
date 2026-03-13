@@ -6,10 +6,12 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 3.0
-**Date**: 2026-03-08
+**Version**: 3.1
+**Date**: 2026-03-13
 **Status**: Active
 **Author**: Sephyi + Claude
+
+**Revision 3.1**: Deep codebase audit + streaming hardening (2026-03-13) — LLM provider hardening: `Provider::new()` returns `Result`, 1 MB response cap (`MAX_RESPONSE_BYTES`), EOF buffer parsing for all SSE providers, zero-allocation streaming (slice + drain), HTTP error body propagation. Security: full untruncated diff scanning for secrets, `sk-proj-` pattern support. Performance: HashSet symbol dedup, single-pass evidence detection, `String::with_capacity` pre-allocation. Error handling: hardened observability in analyzer and app orchestrator. 188 tests.
 
 **Revision 3.0**: v0.3.1 multi-pass retry + prompt enforcement (2026-03-08) — FR-041 expanded to 7 rules: added Rule 7 (subject length validation with char budget). `validate_and_retry` upgraded from single-shot to multi-pass loop (up to 3 attempts with re-validation after each). Prompt engineering: "HARD LIMIT" phrasing + char budget embedded in JSON template placeholder for stronger small-model compliance. 182 tests.
 
@@ -80,7 +82,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Git hook integration                                           | Universal                     | **Implemented**   |
 | Shell completions                                              | Expected for CLI tools        | **Implemented**   |
 | Multiple message generation (pick from N)                      | Common (aicommits, aicommit2) | **Implemented**   |
-| Unit/integration tests                                         | Non-negotiable for quality    | **169 tests**     |
+| Unit/integration tests                                         | Non-negotiable for quality    | **188 tests**     |
 | Commit splitting (multi-concern detection)                     | No competitor has this        | **Implemented**   |
 | Custom prompt/instruction files                                | Growing (Copilot, aicommit2)  | Missing           |
 
@@ -631,7 +633,7 @@ These are bugs, panics, and missing foundations that must be fixed before any ne
 - **Budget unit**: Characters (fast estimation, no tokenizer dependency). Internal budget is measured in chars, not tokens; the `max_context_chars` config name reflects this.
 - **Truncation priority** (highest to lowest): symbols > file list > diff hunks. When the budget is exceeded, diff hunks are truncated first, then file list entries, then symbols. Symbols are the most information-dense context and are preserved as long as possible.
 - Tree-sitter parse trees dropped after symbol extraction
-- Streaming line buffer bounded (max 1MB)
+- Streaming response buffer bounded (`MAX_RESPONSE_BYTES` = 1 MB, enforced in all providers) ✅
 - Reduce tokio features to minimize binary bloat
 
 ### PR-006: Binary Size
@@ -921,7 +923,7 @@ opt-level = "z"  # or "s" — benchmark both
 
 - FR-001: Fix UTF-8 panics ✅
 - FR-002: Include symbols in prompt (with fallback ladder) ✅
-- FR-003: Unit test suite (178 tests) ✅
+- FR-003: Unit test suite (188 tests) ✅
 - FR-004: Remove unused dependencies ✅
 - FR-005: Fix dead code ✅
 - FR-006: Reduce tokio features ✅
@@ -938,7 +940,7 @@ opt-level = "z"  # or "s" — benchmark both
 - FR-019: Secure API key storage ✅ (feature-gated)
 - FR-020: Async git operations ✅
 - FR-021: Single-pass diff parsing ✅
-- FR-022: Integration test suite ✅ (178 tests)
+- FR-022: Integration test suite ✅ (188 tests)
 - FR-023: Commit splitting ✅
 - FR-039: Config validation & doctor command ✅ (shipped in v0.2.0)
 - TR-005: CI pipeline ✅

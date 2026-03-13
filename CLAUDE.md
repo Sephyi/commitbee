@@ -21,7 +21,7 @@ cargo build --release
 - **Tree-sitter**: Full file parsing with hunk mapping (not just +/- lines)
 - **Parallelism**: rayon for CPU-bound tree-sitter parsing, tokio JoinSet for concurrent git content fetching
 - **LLM**: Ollama primary (qwen3.5:4b), OpenAI/Anthropic secondary
-- **Streaming**: Line-buffered JSON parsing with CancellationToken
+- **Streaming**: Line-buffered JSON parsing with CancellationToken, 1 MB response cap (`MAX_RESPONSE_BYTES`)
 
 ## Key Design Decisions
 
@@ -66,6 +66,15 @@ ollama_host = "http://localhost:11434"
 max_diff_lines = 500
 max_file_lines = 100
 max_context_chars = 24000
+temperature = 0.7
+num_predict = 256
+timeout_secs = 30
+think = false
+
+[format]
+include_body = true
+include_scope = true
+lowercase_subject = true
 ```
 
 ## Environment Variables
@@ -115,8 +124,7 @@ src/
 - **PRD & Roadmap**: `PRD.md`
 - **Conventional Commits spec anchoring**: `.claude/plans/PLAN_CONVENTIONAL_COMMITS_SPEC.md`
 - **v0.3.0 enhancement plan**: `.claude/plans/PLAN_V030_ENHANCEMENTS.md`
-- **Implementation plan (v1, outdated)**: `.claude/plans/PLAN_COMMITBEE_V1.md` — superseded by PRD v2.1
-- **Skills ecosystem design**: `.claude/plans/2026-02-22-skills-ecosystem-design.md`
+- **Hunk-level splitting discussion**: `DISCUSSION_HUNK_LEVEL_SPLITTING.md`
 
 ## Project Skills
 
@@ -160,7 +168,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (182 tests)
+cargo test                    # All tests (188 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -225,13 +233,36 @@ When adding or updating crates:
 4. Run `cargo audit` before and after adding new dependencies
 5. Use `cargo-dep-auditor` agent for full pre-release dependency review
 
+### LLM Provider Conventions
+
+When adding or modifying LLM providers (`src/services/llm/`), every provider must:
+
+1. **`new()` returns `Result<Self>`** — propagate HTTP client build errors, never `unwrap_or_default()`
+2. **Import and check `MAX_RESPONSE_BYTES`** — cap `full_response.len()` inside the streaming loop to prevent unbounded memory growth
+3. **Error body propagation** — use `unwrap_or_else(|e| format!("(failed to read body: {e})"))` on error response body reads, not `unwrap_or_default()`
+4. **EOF buffer parsing** — after the byte stream ends, parse any remaining content in `line_buffer` (SSE streams may deliver the final frame without a trailing newline)
+5. **Zero-allocation streaming** — parse from `&line_buffer[..newline_pos]` slices, then `drain(..=newline_pos)` instead of allocating new Strings per line
+6. **Shared system prompt** — use `super::SYSTEM_PROMPT`, never duplicate prompt text
+7. **CancellationToken** — check in `tokio::select!` loop alongside stream chunks
+
+### Commit Type Conventions
+
+Follow Conventional Commits strictly — the type must reflect what actually happened:
+
+- **`fix`**: Corrects incorrect behavior (a bug existed, now it doesn't)
+- **`feat`**: Adds a new capability or safeguard that didn't exist before (even defensive checks)
+- **`refactor`**: Improves code without changing behavior (better error messages, code quality, documentation)
+- **`perf`**: Measurable performance improvement
+
+Common mistake: calling a new safeguard/check `fix` — if there was no bug, it's `feat`. Improving error message quality without changing control flow is `refactor`, not `fix`.
+
 ### Gotchas
 
 - `gix` API: use `repo.workdir()` not `repo.work_dir()` (deprecated)
 - `CommitType::parse()` not `from_str()` — avoids clippy `should_implement_trait` warning
 - Enum variants used only via `CommitType::ALL` const need `#[allow(dead_code)]`
 - Parallel subagents running `cargo fmt` may create unstaged changes — commit formatting separately
-- Secret pattern `sk-[a-zA-Z0-9]{48}` requires exactly 48 chars after `sk-` in test data
+- Secret patterns: `sk-[a-zA-Z0-9]{48}` (legacy) and `sk-proj-[a-zA-Z0-9\-_]{40,}` (modern) — test data must match the exact format
 - `tokio::process::Command` output needs explicit `std::process::Output` type annotation when using `.ok()?`
 - Tree-sitter is CPU-bound/sync — pre-fetch file content into HashMaps async, then pass `&HashMap<PathBuf, String>` to `extract_symbols()` which uses rayon for parallel parsing
 - `rayon::par_iter()` requires data to be `Sync`; `tree_sitter::Parser` is neither `Send` nor `Sync` — create a new `Parser` per file inside the rayon closure
@@ -239,11 +270,12 @@ When adding or updating crates:
 
 ### Known Issues
 
+- **Non-atomic split commits**: The split flow uses `unstage_all → stage_files → commit` per group with no rollback. If an intermediate commit fails, earlier commits remain. Documented via TOCTOU comment in `app.rs`. Future improvement: index snapshot with full rollback (see `DISCUSSION_HUNK_LEVEL_SPLITTING.md`).
 - **No streaming during split generation**: When commit splitting generates per-group messages, LLM output is not streamed to the terminal (tokens are consumed silently). Single-commit generation streams normally. Low priority — split generation is fast since each sub-prompt is smaller.
 - **Thinking model output**: Models with thinking enabled prepend `<think>...</think>` blocks before their JSON response. The sanitizer strips both `<think>` and `<thought>` blocks (closed and unclosed) during parsing. The `think` config option (default: `false`) controls whether Ollama's thinking separation is used. The default model `qwen3.5:4b` does not use thinking mode and works well with the default `num_predict: 256`.
-- **Think-then-Compress prompting**: Evaluated and removed in v0.3.0. Adding `<thought>` instructions to prompts caused small models (<10B) to spend their token budget on analysis text instead of JSON output. The pre-computed EVIDENCE/CONSTRAINTS/SYMBOLS sections already do the "thinking" for the model. **Future consideration**: revisit for larger models (70B+, cloud APIs) where chain-of-thought genuinely improves output quality — would require bumping `num_predict` to 512+ and careful prompt engineering to keep thinking concise.
-- **Retry improvement plan**: Current retry is single-pass (one correction attempt via `validate_and_retry()`). **Future improvement**: configurable `max_retries` (default 3), prioritized violation ordering — fix critical errors first (e.g., `breaking_change` detection, invalid type), then structural issues, then length shortening last. Per-group retry for split commits. Would require a new config field and loop in `validate_and_retry()`.
+- **No think-then-compress**: Explicit `<thought>` prompting is not used — small models (<10B) exhaust their token budget on analysis instead of JSON output. The pre-computed EVIDENCE/CONSTRAINTS/SYMBOLS sections serve this role. Revisit for 70B+/cloud APIs.
+- **Retry**: `validate_and_retry()` runs up to 3 attempts (`MAX_RETRIES: 3`), logging each violation individually before retry. Future: prioritized violation ordering, per-group retry for split commits.
 
-### Post-Implementation Documentation TODOs
+### Documentation Sync
 
-- **README.md Running Tests**: Kept in sync with test count updates (currently 182).
+Keep README.md test count in sync (currently 188).
