@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
-use super::{MAX_RESPONSE_BYTES, SYSTEM_PROMPT};
+use super::MAX_RESPONSE_BYTES;
 
 pub struct OllamaProvider {
     client: Client,
@@ -127,6 +127,7 @@ impl OllamaProvider {
     pub async fn generate(
         &self,
         prompt: &str,
+        system_prompt: &str,
         token_tx: mpsc::Sender<String>,
         cancel: CancellationToken,
     ) -> Result<String> {
@@ -138,7 +139,7 @@ impl OllamaProvider {
             .json(&GenerateRequest {
                 model: self.model.clone(),
                 prompt: prompt.to_string(),
-                system: SYSTEM_PROMPT.to_string(),
+                system: system_prompt.to_string(),
                 stream: true,
                 think: self.think,
                 options: OllamaOptions {

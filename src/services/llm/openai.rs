@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
-use super::{MAX_RESPONSE_BYTES, SYSTEM_PROMPT};
+use super::MAX_RESPONSE_BYTES;
 
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 
@@ -109,6 +109,7 @@ impl OpenAiProvider {
     pub async fn generate(
         &self,
         prompt: &str,
+        system_prompt: &str,
         token_tx: mpsc::Sender<String>,
         cancel: CancellationToken,
     ) -> Result<String> {
@@ -123,7 +124,7 @@ impl OpenAiProvider {
                 messages: vec![
                     Message {
                         role: "system".into(),
-                        content: SYSTEM_PROMPT.into(),
+                        content: system_prompt.into(),
                     },
                     Message {
                         role: "user".into(),

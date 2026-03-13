@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::error::{Error, Result};
 
-use super::{MAX_RESPONSE_BYTES, SYSTEM_PROMPT};
+use super::MAX_RESPONSE_BYTES;
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com/v1";
 const API_VERSION: &str = "2023-06-01";
@@ -95,6 +95,7 @@ impl AnthropicProvider {
     pub async fn generate(
         &self,
         prompt: &str,
+        system_prompt: &str,
         token_tx: mpsc::Sender<String>,
         cancel: CancellationToken,
     ) -> Result<String> {
@@ -108,7 +109,7 @@ impl AnthropicProvider {
             .header("content-type", "application/json")
             .json(&MessagesRequest {
                 model: self.model.clone(),
-                system: SYSTEM_PROMPT.into(),
+                system: system_prompt.into(),
                 messages: vec![Message {
                     role: "user".into(),
                     content: prompt.to_string(),

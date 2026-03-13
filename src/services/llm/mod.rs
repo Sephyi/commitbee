@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 pub(crate) const MAX_RESPONSE_BYTES: usize = 1_024 * 1_024; // 1 MB
 
 // SYNC: commit type list must match CommitType::ALL in src/domain/commit.rs
-pub(crate) const SYSTEM_PROMPT: &str = r#"You generate Conventional Commit messages from git diffs.
+pub const SYSTEM_PROMPT: &str = r#"You generate Conventional Commit messages from git diffs.
 
 Use exactly one type:
 feat, fix, refactor, chore, docs, test, style, perf, build, ci, revert
@@ -61,13 +61,14 @@ impl LlmBackend {
     pub async fn generate(
         &self,
         prompt: &str,
+        system_prompt: &str,
         token_tx: mpsc::Sender<String>,
         cancel: CancellationToken,
     ) -> Result<String> {
         match self {
-            Self::Ollama(p) => p.generate(prompt, token_tx, cancel).await,
-            Self::OpenAi(p) => p.generate(prompt, token_tx, cancel).await,
-            Self::Anthropic(p) => p.generate(prompt, token_tx, cancel).await,
+            Self::Ollama(p) => p.generate(prompt, system_prompt, token_tx, cancel).await,
+            Self::OpenAi(p) => p.generate(prompt, system_prompt, token_tx, cancel).await,
+            Self::Anthropic(p) => p.generate(prompt, system_prompt, token_tx, cancel).await,
         }
     }
 

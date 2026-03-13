@@ -13,6 +13,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use commitbee::config::{CommitFormat, Config, Provider};
 use commitbee::error::Error;
+use commitbee::services::llm::SYSTEM_PROMPT;
 use commitbee::services::llm::anthropic::AnthropicProvider;
 use commitbee::services::llm::ollama::OllamaProvider;
 use commitbee::services::llm::openai::OpenAiProvider;
@@ -167,7 +168,10 @@ async fn ollama_streaming_response() {
     let (tx, rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
-    let result = provider.generate("test prompt", tx, cancel).await.unwrap();
+    let result = provider
+        .generate("test prompt", SYSTEM_PROMPT, tx, cancel)
+        .await
+        .unwrap();
 
     assert_eq!(result, "feat(scope): add feature");
 
@@ -195,7 +199,9 @@ async fn ollama_server_error() {
     let (tx, _rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
-    let result = provider.generate("test prompt", tx, cancel).await;
+    let result = provider
+        .generate("test prompt", SYSTEM_PROMPT, tx, cancel)
+        .await;
 
     assert!(result.is_err(), "expected error for 500 response");
     let err = result.unwrap_err();
@@ -237,7 +243,10 @@ async fn openai_streaming_response() {
     let (tx, rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
-    let result = provider.generate("test prompt", tx, cancel).await.unwrap();
+    let result = provider
+        .generate("test prompt", SYSTEM_PROMPT, tx, cancel)
+        .await
+        .unwrap();
 
     assert_eq!(result, "feat: add test");
 
@@ -310,7 +319,10 @@ async fn anthropic_streaming_response() {
     let (tx, rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
-    let result = provider.generate("test prompt", tx, cancel).await.unwrap();
+    let result = provider
+        .generate("test prompt", SYSTEM_PROMPT, tx, cancel)
+        .await
+        .unwrap();
 
     assert_eq!(result, "feat: add streaming");
 
@@ -366,7 +378,9 @@ async fn anthropic_server_error() {
     let (tx, _rx) = mpsc::channel(32);
     let cancel = CancellationToken::new();
 
-    let result = provider.generate("test prompt", tx, cancel).await;
+    let result = provider
+        .generate("test prompt", SYSTEM_PROMPT, tx, cancel)
+        .await;
 
     assert!(result.is_err(), "expected error for 500 response");
     let err = result.unwrap_err();

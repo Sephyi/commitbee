@@ -27,6 +27,7 @@ use crate::services::{
     safety,
     sanitizer::{CommitSanitizer, CommitValidator},
     splitter::{CommitSplitter, SplitSuggestion},
+    template,
 };
 
 pub struct App {
@@ -207,7 +208,8 @@ impl App {
         context.history_context = history_prompt;
         debug!(prompt_chars = context.to_prompt().len(), "context built");
 
-        let prompt = context.to_prompt();
+        let system_prompt = self.resolve_system_prompt()?;
+        let prompt = self.resolve_user_prompt(&context)?;
 
         if self.cli.show_prompt {
             eprintln!("{}", style("--- PROMPT ---").dim());
@@ -274,7 +276,7 @@ impl App {
             });
 
             let raw_message = provider
-                .generate(&prompt, tx, self.cancel_token.clone())
+                .generate(&prompt, &system_prompt, tx, self.cancel_token.clone())
                 .await?;
 
             if let Err(e) = print_handle.await {
@@ -298,7 +300,7 @@ impl App {
 
             // Validate against evidence and retry once if violations found
             let raw_to_sanitize = self
-                .validate_and_retry(&raw_message, &context, &provider, &prompt)
+                .validate_and_retry(&raw_message, &context, &provider, &prompt, &system_prompt)
                 .await
                 .unwrap_or(raw_message);
 
@@ -533,6 +535,7 @@ impl App {
         let provider = llm::create_provider(&self.config)?;
         provider.verify().await?;
 
+        let system_prompt = self.resolve_system_prompt()?;
         let mut commit_messages: Vec<(String, Vec<PathBuf>)> = Vec::new();
 
         for (i, group) in groups.iter().enumerate() {
@@ -560,7 +563,7 @@ impl App {
                 &sub_changes,
                 &group.commit_type,
             ));
-            let prompt = context.to_prompt();
+            let prompt = self.resolve_user_prompt(&context)?;
 
             if self.cli.show_prompt {
                 eprintln!(
@@ -588,7 +591,7 @@ impl App {
             });
 
             let raw_message = provider
-                .generate(&prompt, tx, self.cancel_token.clone())
+                .generate(&prompt, &system_prompt, tx, self.cancel_token.clone())
                 .await?;
 
             if let Err(e) = print_handle.await {
@@ -609,7 +612,7 @@ impl App {
             );
 
             let raw_to_sanitize = self
-                .validate_and_retry(&raw_message, &context, &provider, &prompt)
+                .validate_and_retry(&raw_message, &context, &provider, &prompt, &system_prompt)
                 .await
                 .unwrap_or(raw_message);
 
@@ -1119,6 +1122,7 @@ fi
         context: &PromptContext,
         provider: &llm::LlmBackend,
         original_prompt: &str,
+        system_prompt: &str,
     ) -> Option<String> {
         const MAX_RETRIES: usize = 3;
 
@@ -1168,7 +1172,10 @@ fi
             let cancel = self.cancel_token.clone();
             let drain_handle = tokio::spawn(async move { while rx.recv().await.is_some() {} });
 
-            match provider.generate(&retry_prompt, tx, cancel).await {
+            match provider
+                .generate(&retry_prompt, system_prompt, tx, cancel)
+                .await
+            {
                 Ok(retry_raw) if !retry_raw.trim().is_empty() => {
                     let _ = drain_handle.await;
                     current_raw = retry_raw;
@@ -1188,6 +1195,62 @@ fi
         } else {
             None
         }
+    }
+
+    // ─── Prompt Helpers ───
+
+    /// Resolve the system prompt: load from file if configured, otherwise use built-in.
+    fn resolve_system_prompt(&self) -> Result<String> {
+        if let Some(ref path) = self.config.system_prompt_path {
+            template::load_file(path)
+        } else {
+            Ok(llm::SYSTEM_PROMPT.to_string())
+        }
+    }
+
+    /// Resolve the user prompt: render from template if configured, otherwise use default.
+    fn resolve_user_prompt(&self, context: &PromptContext) -> Result<String> {
+        if let Some(ref path) = self.config.template_path {
+            let symbols_text = self.build_symbols_text(context);
+            let scope_text = context.suggested_scope.as_deref().unwrap_or("");
+
+            let mut vars = std::collections::HashMap::new();
+            vars.insert("diff", context.truncated_diff.as_str());
+            vars.insert("symbols", symbols_text.as_str());
+            vars.insert("files", context.file_breakdown.as_str());
+            vars.insert("type", context.suggested_type.as_str());
+            vars.insert("scope", scope_text);
+            vars.insert("evidence", context.change_summary.as_str());
+            vars.insert("constraints", context.public_api_removed.as_str());
+
+            template::render_template(path, &vars)
+        } else {
+            Ok(context.to_prompt())
+        }
+    }
+
+    /// Build combined symbol text from all symbol sections in a PromptContext.
+    fn build_symbols_text(&self, context: &PromptContext) -> String {
+        let mut parts = Vec::new();
+        if !context.symbols_added.is_empty() {
+            parts.push(format!(
+                "Added:\n  {}",
+                context.symbols_added.replace('\n', "\n  ")
+            ));
+        }
+        if !context.symbols_removed.is_empty() {
+            parts.push(format!(
+                "Removed:\n  {}",
+                context.symbols_removed.replace('\n', "\n  ")
+            ));
+        }
+        if !context.symbols_modified.is_empty() {
+            parts.push(format!(
+                "Modified:\n  {}",
+                context.symbols_modified.replace('\n', "\n  ")
+            ));
+        }
+        parts.join("\n")
     }
 
     // ─── Security Helpers ───

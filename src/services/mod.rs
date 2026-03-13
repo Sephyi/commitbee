@@ -11,3 +11,4 @@ pub mod progress;
 pub mod safety;
 pub mod sanitizer;
 pub mod splitter;
+pub mod template;
