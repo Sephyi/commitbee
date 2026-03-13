@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+[package]
+name = "commitbee-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+commitbee = { path = ".." }
+
+[[bin]]
+name = "fuzz_sanitizer"
+path = "fuzz_targets/fuzz_sanitizer.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_safety"
+path = "fuzz_targets/fuzz_safety.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_diff_parser"
+path = "fuzz_targets/fuzz_diff_parser.rs"
+doc = false

@@ -1,0 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+#![no_main]
+
+use libfuzzer_sys::fuzz_target;
+
+fuzz_target!(|data: &str| {
+    // DiffHunk::parse_from_diff must never panic on any input
+    let _ = commitbee::parse_diff_hunks(data);
+});

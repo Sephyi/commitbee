@@ -22,3 +22,36 @@ pub use app::App;
 pub use cli::Cli;
 pub use config::Config;
 pub use error::{Error, Result};
+
+// ── Thin wrappers for fuzz targets ──
+
+/// Sanitize a raw LLM response into a conventional commit message.
+///
+/// Wrapper around `CommitSanitizer::sanitize` for fuzz target access.
+/// Returns `Ok(message)` on valid input, `Err` on invalid commit format.
+pub fn sanitize_commit_message(
+    raw: &str,
+    include_body: bool,
+    include_scope: bool,
+) -> Result<String> {
+    let format = config::CommitFormat {
+        include_body,
+        include_scope,
+        lowercase_subject: true,
+    };
+    services::sanitizer::CommitSanitizer::sanitize(raw, &format)
+}
+
+/// Scan a full unified diff for leaked secrets using default patterns.
+///
+/// Wrapper around `safety::scan_full_diff_for_secrets` for fuzz target access.
+pub fn scan_full_diff_for_secrets(diff: &str) -> Vec<services::safety::SecretMatch> {
+    services::safety::scan_full_diff_for_secrets(diff)
+}
+
+/// Parse unified diff hunk headers into structured `DiffHunk` values.
+///
+/// Wrapper around `DiffHunk::parse_from_diff` for fuzz target access.
+pub fn parse_diff_hunks(diff: &str) -> Vec<services::analyzer::DiffHunk> {
+    services::analyzer::DiffHunk::parse_from_diff(diff)
+}
