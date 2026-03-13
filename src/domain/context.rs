@@ -32,6 +32,7 @@ pub struct PromptContext {
 }
 
 impl PromptContext {
+    #[must_use]
     pub fn to_prompt(&self) -> String {
         let symbols_section = self.format_symbols_section();
         let breaking_warning = self.format_breaking_warning();

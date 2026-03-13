@@ -30,6 +30,7 @@ static HUNK_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 
 impl DiffHunk {
     /// Parse hunks from unified diff format
+    #[must_use]
     pub fn parse_from_diff(diff: &str) -> Vec<Self> {
         let mut hunks = Vec::new();
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 #[allow(dead_code)]
 pub enum CommitType {
     Feat,
@@ -25,6 +26,7 @@ impl CommitType {
         "revert",
     ];
 
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Feat => "feat",
@@ -41,6 +43,7 @@ impl CommitType {
         }
     }
 
+    #[must_use]
     #[allow(dead_code)]
     pub fn parse(s: &str) -> Option<Self> {
         match s {

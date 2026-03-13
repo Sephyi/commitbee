@@ -117,7 +117,8 @@ impl CommitSanitizer {
     pub fn sanitize(raw: &str, format: &CommitFormat) -> Result<String> {
         // Step 1: Try to parse as JSON (structured output)
         if let Ok(structured) = Self::try_parse_json(raw) {
-            return Self::format_structured(&structured, format);
+            let msg = Self::format_structured(&structured, format)?;
+            return Ok(Self::strip_control_chars(&msg));
         }
 
         // Step 2: Clean up plain text output
@@ -136,7 +137,16 @@ impl CommitSanitizer {
             )));
         }
 
-        Ok(cleaned)
+        Ok(Self::strip_control_chars(&cleaned))
+    }
+
+    /// Remove control characters (null bytes, escape sequences, carriage returns)
+    /// that could interfere with terminal display or git commit storage.
+    /// Preserves newlines and tabs.
+    fn strip_control_chars(s: &str) -> String {
+        s.chars()
+            .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+            .collect()
     }
 
     fn try_parse_json(raw: &str) -> std::result::Result<StructuredCommit, ()> {
@@ -344,6 +354,7 @@ impl CommitSanitizer {
 
     /// Try to parse raw LLM output as structured JSON without sanitizing.
     /// Used by the post-generation validator to inspect the LLM's raw intent.
+    #[must_use]
     pub fn parse_structured(raw: &str) -> Option<StructuredCommit> {
         Self::try_parse_json(raw).ok()
     }
@@ -359,6 +370,7 @@ pub struct CommitValidator;
 impl CommitValidator {
     /// Validate a structured commit against evidence flags.
     /// Returns violations as human-readable correction instructions.
+    #[must_use]
     pub fn validate(
         commit: &StructuredCommit,
         has_bug_evidence: bool,
@@ -493,6 +505,7 @@ impl CommitValidator {
     }
 
     /// Format violations as a CORRECTIONS section for a retry prompt.
+    #[must_use]
     pub fn format_corrections(violations: &[String]) -> String {
         let mut section =
             String::from("\nCORRECTIONS (your previous output had these errors — fix them):\n");

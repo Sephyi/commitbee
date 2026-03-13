@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ChangeStatus {
     Added,
     Modified,
@@ -13,6 +14,7 @@ pub enum ChangeStatus {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FileCategory {
     Source,
     Test,
@@ -23,6 +25,7 @@ pub enum FileCategory {
 }
 
 impl FileCategory {
+    #[must_use]
     pub fn from_path(path: &std::path::Path) -> Self {
         let path_str = path.to_string_lossy();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -159,6 +162,7 @@ impl FileCategory {
         }
     }
 
+    #[must_use]
     pub fn priority(&self) -> u8 {
         match self {
             Self::Source => 0,
@@ -175,7 +179,7 @@ impl FileCategory {
 pub struct FileChange {
     pub path: PathBuf,
     pub status: ChangeStatus,
-    pub diff: Arc<String>,
+    pub diff: Arc<str>,
     pub additions: usize,
     pub deletions: usize,
     pub category: FileCategory,
@@ -196,12 +200,14 @@ pub struct StagedChanges {
 }
 
 impl StagedChanges {
+    #[must_use]
     #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
     }
 
     /// Get files sorted by category priority (source first)
+    #[must_use]
     pub fn files_by_priority(&self) -> Vec<&FileChange> {
         let mut files: Vec<_> = self.files.iter().collect();
         files.sort_by_key(|f| f.category.priority());
@@ -210,6 +216,7 @@ impl StagedChanges {
 
     /// Create a subset containing only files matching the given paths.
     /// Recomputes DiffStats from the subset.
+    #[must_use]
     pub fn subset(&self, paths: &[PathBuf]) -> StagedChanges {
         let files: Vec<FileChange> = self
             .files

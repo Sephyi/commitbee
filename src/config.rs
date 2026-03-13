@@ -44,6 +44,7 @@ fn default_true() -> bool {
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 #[serde(rename_all = "lowercase")]
 pub enum Provider {
     #[default]

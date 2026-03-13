@@ -9,6 +9,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug)]
+#[non_exhaustive]
 pub enum Error {
     #[error("No staged changes found")]
     #[diagnostic(
