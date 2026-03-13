@@ -18,7 +18,7 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 | Version | Date       | Summary |
 |---------|------------|---------|
-| 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. |
+| 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |
 | 3.3     | 2026-03-13 | v0.4.0 full feature completion — FR-030 (Custom Prompt Templates), FR-032 (Multi-Language), FR-036 (Tree-sitter Query Patterns), FR-057 (Additional Languages), FR-058 (History Learning), TR-006 (Eval Harness), TR-007 (Fuzzing). 308 tests. |
 | 3.2     | 2026-03-13 | FR-035 (Rename Detection), FR-037 (Expanded Secret Scanning), FR-038 (Progress Indicators). 202 tests. |
 | 3.1     | 2026-03-13 | Deep codebase audit + streaming hardening: `Provider::new()` returns `Result`, 1 MB response cap, EOF buffer parsing, zero-allocation streaming, HTTP error body propagation. 188 tests. |

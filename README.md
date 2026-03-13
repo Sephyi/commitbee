@@ -229,7 +229,7 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 ### 🔎 `v0.4.0` — See Everything (current)
 
 - **10-language tree-sitter support** — Added Java, C, C++, Ruby, and C# to the existing Rust, TypeScript, JavaScript, Python, and Go. All languages are individually feature-gated and enabled by default. Disable any with `--no-default-features` + selective `--features lang-rust,lang-go,...`.
-- **Custom prompt templates** — User-defined templates with `{{type}}`, `{{scope}}`, `{{subject}}`, `{{body}}` variables via `template_path` config.
+- **Custom prompt templates** — User-defined templates with `{{diff}}`, `{{symbols}}`, `{{files}}`, `{{type}}`, `{{scope}}` variables via `template_path` config.
 - **Multi-language commit messages** — Generate messages in any language with `--locale` flag or `locale` config (e.g., `--locale de` for German).
 - **Commit history style learning** — Learns from recent commit history to match your project's style (`learn_from_history`, `history_sample_size` config).
 - **Rename detection** — Detects file renames with similarity percentage via `git diff --find-renames`, displayed as `old → new (N% similar)` in prompts and split suggestions. Configurable threshold (default 70%, set to 0 to disable).
@@ -237,6 +237,8 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 - **Progress indicators** — Contextual `indicatif` spinners during pipeline phases (analyzing, scanning, generating). Auto-suppressed in non-TTY environments (git hooks, pipes).
 - **Evaluation harness** — `cargo test --features eval` for structured LLM output quality benchmarking.
 - **Fuzz testing** — `cargo-fuzz` targets for sanitizer and diff parser robustness.
+- **Exclude files** — `--exclude <GLOB>` flag (repeatable) and `exclude_patterns` config option. Glob patterns filter files from analysis (e.g., `*.lock`, `**/*.generated.*`, `vendor/**`). CLI patterns additive with config.
+- **Copy to clipboard** — `--clipboard` flag copies the generated message to the system clipboard and prints to stdout, skipping commit confirmation.
 
 ### 🔬 `v0.3.1` — Trust, but Verify
 
