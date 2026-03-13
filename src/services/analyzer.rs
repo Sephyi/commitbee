@@ -8,10 +8,18 @@ use std::sync::LazyLock;
 
 use rayon::prelude::*;
 use regex::Regex;
-use tree_sitter::{Language, Parser};
+use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
 use crate::domain::{CodeSymbol, FileChange, SymbolKind};
 use crate::error::Result;
+
+// ─── Embedded query patterns ────────────────────────────────────────────────
+
+const RUST_QUERY: &str = include_str!("../queries/rust.scm");
+const TYPESCRIPT_QUERY: &str = include_str!("../queries/typescript.scm");
+const JAVASCRIPT_QUERY: &str = include_str!("../queries/javascript.scm");
+const PYTHON_QUERY: &str = include_str!("../queries/python.scm");
+const GO_QUERY: &str = include_str!("../queries/go.scm");
 
 /// Represents a diff hunk with line ranges
 #[derive(Debug, Clone)]
@@ -79,6 +87,13 @@ impl DiffHunk {
     }
 }
 
+/// Language-specific configuration for query-based symbol extraction
+struct LanguageConfig {
+    language: Language,
+    query_source: &'static str,
+    file_ext: &'static str,
+}
+
 pub struct AnalyzerService;
 
 impl AnalyzerService {
@@ -104,19 +119,49 @@ impl AnalyzerService {
                     .and_then(|e| e.to_str())
                     .unwrap_or("");
 
-                let language: Option<Language> = match ext {
-                    "rs" => Some(tree_sitter_rust::LANGUAGE.into()),
-                    "ts" | "tsx" => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
-                    "py" => Some(tree_sitter_python::LANGUAGE.into()),
-                    "go" => Some(tree_sitter_go::LANGUAGE.into()),
-                    "js" | "jsx" => Some(tree_sitter_javascript::LANGUAGE.into()),
+                let config = match ext {
+                    "rs" => Some(LanguageConfig {
+                        language: tree_sitter_rust::LANGUAGE.into(),
+                        query_source: RUST_QUERY,
+                        file_ext: "rs",
+                    }),
+                    "ts" => Some(LanguageConfig {
+                        language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+                        query_source: TYPESCRIPT_QUERY,
+                        file_ext: "ts",
+                    }),
+                    "tsx" => Some(LanguageConfig {
+                        language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+                        query_source: TYPESCRIPT_QUERY,
+                        file_ext: "tsx",
+                    }),
+                    "py" => Some(LanguageConfig {
+                        language: tree_sitter_python::LANGUAGE.into(),
+                        query_source: PYTHON_QUERY,
+                        file_ext: "py",
+                    }),
+                    "go" => Some(LanguageConfig {
+                        language: tree_sitter_go::LANGUAGE.into(),
+                        query_source: GO_QUERY,
+                        file_ext: "go",
+                    }),
+                    "js" => Some(LanguageConfig {
+                        language: tree_sitter_javascript::LANGUAGE.into(),
+                        query_source: JAVASCRIPT_QUERY,
+                        file_ext: "js",
+                    }),
+                    "jsx" => Some(LanguageConfig {
+                        language: tree_sitter_javascript::LANGUAGE.into(),
+                        query_source: JAVASCRIPT_QUERY,
+                        file_ext: "jsx",
+                    }),
                     _ => None,
                 };
 
-                language
-                    .map(|lang| {
+                config
+                    .map(|cfg| {
                         let hunks = DiffHunk::parse_from_diff(&change.diff);
-                        Self::extract_for_file(lang, change, &hunks, staged_content, head_content)
+                        Self::extract_for_file(cfg, change, &hunks, staged_content, head_content)
                     })
                     .unwrap_or_default()
             })
@@ -124,23 +169,29 @@ impl AnalyzerService {
     }
 
     fn extract_for_file(
-        language: Language,
+        config: LanguageConfig,
         change: &FileChange,
         hunks: &[DiffHunk],
         staged_content: &HashMap<PathBuf, String>,
         head_content: &HashMap<PathBuf, String>,
     ) -> Vec<CodeSymbol> {
         let mut parser = Parser::new();
-        if parser.set_language(&language).is_err() {
+        if parser.set_language(&config.language).is_err() {
             return Vec::new();
         }
+
+        let Ok(query) = Query::new(&config.language, config.query_source) else {
+            return Vec::new();
+        };
 
         let mut symbols = Vec::new();
 
         // Parse staged (new) file content
         if let Some(content) = staged_content.get(&change.path) {
-            let changed = Self::extract_changed_symbols_static(
+            let changed = Self::extract_changed_symbols_with_query(
                 &mut parser,
+                &query,
+                config.file_ext,
                 &change.path,
                 content,
                 hunks,
@@ -151,8 +202,10 @@ impl AnalyzerService {
 
         // Parse HEAD (old) file content
         if let Some(content) = head_content.get(&change.path) {
-            let changed = Self::extract_changed_symbols_static(
+            let changed = Self::extract_changed_symbols_with_query(
                 &mut parser,
+                &query,
+                config.file_ext,
                 &change.path,
                 content,
                 hunks,
@@ -164,8 +217,10 @@ impl AnalyzerService {
         symbols
     }
 
-    fn extract_changed_symbols_static(
+    fn extract_changed_symbols_with_query(
         parser: &mut Parser,
+        query: &Query,
+        file_ext: &str,
         file: &Path,
         source: &str,
         hunks: &[DiffHunk],
@@ -175,45 +230,25 @@ impl AnalyzerService {
             return Vec::new();
         };
 
+        let Some(name_idx) = query.capture_index_for_name("name") else {
+            return Vec::new();
+        };
+        let Some(def_idx) = query.capture_index_for_name("definition") else {
+            return Vec::new();
+        };
+
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(query, tree.root_node(), source.as_bytes());
+
         let mut symbols = Vec::new();
-        let mut cursor = tree.walk();
+        while let Some(m) = matches.next() {
+            let def_capture = m.captures.iter().find(|c| c.index == def_idx);
+            let name_capture = m.captures.iter().find(|c| c.index == name_idx);
 
-        Self::visit_node_with_hunks(&mut cursor, file, source, hunks, is_added, &mut symbols);
-
-        symbols
-    }
-
-    fn visit_node_with_hunks(
-        cursor: &mut tree_sitter::TreeCursor,
-        file: &Path,
-        source: &str,
-        hunks: &[DiffHunk],
-        is_added: bool,
-        symbols: &mut Vec<CodeSymbol>,
-    ) {
-        loop {
-            let node = cursor.node();
-            let kind_str = node.kind();
-
-            let symbol_kind = match kind_str {
-                "function_item" | "function_definition" | "function_declaration" => {
-                    Some(SymbolKind::Function)
-                }
-                "method_definition" | "method_declaration" => Some(SymbolKind::Method),
-                "struct_item" | "struct_declaration" => Some(SymbolKind::Struct),
-                "enum_item" | "enum_declaration" => Some(SymbolKind::Enum),
-                "trait_item" => Some(SymbolKind::Trait),
-                "impl_item" => Some(SymbolKind::Impl),
-                "class_declaration" | "class_definition" => Some(SymbolKind::Class),
-                "interface_declaration" => Some(SymbolKind::Interface),
-                "const_item" | "const_declaration" => Some(SymbolKind::Const),
-                "type_alias_declaration" | "type_item" => Some(SymbolKind::Type),
-                _ => None,
-            };
-
-            if let Some(kind) = symbol_kind {
-                let line_start = node.start_position().row + 1;
-                let line_end = node.end_position().row + 1;
+            if let (Some(def), Some(name)) = (def_capture, name_capture) {
+                let def_node = def.node;
+                let line_start = def_node.start_position().row + 1;
+                let line_end = def_node.end_position().row + 1;
 
                 // Check if this symbol's span intersects any changed hunk
                 let intersects = hunks.iter().any(|h| {
@@ -224,21 +259,24 @@ impl AnalyzerService {
                     }
                 });
 
-                if intersects {
-                    let name = node
-                        .child_by_field_name("name")
-                        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-                        .unwrap_or("anonymous")
-                        .to_string();
+                if !intersects {
+                    continue;
+                }
 
-                    let is_public = node
-                        .child(0)
-                        .map(|n| n.kind() == "visibility_modifier")
-                        .unwrap_or(false);
+                let symbol_name = name
+                    .node
+                    .utf8_text(source.as_bytes())
+                    .unwrap_or("anonymous")
+                    .to_string();
 
+                let kind = Self::node_kind_to_symbol_kind(def_node.kind());
+
+                let is_public = Self::detect_visibility(def_node, file_ext, &symbol_name, source);
+
+                if let Some(kind) = kind {
                     symbols.push(CodeSymbol {
                         kind,
-                        name,
+                        name: symbol_name,
                         file: file.to_path_buf(),
                         line: line_start,
                         is_public,
@@ -246,16 +284,52 @@ impl AnalyzerService {
                     });
                 }
             }
+        }
+        symbols
+    }
 
-            // Recurse into children
-            if cursor.goto_first_child() {
-                Self::visit_node_with_hunks(cursor, file, source, hunks, is_added, symbols);
-                cursor.goto_parent();
+    /// Map tree-sitter node kinds to `SymbolKind` values
+    fn node_kind_to_symbol_kind(node_kind: &str) -> Option<SymbolKind> {
+        match node_kind {
+            "function_item" | "function_definition" | "function_declaration" => {
+                Some(SymbolKind::Function)
             }
+            "method_definition" | "method_declaration" => Some(SymbolKind::Method),
+            "struct_item" | "struct_declaration" => Some(SymbolKind::Struct),
+            "enum_item" | "enum_declaration" => Some(SymbolKind::Enum),
+            "trait_item" => Some(SymbolKind::Trait),
+            "impl_item" => Some(SymbolKind::Impl),
+            "class_declaration" | "class_definition" => Some(SymbolKind::Class),
+            "interface_declaration" => Some(SymbolKind::Interface),
+            "const_item" | "const_declaration" => Some(SymbolKind::Const),
+            "type_alias_declaration" | "type_item" | "type_declaration" => Some(SymbolKind::Type),
+            _ => None,
+        }
+    }
 
-            if !cursor.goto_next_sibling() {
-                break;
-            }
+    /// Detect visibility based on language-specific conventions
+    fn detect_visibility(
+        def_node: tree_sitter::Node,
+        file_ext: &str,
+        symbol_name: &str,
+        _source: &str,
+    ) -> bool {
+        match file_ext {
+            // Rust: first child is a visibility_modifier (e.g., `pub`)
+            "rs" => def_node
+                .child(0)
+                .map(|n| n.kind() == "visibility_modifier")
+                .unwrap_or(false),
+            // Python: public if name does not start with underscore
+            "py" => !symbol_name.starts_with('_'),
+            // Go: public if first character is uppercase
+            "go" => symbol_name
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false),
+            // TypeScript/JavaScript: no standard visibility modifier at AST level
+            _ => false,
         }
     }
 }
