@@ -21,6 +21,17 @@ const JAVASCRIPT_QUERY: &str = include_str!("../queries/javascript.scm");
 const PYTHON_QUERY: &str = include_str!("../queries/python.scm");
 const GO_QUERY: &str = include_str!("../queries/go.scm");
 
+#[cfg(feature = "lang-java")]
+const JAVA_QUERY: &str = include_str!("../queries/java.scm");
+#[cfg(feature = "lang-c")]
+const C_QUERY: &str = include_str!("../queries/c.scm");
+#[cfg(feature = "lang-cpp")]
+const CPP_QUERY: &str = include_str!("../queries/cpp.scm");
+#[cfg(feature = "lang-ruby")]
+const RUBY_QUERY: &str = include_str!("../queries/ruby.scm");
+#[cfg(feature = "lang-csharp")]
+const CSHARP_QUERY: &str = include_str!("../queries/csharp.scm");
+
 /// Represents a diff hunk with line ranges
 #[derive(Debug, Clone)]
 pub struct DiffHunk {
@@ -154,6 +165,36 @@ impl AnalyzerService {
                         language: tree_sitter_javascript::LANGUAGE.into(),
                         query_source: JAVASCRIPT_QUERY,
                         file_ext: "jsx",
+                    }),
+                    #[cfg(feature = "lang-java")]
+                    "java" => Some(LanguageConfig {
+                        language: tree_sitter_java::LANGUAGE.into(),
+                        query_source: JAVA_QUERY,
+                        file_ext: "java",
+                    }),
+                    #[cfg(feature = "lang-c")]
+                    "c" | "h" => Some(LanguageConfig {
+                        language: tree_sitter_c::LANGUAGE.into(),
+                        query_source: C_QUERY,
+                        file_ext: "c",
+                    }),
+                    #[cfg(feature = "lang-cpp")]
+                    "cpp" | "cc" | "cxx" | "hpp" | "hxx" => Some(LanguageConfig {
+                        language: tree_sitter_cpp::LANGUAGE.into(),
+                        query_source: CPP_QUERY,
+                        file_ext: "cpp",
+                    }),
+                    #[cfg(feature = "lang-ruby")]
+                    "rb" => Some(LanguageConfig {
+                        language: tree_sitter_ruby::LANGUAGE.into(),
+                        query_source: RUBY_QUERY,
+                        file_ext: "rb",
+                    }),
+                    #[cfg(feature = "lang-csharp")]
+                    "cs" => Some(LanguageConfig {
+                        language: tree_sitter_c_sharp::LANGUAGE.into(),
+                        query_source: CSHARP_QUERY,
+                        file_ext: "cs",
                     }),
                     _ => None,
                 };
@@ -291,18 +332,42 @@ impl AnalyzerService {
     /// Map tree-sitter node kinds to `SymbolKind` values
     fn node_kind_to_symbol_kind(node_kind: &str) -> Option<SymbolKind> {
         match node_kind {
+            // Functions (Rust, C, C++, Go, Python, JS/TS)
             "function_item" | "function_definition" | "function_declaration" => {
                 Some(SymbolKind::Function)
             }
+            // Methods (JS/TS, Java, C#)
             "method_definition" | "method_declaration" => Some(SymbolKind::Method),
+            // Ruby methods
+            "method" | "singleton_method" => Some(SymbolKind::Method),
+            // Constructors (Java, C#)
+            "constructor_declaration" => Some(SymbolKind::Method),
+            // Structs (Rust, C#)
             "struct_item" | "struct_declaration" => Some(SymbolKind::Struct),
+            // C/C++ struct specifier
+            "struct_specifier" => Some(SymbolKind::Struct),
+            // Enums (Rust, Java, C#)
             "enum_item" | "enum_declaration" => Some(SymbolKind::Enum),
+            // C/C++ enum specifier
+            "enum_specifier" => Some(SymbolKind::Enum),
+            // Rust traits
             "trait_item" => Some(SymbolKind::Trait),
+            // Rust impl blocks
             "impl_item" => Some(SymbolKind::Impl),
+            // Classes (JS/TS, Java, C#, Python, Ruby)
             "class_declaration" | "class_definition" => Some(SymbolKind::Class),
+            // C++ class specifier
+            "class_specifier" => Some(SymbolKind::Class),
+            // Ruby class and module
+            "class" | "module" => Some(SymbolKind::Class),
+            // Interfaces (TS, Java, C#)
             "interface_declaration" => Some(SymbolKind::Interface),
+            // Constants (Rust, JS/TS)
             "const_item" | "const_declaration" => Some(SymbolKind::Const),
+            // Type aliases (TS, Rust)
             "type_alias_declaration" | "type_item" | "type_declaration" => Some(SymbolKind::Type),
+            // C typedef
+            "type_definition" => Some(SymbolKind::Type),
             _ => None,
         }
     }
@@ -328,8 +393,65 @@ impl AnalyzerService {
                 .next()
                 .map(|c| c.is_uppercase())
                 .unwrap_or(false),
+            // Java: check for `modifiers` child containing `public`
+            "java" => Self::has_java_public_modifier(def_node),
+            // C#: check for `modifier` child with `public` text
+            "cs" => Self::has_csharp_public_modifier(def_node),
+            // C/C++: no file-scope visibility modifiers, default to public
+            "c" | "cpp" => true,
+            // Ruby: no straightforward visibility detection from AST, default to public
+            "rb" => true,
             // TypeScript/JavaScript: no standard visibility modifier at AST level
             _ => false,
         }
+    }
+
+    /// Check if a Java node has a `modifiers` child containing a `public` modifier
+    fn has_java_public_modifier(node: tree_sitter::Node) -> bool {
+        let child_count = node.child_count();
+        for i in 0..child_count {
+            #[allow(clippy::cast_possible_truncation)]
+            if let Some(child) = node.child(i as u32)
+                && child.kind() == "modifiers"
+            {
+                let mut cursor = child.walk();
+                if cursor.goto_first_child() {
+                    loop {
+                        if cursor.node().kind() == "public" {
+                            return true;
+                        }
+                        if !cursor.goto_next_sibling() {
+                            break;
+                        }
+                    }
+                }
+                return false;
+            }
+        }
+        false
+    }
+
+    /// Check if a C# node has a `modifier` child with text "public"
+    fn has_csharp_public_modifier(node: tree_sitter::Node) -> bool {
+        let child_count = node.child_count();
+        for i in 0..child_count {
+            #[allow(clippy::cast_possible_truncation)]
+            if let Some(child) = node.child(i as u32)
+                && child.kind() == "modifier"
+            {
+                let mut cursor = child.walk();
+                if cursor.goto_first_child() {
+                    loop {
+                        if cursor.node().kind() == "public" {
+                            return true;
+                        }
+                        if !cursor.goto_next_sibling() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 }
