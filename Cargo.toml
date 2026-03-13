@@ -65,7 +65,7 @@ tree-sitter-python = { version = "0.25", optional = true }
 tree-sitter-go = { version = "0.25", optional = true }
 tree-sitter-javascript = { version = "0.25", optional = true }
 tree-sitter-java = { version = "0.23", optional = true }
-tree-sitter-c = { version = "0.23", optional = true }
+tree-sitter-c = { version = "0.24", optional = true }
 tree-sitter-cpp = { version = "0.23", optional = true }
 tree-sitter-ruby = { version = "0.23", optional = true }
 tree-sitter-c-sharp = { version = "0.23", optional = true }
@@ -91,8 +91,16 @@ regex = "1.12"
 
 [features]
 default = [
-  "lang-rust", "lang-typescript", "lang-javascript", "lang-python", "lang-go",
-  "lang-java", "lang-c", "lang-cpp", "lang-ruby", "lang-csharp",
+  "lang-rust",
+  "lang-typescript",
+  "lang-javascript",
+  "lang-python",
+  "lang-go",
+  "lang-java",
+  "lang-c",
+  "lang-cpp",
+  "lang-ruby",
+  "lang-csharp",
 ]
 secure-storage = ["keyring"]
 eval = []
@@ -107,8 +115,16 @@ lang-cpp = ["tree-sitter-cpp"]
 lang-ruby = ["tree-sitter-ruby"]
 lang-csharp = ["tree-sitter-c-sharp"]
 all-languages = [
-  "lang-rust", "lang-typescript", "lang-javascript", "lang-python", "lang-go",
-  "lang-java", "lang-c", "lang-cpp", "lang-ruby", "lang-csharp",
+  "lang-rust",
+  "lang-typescript",
+  "lang-javascript",
+  "lang-python",
+  "lang-go",
+  "lang-java",
+  "lang-c",
+  "lang-cpp",
+  "lang-ruby",
+  "lang-csharp",
 ]
 
 [profile.release]
