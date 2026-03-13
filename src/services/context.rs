@@ -154,6 +154,7 @@ impl ContextBuilder {
             primary_change: Self::detect_primary_change(changes, &symbols_deduped),
             group_rationale: None, // Set by splitter when generating per-group prompts
             metadata_breaking_signals: Self::detect_metadata_breaking(changes),
+            locale: config.locale.clone(),
         }
     }
 

@@ -127,6 +127,12 @@ pub struct Config {
     #[serde(default)]
     pub disabled_secret_patterns: Vec<String>,
 
+    /// Language for commit message generation (ISO 639-1 code, e.g., "de", "ja", "fr")
+    /// When set, the LLM is instructed to write in this language.
+    /// Type/scope remain in English per Conventional Commits spec.
+    #[serde(default)]
+    pub locale: Option<String>,
+
     /// Commit message format options
     #[serde(default)]
     pub format: CommitFormat,
@@ -180,6 +186,7 @@ impl Default for Config {
             rename_threshold: default_rename_threshold(),
             custom_secret_patterns: Vec::new(),
             disabled_secret_patterns: Vec::new(),
+            locale: None,
             format: CommitFormat::default(),
         }
     }
@@ -204,6 +211,7 @@ impl std::fmt::Debug for Config {
             .field("rename_threshold", &self.rename_threshold)
             .field("custom_secret_patterns", &self.custom_secret_patterns)
             .field("disabled_secret_patterns", &self.disabled_secret_patterns)
+            .field("locale", &self.locale)
             .field("format", &self.format)
             .finish()
     }
@@ -314,6 +322,9 @@ impl Config {
         }
         if cli.no_scope {
             self.format.include_scope = false;
+        }
+        if let Some(ref l) = cli.locale {
+            self.locale = Some(l.clone());
         }
         Ok(())
     }
@@ -445,6 +456,10 @@ max_file_lines = 100
 # Rename detection similarity threshold (0-100, default 70)
 # Set to 0 to disable rename detection
 # rename_threshold = 70
+
+# Language for commit message generation (ISO 639-1 code)
+# Type and scope remain in English per Conventional Commits spec.
+# locale = "de"
 
 # Custom secret patterns (additional regex patterns for secret scanning)
 # custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]

@@ -876,6 +876,86 @@ fn file_category_containerfile_is_build() {
 
 // ─── Multi-file diff truncation ──────────────────────────────────────────────
 
+// ─── Locale support ──────────────────────────────────────────────────────────
+
+#[test]
+fn locale_instruction_appears_in_prompt_when_set() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-old\n+new",
+        1,
+        1,
+    )]);
+    let mut config = default_config();
+    config.locale = Some("de".to_string());
+
+    let ctx = ContextBuilder::build(&changes, &[], &config);
+    let prompt = ctx.to_prompt();
+
+    assert!(
+        prompt.contains("LANGUAGE:"),
+        "prompt should contain LANGUAGE instruction when locale is set"
+    );
+    assert!(
+        prompt.contains("Write the subject and body in de"),
+        "prompt should instruct writing in the specified language"
+    );
+    assert!(
+        prompt.contains("JSON keys must remain in English"),
+        "prompt should instruct keeping JSON keys in English"
+    );
+}
+
+#[test]
+fn no_locale_instruction_when_none() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-old\n+new",
+        1,
+        1,
+    )]);
+    let config = default_config();
+
+    let ctx = ContextBuilder::build(&changes, &[], &config);
+    let prompt = ctx.to_prompt();
+
+    assert!(
+        !prompt.contains("LANGUAGE:"),
+        "prompt should not contain LANGUAGE instruction when locale is None"
+    );
+}
+
+#[test]
+fn locale_config_defaults_to_none() {
+    let config = Config::default();
+    assert!(config.locale.is_none(), "locale should default to None");
+}
+
+#[test]
+fn locale_deserialized_from_toml() {
+    let toml_str = r#"locale = "ja""#;
+    let config: Config = toml::from_str(toml_str).unwrap();
+    assert_eq!(
+        config.locale,
+        Some("ja".to_string()),
+        "locale should be deserialized from TOML"
+    );
+}
+
+#[test]
+fn locale_absent_in_toml_defaults_to_none() {
+    let toml_str = r#"model = "llama3:8b""#;
+    let config: Config = toml::from_str(toml_str).unwrap();
+    assert!(
+        config.locale.is_none(),
+        "locale should default to None when absent from TOML"
+    );
+}
+
+// ─── Multi-file diff truncation ──────────────────────────────────────────────
+
 #[test]
 fn diff_truncation_multiple_files() {
     let huge_diff = "+line of code\n".repeat(500);

@@ -45,6 +45,10 @@ pub struct Cli {
     #[arg(long)]
     pub no_scope: bool,
 
+    /// Generate commit message in specified language (e.g., de, ja, fr)
+    #[arg(long)]
+    pub locale: Option<String>,
+
     /// Verbose output
     #[arg(short, long)]
     pub verbose: bool,

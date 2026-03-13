@@ -29,6 +29,8 @@ pub struct PromptContext {
     pub group_rationale: Option<String>,
     /// Metadata-level breaking signals detected from diff content
     pub metadata_breaking_signals: Vec<String>,
+    /// ISO 639-1 locale code for non-English commit messages (e.g., "de", "ja")
+    pub locale: Option<String>,
 }
 
 impl PromptContext {
@@ -67,6 +69,17 @@ impl PromptContext {
             .map(|gr| format!("GROUP_REASON: {}\n", gr))
             .unwrap_or_default();
 
+        let locale_instruction = self
+            .locale
+            .as_ref()
+            .map(|lang| {
+                format!(
+                    "\nLANGUAGE: Write the subject and body in {lang}. \
+                     The commit type, scope, and JSON keys must remain in English.\n"
+                )
+            })
+            .unwrap_or_default();
+
         let metadata_breaking_section = if self.metadata_breaking_signals.is_empty() {
             String::new()
         } else {
@@ -89,7 +102,7 @@ SUGGESTED TYPE: {commit_type}{scope}
 {group_rationale}{evidence}{primary_change}{symbols}
 DIFF:
 {diff}
-{constraints}{breaking}{metadata_breaking}{focus}
+{constraints}{breaking}{metadata_breaking}{locale}{focus}
 HARD LIMIT: subject must be under {subject_budget} chars (count carefully). Name at least one concrete entity (function, struct, variable) from the diff.
 Body: 1-3 sentences on WHY, or null if trivial. breaking_change: only if existing users must change code/config to stay compatible, else null.
 
@@ -111,6 +124,7 @@ Respond with ONLY this JSON:
             primary_change = primary_change_line,
             group_rationale = group_rationale_line,
             metadata_breaking = metadata_breaking_section,
+            locale = locale_instruction,
             subject_budget = subject_budget,
             scope_json = self
                 .suggested_scope
