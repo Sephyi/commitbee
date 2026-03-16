@@ -320,8 +320,10 @@ impl AnalyzerService {
                         name: symbol_name,
                         file: file.to_path_buf(),
                         line: line_start,
+                        end_line: line_end,
                         is_public,
                         is_added,
+                        is_whitespace_only: None,
                     });
                 }
             }

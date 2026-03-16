@@ -19,14 +19,52 @@ pub enum SymbolKind {
     Type,
 }
 
+/// How a symbol was affected by the change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
+pub enum SymbolChangeType {
+    /// Symbol only exists in staged content (new symbol)
+    Added,
+    /// Symbol only exists in HEAD content (removed symbol)
+    Removed,
+    /// Symbol exists in both, body changed (non-whitespace)
+    ModifiedBody,
+    /// Symbol exists in both, signature changed (parameters, return type, etc.)
+    ModifiedSignature,
+    /// Symbol exists in both, only whitespace/indentation changed within span
+    TouchedOnly,
+}
+
 #[derive(Debug, Clone)]
 pub struct CodeSymbol {
     pub kind: SymbolKind,
     pub name: String,
     pub file: PathBuf,
     pub line: usize,
+    #[allow(dead_code)]
+    pub end_line: usize,
     pub is_public: bool,
     pub is_added: bool,
+    /// For symbols that exist in both HEAD and staged, indicates if only whitespace changed.
+    /// None = symbol is purely added or removed, not a modification.
+    #[allow(dead_code)]
+    pub is_whitespace_only: Option<bool>,
+}
+
+impl CodeSymbol {
+    /// Determine the change type for this symbol.
+    #[must_use]
+    #[allow(dead_code)]
+    pub fn change_type(&self) -> SymbolChangeType {
+        match (self.is_added, self.is_whitespace_only) {
+            (true, None) => SymbolChangeType::Added,
+            (false, None) => SymbolChangeType::Removed,
+            (true, Some(true)) => SymbolChangeType::TouchedOnly,
+            (true, Some(false)) => SymbolChangeType::ModifiedBody,
+            (false, Some(true)) => SymbolChangeType::TouchedOnly,
+            (false, Some(false)) => SymbolChangeType::ModifiedBody,
+        }
+    }
 }
 
 impl std::fmt::Display for CodeSymbol {

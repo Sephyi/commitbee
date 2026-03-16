@@ -29,8 +29,10 @@ fn make_symbol(
         name: name.to_string(),
         file: PathBuf::from(file),
         line: 1,
+        end_line: 10,
         is_public,
         is_added,
+        is_whitespace_only: None,
     }
 }
 
