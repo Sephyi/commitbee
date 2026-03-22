@@ -17,6 +17,8 @@ cargo build --release
 
 ## Architecture
 
+**Pipeline:** git diff → tree-sitter parse → symbol extraction → context building (budget, evidence, connections) → LLM prompt → sanitize → validate+retry → commit
+
 - **Hybrid Git**: gix for repo discovery, git CLI for diffs (documented choice)
 - **Tree-sitter**: Full file parsing with hunk mapping (not just +/- lines)
 - **Parallelism**: rayon for CPU-bound tree-sitter parsing, tokio JoinSet for concurrent git content fetching
@@ -28,9 +30,9 @@ cargo build --release
 1. **Full file parsing** - Parse staged/HEAD blobs, map diff hunks to symbol spans
 2. **Token budget** - 24K char limit (~6K tokens), prioritizes diff over symbols
 3. **TTY detection** - Safe for git hooks (graceful non-interactive fallback)
-4. **Commit sanitizer** - Validates LLM output, supports JSON + plain text; emits `BREAKING CHANGE:` footer and `!` suffix for breaking changes (footer emitted regardless of `include_body` — it is machine-readable metadata)
+4. **Commit sanitizer** - Validates LLM output (JSON + plain text), emits `BREAKING CHANGE:` footer regardless of `include_body`
 5. **Structured JSON output** - Prompt requests JSON for reliable parsing; schema includes `breaking_change: Option<String>` field
-6. **System prompt** - Single `pub(crate) const SYSTEM_PROMPT` in `llm/mod.rs`, shared by all providers; includes commit type list (synced with `CommitType::ALL`), project-agnostic breaking change threshold (only when existing users or dependents must change their code/config/scripts to stay compatible — not for new features, bug fixes, or internal refactors), and 72-char subject limit
+6. **System prompt** - Single `SYSTEM_PROMPT` in `llm/mod.rs`, shared by all providers. Type list synced with `CommitType::ALL`, 72-char subject limit.
 7. **Simplified user prompt** - Concise format optimized for <4B parameter models
 8. **Commit splitting** - Detects multi-concern changes, suggests splitting into separate commits
 9. **Body line wrapping** - Sanitizer wraps body text at 72 characters
@@ -117,6 +119,7 @@ src/
 ├── cli.rs               # CLI arguments (clap)
 ├── config.rs            # Configuration (figment layered)
 ├── error.rs             # Error types (thiserror + miette)
+├── queries/             # Tree-sitter .scm patterns (10 languages)
 ├── domain/
 │   ├── mod.rs
 │   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
@@ -189,7 +192,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (334 tests)
+cargo test                    # All tests (339 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -330,4 +333,4 @@ A tracked list of review findings, design decisions, and improvement ideas that 
 
 ### Documentation Sync
 
-Keep README.md test count in sync (currently 339).
+Keep test counts in sync across README.md, DOCS.md, PRD.md, CLAUDE.md (currently 339).
