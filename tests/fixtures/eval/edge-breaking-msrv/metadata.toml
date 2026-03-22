@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "edge-breaking-msrv"
+description = "MSRV bump in Cargo.toml should signal metadata breaking change"
+language = "rust"
+category = "chore"
+expected_type = "chore"
+
+[evidence]
+is_dependency_only = true
+
+[prompt]
+must_contain = ["METADATA BREAKING CHANGES DETECTED", "MSRV changed"]
+
+[breaking]
+expected = true

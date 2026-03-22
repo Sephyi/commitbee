@@ -1,0 +1,29 @@
+[[symbols]]
+kind = "Function"
+name = "validate_input"
+file = "src/services/validator.rs"
+line = 4
+end_line = 11
+is_public = true
+is_added = true
+signature = "pub fn validate_input(input: &str) -> Result<()>"
+
+[[symbols]]
+kind = "Struct"
+name = "RequestHandler"
+file = "src/services/handler.rs"
+line = 4
+end_line = 4
+is_public = true
+is_added = true
+signature = "pub struct RequestHandler"
+
+[[symbols]]
+kind = "Function"
+name = "handle"
+file = "src/services/handler.rs"
+line = 7
+end_line = 14
+is_public = true
+is_added = true
+signature = "pub fn handle(&self, request: &str) -> Result<String>"

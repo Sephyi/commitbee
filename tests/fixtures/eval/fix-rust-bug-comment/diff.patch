@@ -1,0 +1,19 @@
+diff --git a/src/services/parser.rs b/src/services/parser.rs
+index abc1234..def5678 100644
+--- a/src/services/parser.rs
++++ b/src/services/parser.rs
+@@ -42,8 +42,12 @@ impl Parser {
+     pub fn parse_input(&self, input: &str) -> Result<Vec<Token>> {
+         let mut tokens = Vec::new();
+         for line in input.lines() {
+-            let token = self.tokenize(line)?;
+-            tokens.push(token);
++            // Fix: skip empty lines that caused panic in tokenize()
++            // Bug: tokenize() assumed non-empty input, causing index-out-of-bounds
++            if !line.is_empty() {
++                let token = self.tokenize(line)?;
++                tokens.push(token);
++            }
+         }
+         Ok(tokens)
+     }

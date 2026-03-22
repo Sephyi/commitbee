@@ -1,0 +1,21 @@
+diff --git a/README.md b/README.md
+index abc1234..def5678 100644
+--- a/README.md
++++ b/README.md
+@@ -1,8 +1,12 @@
+-# MyProject
++# MyProject v2.0
+
+-A simple project.
++A powerful project for managing widgets.
+
+ ## Installation
+
+ ```bash
+-cargo install myproject
++cargo install myproject --locked
+ ```
++
++## Quick Start
++
++Run `myproject init` to create a configuration file.

@@ -461,8 +461,7 @@ impl EvalRunner {
     fn load_metadata(&self, fixture_dir: &Path) -> Result<FixtureMetadata> {
         let content = std::fs::read_to_string(fixture_dir.join("metadata.toml"))
             .map_err(|e| Error::Config(format!("Cannot read metadata.toml: {}", e)))?;
-        toml::from_str(&content)
-            .map_err(|e| Error::Config(format!("Invalid metadata.toml: {}", e)))
+        toml::from_str(&content).map_err(|e| Error::Config(format!("Invalid metadata.toml: {}", e)))
     }
 
     fn load_config(&self, fixture_dir: &Path) -> Config {
