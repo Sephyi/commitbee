@@ -55,3 +55,38 @@ pub fn scan_full_diff_for_secrets(diff: &str) -> Vec<services::safety::SecretMat
 pub fn parse_diff_hunks(diff: &str) -> Vec<services::analyzer::DiffHunk> {
     services::analyzer::DiffHunk::parse_from_diff(diff)
 }
+
+/// Extract signature from Rust source code for fuzz target access.
+///
+/// Parses the source with tree-sitter Rust, finds the first top-level definition,
+/// and extracts its signature. Must never panic on any input.
+#[cfg(feature = "lang-rust")]
+pub fn extract_rust_signature(source: &str) -> Option<String> {
+    use tree_sitter::Parser;
+    let mut parser = Parser::new();
+    if parser
+        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .is_err()
+    {
+        return None;
+    }
+    let tree = parser.parse(source, None)?;
+    let root = tree.root_node();
+    let first_child = root.child(0)?;
+    services::analyzer::AnalyzerService::extract_signature(first_child, source)
+}
+
+/// Classify whether a diff span contains whitespace-only changes for fuzz target access.
+///
+/// Wrapper around `ContextBuilder::classify_span_change`. Must never panic on any input.
+pub fn classify_diff_span(
+    diff: &str,
+    new_start: usize,
+    new_end: usize,
+    old_start: usize,
+    old_end: usize,
+) -> Option<bool> {
+    services::context::ContextBuilder::classify_span_change(
+        diff, new_start, new_end, old_start, old_end,
+    )
+}

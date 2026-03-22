@@ -13,7 +13,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-commitbee = { path = ".." }
+commitbee = { path = "..", features = ["lang-rust"] }
 
 [[bin]]
 name = "fuzz_sanitizer"
@@ -28,4 +28,14 @@ doc = false
 [[bin]]
 name = "fuzz_diff_parser"
 path = "fuzz_targets/fuzz_diff_parser.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_signature"
+path = "fuzz_targets/fuzz_signature.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_classify_span"
+path = "fuzz_targets/fuzz_classify_span.rs"
 doc = false

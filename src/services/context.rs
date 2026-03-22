@@ -224,7 +224,7 @@ impl ContextBuilder {
     ///
     /// Returns `None` if no changes in span, `Some(true)` if whitespace-only,
     /// `Some(false)` if semantic changes detected.
-    fn classify_span_change(
+    pub(crate) fn classify_span_change(
         diff: &str,
         new_start: usize,
         new_end: usize,

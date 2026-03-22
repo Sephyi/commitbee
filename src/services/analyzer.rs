@@ -456,7 +456,7 @@ impl AnalyzerService {
 
     /// Extract the signature from a definition node by taking text before the body.
     /// Two-strategy: child_by_field_name("body") primary, BODY_NODE_KINDS fallback.
-    fn extract_signature(node: tree_sitter::Node, source: &str) -> Option<String> {
+    pub(crate) fn extract_signature(node: tree_sitter::Node, source: &str) -> Option<String> {
         let node_start = node.start_byte();
 
         // Strategy 1: named "body" field (most grammars)
