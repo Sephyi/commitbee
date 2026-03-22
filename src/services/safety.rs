@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -17,9 +18,9 @@ pub struct SecretMatch {
 /// A named secret detection pattern with description.
 #[allow(dead_code)]
 pub struct SecretPattern {
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
     pub regex: Regex,
-    pub description: &'static str,
+    pub description: Cow<'static, str>,
 }
 
 /// Build the full set of secret patterns, applying custom additions and disabled names.
@@ -39,9 +40,9 @@ pub fn build_patterns(custom: &[String], disabled: &[String]) -> Vec<SecretPatte
     for (i, raw) in custom.iter().enumerate() {
         if let Ok(regex) = Regex::new(raw) {
             patterns.push(SecretPattern {
-                name: Box::leak(format!("Custom Pattern {}", i + 1).into_boxed_str()),
+                name: Cow::Owned(format!("Custom Pattern {}", i + 1)),
                 regex,
-                description: Box::leak(format!("User-defined: {}", raw).into_boxed_str()),
+                description: Cow::Owned(format!("User-defined: {}", raw)),
             });
         }
     }
@@ -53,141 +54,143 @@ fn builtin_patterns() -> Vec<SecretPattern> {
     vec![
         // ── Cloud Provider API Keys ──
         SecretPattern {
-            name: "AWS Access Key",
+            name: Cow::Borrowed("AWS Access Key"),
             regex: Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
-            description: "AWS IAM access key ID",
+            description: Cow::Borrowed("AWS IAM access key ID"),
         },
         SecretPattern {
-            name: "AWS Secret Key",
+            name: Cow::Borrowed("AWS Secret Key"),
             regex: Regex::new(
                 r#"(?i)aws[_-]?secret[_-]?access[_-]?key\s*[:=]\s*["']?[A-Za-z0-9/+=]{40}"#,
             )
             .unwrap(),
-            description: "AWS secret access key",
+            description: Cow::Borrowed("AWS secret access key"),
         },
         SecretPattern {
-            name: "GCP Service Account",
+            name: Cow::Borrowed("GCP Service Account"),
             regex: Regex::new(r#""type"\s*:\s*"service_account""#).unwrap(),
-            description: "Google Cloud service account JSON key",
+            description: Cow::Borrowed("Google Cloud service account JSON key"),
         },
         SecretPattern {
-            name: "GCP API Key",
+            name: Cow::Borrowed("GCP API Key"),
             regex: Regex::new(r"AIza[0-9A-Za-z_-]{35}").unwrap(),
-            description: "Google API key",
+            description: Cow::Borrowed("Google API key"),
         },
         SecretPattern {
-            name: "Azure Storage Key",
+            name: Cow::Borrowed("Azure Storage Key"),
             regex: Regex::new(r#"(?i)AccountKey\s*=\s*[A-Za-z0-9+/=]{44,}"#).unwrap(),
-            description: "Azure storage account key",
+            description: Cow::Borrowed("Azure storage account key"),
         },
         // ── AI/ML Provider Keys ──
         SecretPattern {
-            name: "OpenAI Key",
-            regex: Regex::new(r"sk-[a-zA-Z0-9]{48}|sk-proj-[a-zA-Z0-9\-_]{40,}").unwrap(),
-            description: "OpenAI API key (legacy or project-scoped)",
+            name: Cow::Borrowed("OpenAI Key"),
+            regex: Regex::new(r"sk-(?:proj-|svcacct-)?[a-zA-Z0-9\-_]{20,}").unwrap(),
+            description: Cow::Borrowed(
+                "OpenAI API key (legacy, project-scoped, or service account)",
+            ),
         },
         SecretPattern {
-            name: "Anthropic Key",
+            name: Cow::Borrowed("Anthropic Key"),
             regex: Regex::new(r"sk-ant-[a-zA-Z0-9-]{80,}").unwrap(),
-            description: "Anthropic API key",
+            description: Cow::Borrowed("Anthropic API key"),
         },
         SecretPattern {
-            name: "HuggingFace Token",
+            name: Cow::Borrowed("HuggingFace Token"),
             regex: Regex::new(r"hf_[a-zA-Z0-9]{34,}").unwrap(),
-            description: "HuggingFace access token",
+            description: Cow::Borrowed("HuggingFace access token"),
         },
         // ── Source Control & CI ──
         SecretPattern {
-            name: "GitHub Token",
+            name: Cow::Borrowed("GitHub Token"),
             regex: Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").unwrap(),
-            description: "GitHub personal access or OAuth token",
+            description: Cow::Borrowed("GitHub personal access or OAuth token"),
         },
         SecretPattern {
-            name: "GitHub Fine-Grained Token",
+            name: Cow::Borrowed("GitHub Fine-Grained Token"),
             regex: Regex::new(r"github_pat_[a-zA-Z0-9_]{22,}").unwrap(),
-            description: "GitHub fine-grained personal access token",
+            description: Cow::Borrowed("GitHub fine-grained personal access token"),
         },
         SecretPattern {
-            name: "GitLab Token",
+            name: Cow::Borrowed("GitLab Token"),
             regex: Regex::new(r"glpat-[a-zA-Z0-9_-]{20,}").unwrap(),
-            description: "GitLab personal access token",
+            description: Cow::Borrowed("GitLab personal access token"),
         },
         // ── Communication Platforms ──
         SecretPattern {
-            name: "Slack Token",
+            name: Cow::Borrowed("Slack Token"),
             regex: Regex::new(r"xox[bpras]-[0-9]{10,}-[a-zA-Z0-9-]+").unwrap(),
-            description: "Slack bot, user, or app token",
+            description: Cow::Borrowed("Slack bot, user, or app token"),
         },
         SecretPattern {
-            name: "Slack Webhook",
+            name: Cow::Borrowed("Slack Webhook"),
             regex: Regex::new(
                 r"https://hooks\.slack\.com/services/T[0-9A-Z]+/B[0-9A-Z]+/[a-zA-Z0-9]+",
             )
             .unwrap(),
-            description: "Slack incoming webhook URL",
+            description: Cow::Borrowed("Slack incoming webhook URL"),
         },
         SecretPattern {
-            name: "Discord Webhook",
+            name: Cow::Borrowed("Discord Webhook"),
             regex: Regex::new(r"https://discord(?:app)?\.com/api/webhooks/\d+/[a-zA-Z0-9_-]+")
                 .unwrap(),
-            description: "Discord webhook URL",
+            description: Cow::Borrowed("Discord webhook URL"),
         },
         // ── Payment & SaaS ──
         SecretPattern {
-            name: "Stripe Key",
+            name: Cow::Borrowed("Stripe Key"),
             regex: Regex::new(r"[sr]k_(live|test)_[a-zA-Z0-9]{24,}").unwrap(),
-            description: "Stripe secret or restricted API key",
+            description: Cow::Borrowed("Stripe secret or restricted API key"),
         },
         SecretPattern {
-            name: "Twilio Key",
+            name: Cow::Borrowed("Twilio Key"),
             regex: Regex::new(r"SK[a-f0-9]{32}").unwrap(),
-            description: "Twilio API key SID",
+            description: Cow::Borrowed("Twilio API key SID"),
         },
         SecretPattern {
-            name: "SendGrid Key",
+            name: Cow::Borrowed("SendGrid Key"),
             regex: Regex::new(r"SG\.[a-zA-Z0-9_-]{22,}\.[a-zA-Z0-9_-]{43,}").unwrap(),
-            description: "SendGrid API key",
+            description: Cow::Borrowed("SendGrid API key"),
         },
         SecretPattern {
-            name: "Mailgun Key",
+            name: Cow::Borrowed("Mailgun Key"),
             regex: Regex::new(r"key-[a-f0-9]{32}").unwrap(),
-            description: "Mailgun API key",
+            description: Cow::Borrowed("Mailgun API key"),
         },
         // ── Database & Infrastructure ──
         SecretPattern {
-            name: "Connection String",
+            name: Cow::Borrowed("Connection String"),
             regex: Regex::new(r"(?i)(mongodb(\+srv)?|postgres(ql)?|mysql|redis|amqp)://[^\s]+")
                 .unwrap(),
-            description: "Database or message broker connection URI",
+            description: Cow::Borrowed("Database or message broker connection URI"),
         },
         // ── Cryptographic Material ──
         SecretPattern {
-            name: "Private Key",
+            name: Cow::Borrowed("Private Key"),
             regex: Regex::new(r"-----BEGIN .* PRIVATE KEY-----").unwrap(),
-            description: "PEM-encoded private key (RSA, EC, etc.)",
+            description: Cow::Borrowed("PEM-encoded private key (RSA, EC, etc.)"),
         },
         SecretPattern {
-            name: "JWT Token",
+            name: Cow::Borrowed("JWT Token"),
             regex: Regex::new(r"eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+")
                 .unwrap(),
-            description: "JSON Web Token (three-part Base64)",
+            description: Cow::Borrowed("JSON Web Token (three-part Base64)"),
         },
         // ── Generic Patterns ──
         SecretPattern {
-            name: "Generic API Key",
+            name: Cow::Borrowed("Generic API Key"),
             regex: Regex::new(r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*["']?[a-zA-Z0-9_-]{20,}"#)
                 .unwrap(),
-            description: "Generic API key assignment",
+            description: Cow::Borrowed("Generic API key assignment"),
         },
         SecretPattern {
-            name: "Generic Secret",
+            name: Cow::Borrowed("Generic Secret"),
             regex: Regex::new(r#"(?i)(password|secret|token)\s*[:=]\s*["'][^"']{8,}["']"#).unwrap(),
-            description: "Quoted password, secret, or token assignment",
+            description: Cow::Borrowed("Quoted password, secret, or token assignment"),
         },
         SecretPattern {
-            name: "Generic Secret (unquoted)",
+            name: Cow::Borrowed("Generic Secret (unquoted)"),
             regex: Regex::new(r#"(?i)(password|secret|token)\s*[:=]\s*[^\s'"]{16,}"#).unwrap(),
-            description: "Unquoted password, secret, or token assignment",
+            description: Cow::Borrowed("Unquoted password, secret, or token assignment"),
         },
     ]
 }
