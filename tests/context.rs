@@ -877,6 +877,46 @@ fn file_category_containerfile_is_build() {
     );
 }
 
+// ─── Whitespace-only modified symbol detection ──────────────────────────────
+
+#[test]
+fn modified_symbol_whitespace_only_detected() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,3 +1,3 @@\n fn foo() {\n-    bar()\n+  bar()\n }",
+        1,
+        1,
+    )]);
+    let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
+    let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert!(
+        !ctx.symbols_modified.contains("foo"),
+        "whitespace-only modified symbol should not appear in symbols_modified: {}",
+        ctx.symbols_modified
+    );
+}
+
+#[test]
+fn modified_symbol_semantic_change_shown() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,3 +1,3 @@\n fn foo() {\n-    bar()\n+    baz()\n }",
+        1,
+        1,
+    )]);
+    let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
+    let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert!(
+        ctx.symbols_modified.contains("foo"),
+        "semantic modified symbol should appear in symbols_modified: {}",
+        ctx.symbols_modified
+    );
+}
+
 // ─── Multi-file diff truncation ──────────────────────────────────────────────
 
 // ─── Locale support ──────────────────────────────────────────────────────────

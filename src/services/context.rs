@@ -39,13 +39,6 @@ impl ContextBuilder {
         symbols: &[CodeSymbol],
         config: &Config,
     ) -> PromptContext {
-        let commit_type = Self::infer_commit_type(changes, symbols);
-        let scope = if config.format.include_scope {
-            Self::infer_scope(changes)
-        } else {
-            None
-        };
-
         // Build components with budget management
         let change_summary = Self::summarize_changes(changes);
         let file_breakdown = Self::format_files(changes);
@@ -89,12 +82,22 @@ impl ContextBuilder {
             .map(|s| (&s.kind, s.name.as_str(), s.file.as_path()))
             .collect();
 
-        let modified_symbols: Vec<&CodeSymbol> = symbols
+        // Build modified symbols with whitespace classification
+        let mut modified_symbols: Vec<CodeSymbol> = symbols
             .iter()
             .filter(|s| {
                 s.is_added && removed_keys.contains(&(&s.kind, s.name.as_str(), s.file.as_path()))
             })
+            .cloned()
             .collect();
+
+        // Populate is_whitespace_only by comparing diff content within each symbol's span
+        for symbol in &mut modified_symbols {
+            if let Some(file_change) = changes.files.iter().find(|f| f.path == symbol.file) {
+                symbol.is_whitespace_only =
+                    Self::classify_span_change(&file_change.diff, symbol.line, symbol.end_line);
+            }
+        }
 
         let symbols_deduped: Vec<CodeSymbol> = symbols
             .iter()
@@ -109,13 +112,25 @@ impl ContextBuilder {
             .cloned()
             .collect();
 
+        // Infer commit type AFTER classification so it can see whitespace-only data
+        let commit_type = Self::infer_commit_type(changes, &symbols_deduped);
+        let scope = if config.format.include_scope {
+            Self::infer_scope(changes)
+        } else {
+            None
+        };
+
         let symbols_added =
             Self::format_symbols_with_budget(&symbols_deduped, true, symbol_budget / 3);
         let symbols_removed =
             Self::format_symbols_with_budget(&symbols_deduped, false, symbol_budget / 3);
 
-        // Format modified symbols (signature changes)
-        let symbols_modified = Self::format_modified_symbols(&modified_symbols, symbol_budget / 3);
+        // Format modified symbols (signature changes), excluding whitespace-only
+        let semantic_modified: Vec<&CodeSymbol> = modified_symbols
+            .iter()
+            .filter(|s| s.is_whitespace_only != Some(true))
+            .collect();
+        let symbols_modified = Self::format_modified_symbols(&semantic_modified, symbol_budget / 3);
 
         // Highlight removed public symbols — strong signal for breaking changes
         let public_api_removed = Self::format_public_api_removed(&symbols_deduped);
@@ -164,6 +179,76 @@ impl ContextBuilder {
             locale: config.locale.clone(),
             history_context: None, // Set by App when learn_from_history is enabled
         }
+    }
+
+    /// Classify whether changes within a symbol span are whitespace-only.
+    /// Tracks both old-file and new-file line numbers independently.
+    /// Returns `None` if no changes in span, `Some(true)` if whitespace-only,
+    /// `Some(false)` if semantic changes detected.
+    fn classify_span_change(diff: &str, start_line: usize, end_line: usize) -> Option<bool> {
+        use crate::services::analyzer::DiffHunk;
+
+        let hunks = DiffHunk::parse_from_diff(diff);
+        let mut added_in_span: Vec<&str> = Vec::new();
+        let mut removed_in_span: Vec<&str> = Vec::new();
+
+        let mut current_old_line: usize = 0;
+        let mut current_new_line: usize = 0;
+        let mut hunk_idx: usize = 0;
+        let mut in_hunk = false;
+
+        for line in diff.lines() {
+            if line.starts_with("@@") {
+                if hunk_idx < hunks.len() {
+                    current_old_line = hunks[hunk_idx].old_start;
+                    current_new_line = hunks[hunk_idx].new_start;
+                    hunk_idx += 1;
+                    in_hunk = true;
+                }
+                continue;
+            }
+
+            if !in_hunk || line.starts_with("+++") || line.starts_with("---") {
+                continue;
+            }
+
+            if let Some(content) = line.strip_prefix('+') {
+                let in_new_span = current_new_line >= start_line && current_new_line <= end_line;
+                if in_new_span {
+                    added_in_span.push(content);
+                }
+                current_new_line += 1;
+            } else if let Some(content) = line.strip_prefix('-') {
+                let in_old_span = current_old_line >= start_line && current_old_line <= end_line;
+                if in_old_span {
+                    removed_in_span.push(content);
+                }
+                current_old_line += 1;
+            } else {
+                // Context line — advances both counters
+                current_old_line += 1;
+                current_new_line += 1;
+            }
+        }
+
+        if added_in_span.is_empty() && removed_in_span.is_empty() {
+            return None;
+        }
+
+        // Compare non-whitespace character streams.
+        // Correctly handles line wrapping while detecting actual content changes.
+        let old_text: String = removed_in_span
+            .iter()
+            .flat_map(|l| l.chars())
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        let new_text: String = added_in_span
+            .iter()
+            .flat_map(|l| l.chars())
+            .filter(|c| !c.is_whitespace())
+            .collect();
+
+        Some(old_text == new_text)
     }
 
     pub fn infer_commit_type(changes: &StagedChanges, symbols: &[CodeSymbol]) -> CommitType {
