@@ -184,10 +184,35 @@ fn breaking_change_fixtures() {
 fn fixture_count() {
     let runner = EvalRunner::new(fixtures_dir(), None);
     let results = runner.run_sync().expect("eval runner should not error");
-    // 2 original (simple-feat, style-only) + 10 new = 12
+    // 12 original + 26 new = 38
     assert!(
-        results.len() >= 12,
-        "Expected at least 12 fixtures, found {}",
+        results.len() >= 38,
+        "Expected at least 38 fixtures, found {}",
         results.len()
+    );
+}
+
+/// Print aggregate per-type accuracy report after running all fixtures.
+#[test]
+fn aggregate_summary() {
+    let runner = EvalRunner::new(fixtures_dir(), None);
+    let results = runner.run_sync().expect("eval runner should not error");
+
+    let summary = commitbee::eval::EvalSummary::from_results(&results);
+    let report = summary.format_report();
+
+    // Print the report so it's visible with --nocapture
+    eprintln!("\n{}", report);
+
+    // Verify the summary math is consistent
+    assert_eq!(
+        summary.total_passed + summary.total_failed,
+        summary.total_fixtures,
+        "passed + failed should equal total"
+    );
+    assert_eq!(
+        summary.total_fixtures,
+        results.len(),
+        "summary total should match results count"
     );
 }

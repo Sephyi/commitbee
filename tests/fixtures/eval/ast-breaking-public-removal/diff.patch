@@ -1,0 +1,25 @@
+diff --git a/src/services/api.rs b/src/services/api.rs
+index abc1234..def5678 100644
+--- a/src/services/api.rs
++++ b/src/services/api.rs
+@@ -5,20 +5,5 @@ use crate::error::Result;
+
+ pub struct ApiClient {
+     base_url: String,
+ }
+
+-/// Send a GET request to the given path.
+-pub fn api_get(client: &ApiClient, path: &str) -> Result<Response> {
+-    let url = format!("{}/{}", client.base_url, path);
+-    reqwest::blocking::get(&url).map_err(|e| Error::Network(e.to_string()))
+-}
+-
+-/// Send a POST request with a JSON body.
+-pub fn api_post(client: &ApiClient, path: &str, body: &str) -> Result<Response> {
+-    let url = format!("{}/{}", client.base_url, path);
+-    reqwest::blocking::Client::new()
+-        .post(&url)
+-        .body(body.to_string())
+-        .send()
+-        .map_err(|e| Error::Network(e.to_string()))
+-}

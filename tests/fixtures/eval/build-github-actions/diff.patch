@@ -1,0 +1,20 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index abc1234..def5678 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -10,10 +10,15 @@ jobs:
+   test:
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/checkout@v3
+-      - uses: dtolnay/rust-toolchain@stable
++      - uses: actions/checkout@v4
++      - uses: dtolnay/rust-toolchain@stable
++        with:
++          components: clippy, rustfmt
+       - run: cargo fmt --check
+-      - run: cargo test
++      - run: cargo clippy --all-targets -- -D warnings
++      - run: cargo test --all-targets
++      - name: Security audit
++        run: cargo audit

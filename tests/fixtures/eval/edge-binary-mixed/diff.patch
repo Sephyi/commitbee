@@ -1,0 +1,26 @@
+diff --git a/assets/logo.png b/assets/logo.png
+new file mode 100644
+index 0000000..abc1234
+Binary files /dev/null and b/assets/logo.png differ
+diff --git a/src/services/branding.rs b/src/services/branding.rs
+new file mode 100644
+index 0000000..def5678
+--- /dev/null
++++ b/src/services/branding.rs
+@@ -0,0 +1,15 @@
++use std::path::Path;
++
++/// Branding configuration for the application.
++pub struct BrandConfig {
++    pub logo_path: String,
++    pub app_name: String,
++}
++
++impl BrandConfig {
++    pub fn new(logo_path: &str, app_name: &str) -> Self {
++        Self {
++            logo_path: logo_path.to_string(),
++            app_name: app_name.to_string(),
++        }
++    }
++}

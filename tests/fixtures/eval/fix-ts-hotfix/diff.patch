@@ -1,0 +1,12 @@
+diff --git a/src/services/auth.ts b/src/services/auth.ts
+index abc1234..def5678 100644
+--- a/src/services/auth.ts
++++ b/src/services/auth.ts
+@@ -22,8 +22,12 @@ export function validateToken(token: string): boolean {
+   const decoded = decodeJWT(token);
+-  return decoded.exp > Date.now();
++  // hotfix: token expiry comparison was using seconds vs milliseconds
++  // Date.now() returns ms but JWT exp is in seconds
++  const nowSeconds = Math.floor(Date.now() / 1000);
++  return decoded.exp > nowSeconds;
+ }

@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "edge-lock-file-only"
+description = "Lock file only change should produce chore type"
+category = "edge"
+expected_type = "chore"
+
+[evidence]
+is_dependency_only = true
+
+[breaking]
+expected = false

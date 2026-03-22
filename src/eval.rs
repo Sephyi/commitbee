@@ -286,20 +286,23 @@ impl EvalRunner {
 
         self.print_results(&results);
 
-        let failed = results.iter().filter(|r| !r.passed()).count();
-        if failed > 0 {
+        // Print aggregate summary
+        let summary = EvalSummary::from_results(&results);
+        eprintln!("{}", summary.format_report());
+
+        if summary.total_failed > 0 {
             eprintln!(
-                "\n{} {} fixture(s) failed",
+                "{} {} fixture(s) failed",
                 style("FAIL").red().bold(),
-                failed,
+                summary.total_failed,
             );
             std::process::exit(1);
         }
 
         eprintln!(
-            "\n{} All {} fixture(s) passed",
+            "{} All {} fixture(s) passed",
             style("PASS").green().bold(),
-            results.len(),
+            summary.total_passed,
         );
 
         Ok(())
@@ -1012,6 +1015,89 @@ impl EvalRunner {
 
             eprintln!();
         }
+    }
+}
+
+/// Aggregate evaluation summary with per-type accuracy breakdown.
+#[derive(Debug)]
+pub struct EvalSummary {
+    pub total_fixtures: usize,
+    pub total_passed: usize,
+    pub total_failed: usize,
+    /// Per-type accuracy: (type_name, passed, total).
+    pub per_type: Vec<(String, usize, usize)>,
+}
+
+impl EvalSummary {
+    /// Build a summary from eval results.
+    #[must_use]
+    pub fn from_results(results: &[EvalResult]) -> Self {
+        let total_fixtures = results.len();
+        let total_passed = results.iter().filter(|r| r.passed()).count();
+        let total_failed = total_fixtures - total_passed;
+
+        // Group by expected_type
+        let mut type_map: std::collections::BTreeMap<String, (usize, usize)> =
+            std::collections::BTreeMap::new();
+
+        for result in results {
+            let key = result.expected_type.to_lowercase();
+            if key.is_empty() {
+                continue;
+            }
+            let entry = type_map.entry(key).or_insert((0, 0));
+            entry.1 += 1; // total
+            if result.passed() {
+                entry.0 += 1; // passed
+            }
+        }
+
+        let per_type: Vec<(String, usize, usize)> = type_map
+            .into_iter()
+            .map(|(k, (passed, total))| (k, passed, total))
+            .collect();
+
+        Self {
+            total_fixtures,
+            total_passed,
+            total_failed,
+            per_type,
+        }
+    }
+
+    /// Format the summary as a human-readable report.
+    #[must_use]
+    pub fn format_report(&self) -> String {
+        let mut report = String::new();
+
+        report.push_str("=== Eval Summary ===\n\n");
+
+        // Per-type breakdown
+        report.push_str("Per-type accuracy:\n");
+        for (type_name, passed, total) in &self.per_type {
+            let pct = if *total > 0 {
+                (*passed as f64 / *total as f64) * 100.0
+            } else {
+                0.0
+            };
+            report.push_str(&format!(
+                "  {}: {}/{} ({:.0}%)\n",
+                type_name, passed, total, pct
+            ));
+        }
+
+        // Overall score
+        let overall_pct = if self.total_fixtures > 0 {
+            (self.total_passed as f64 / self.total_fixtures as f64) * 100.0
+        } else {
+            0.0
+        };
+        report.push_str(&format!(
+            "\nOverall: {}/{} ({:.1}%)\n",
+            self.total_passed, self.total_fixtures, overall_pct
+        ));
+
+        report
     }
 }
 

@@ -1,0 +1,19 @@
+diff --git a/src/services/config.rs b/src/services/config.rs
+index abc1234..def5678 100644
+--- a/src/services/config.rs
++++ b/src/services/config.rs
+@@ -8,10 +8,10 @@ impl ConfigLoader {
+     pub fn load(&self, path: &Path) -> Result<Config> {
+         let content = std::fs::read_to_string(path)?;
+-        let  parsed:  Config = toml::from_str(&content)?;
+-        if  parsed.validate() {
+-            Ok( parsed )
++        let parsed: Config = toml::from_str(&content)?;
++        if parsed.validate() {
++            Ok(parsed)
+         } else {
+-            Err(Error::Config( "invalid".into() ))
++            Err(Error::Config("invalid".into()))
+         }
+     }
+ }

@@ -1,0 +1,24 @@
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,18 @@
++FROM rust:1.94-slim AS builder
++WORKDIR /app
++COPY Cargo.toml Cargo.lock ./
++COPY src/ src/
++RUN cargo build --release
++
++FROM debian:bookworm-slim
++RUN apt-get update && apt-get install -y \
++    ca-certificates \
++    && rm -rf /var/lib/apt/lists/*
++
++COPY --from=builder /app/target/release/commitbee /usr/local/bin/
++
++RUN useradd -m appuser
++USER appuser
++
++ENTRYPOINT ["commitbee"]
++CMD ["--help"]

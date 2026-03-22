@@ -1,0 +1,9 @@
+[[symbols]]
+kind = "Function"
+name = "validate_batch"
+file = "src/services/validator.rs"
+line = 16
+end_line = 24
+is_public = true
+is_added = true
+signature = "pub fn validate_batch(inputs: &[&str]) -> Result<()>"

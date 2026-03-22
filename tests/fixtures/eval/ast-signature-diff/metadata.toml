@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "ast-signature-diff"
+description = "Replacing a public function with a new-name version should produce refactor"
+language = "rust"
+category = "ast"
+expected_type = "refactor"
+expected_scope = "optional"
+
+[evidence]
+has_new_public_api = true
+public_api_removed_count = 1
+
+[prompt]
+must_contain = ["SYMBOLS CHANGED", "Added", "Removed"]
+
+[breaking]
+expected = true

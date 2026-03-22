@@ -1,0 +1,15 @@
+diff --git a/src/services/old_name.rs b/src/services/new_name.rs
+similarity index 95%
+rename from src/services/old_name.rs
+rename to src/services/new_name.rs
+index abc1234..def5678 100644
+--- a/src/services/old_name.rs
++++ b/src/services/new_name.rs
+@@ -1,5 +1,5 @@
+ use crate::error::Result;
+
+-/// Old module name documentation.
++/// Renamed module with updated documentation.
+ pub fn process(data: &str) -> Result<String> {
+     Ok(data.to_uppercase())
+ }

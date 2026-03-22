@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "ci-github-workflow"
+description = "New CI workflow file should produce build type"
+category = "ci"
+expected_type = "build"
+
+[evidence]
+is_dependency_only = true
+
+[breaking]
+expected = false

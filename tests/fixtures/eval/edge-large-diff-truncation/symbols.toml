@@ -1,0 +1,9 @@
+[[symbols]]
+kind = "Struct"
+name = "LargeModule"
+file = "src/services/large.rs"
+line = 5
+end_line = 10
+is_public = true
+is_added = true
+signature = "pub struct LargeModule"

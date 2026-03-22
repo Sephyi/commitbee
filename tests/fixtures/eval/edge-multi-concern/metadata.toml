@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "edge-multi-concern"
+description = "Source + test + docs change should prefer source type (feat)"
+language = "rust"
+category = "edge"
+expected_type = "feat"
+expected_scope = "optional"
+
+[evidence]
+has_new_public_api = true
+
+[breaking]
+expected = false

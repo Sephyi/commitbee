@@ -1,0 +1,19 @@
+[[symbols]]
+kind = "Function"
+name = "api_get"
+file = "src/services/api.rs"
+line = 10
+end_line = 13
+is_public = true
+is_added = false
+signature = "pub fn api_get(client: &ApiClient, path: &str) -> Result<Response>"
+
+[[symbols]]
+kind = "Function"
+name = "api_post"
+file = "src/services/api.rs"
+line = 16
+end_line = 22
+is_public = true
+is_added = false
+signature = "pub fn api_post(client: &ApiClient, path: &str, body: &str) -> Result<Response>"

@@ -1,0 +1,15 @@
+diff --git a/src/services/render.rs b/src/services/render.rs
+index abc1234..def5678 100644
+--- a/src/services/render.rs
++++ b/src/services/render.rs
+@@ -3,9 +3,9 @@ use crate::config::Config;
+
+ impl Renderer {
+-    pub fn render(&self,  template: &str,  data: &Data) -> String {
+-        let  compiled = self.compile(template);
+-        compiled.execute( data )
++    pub fn render(&self, template: &str, data: &Data) -> String {
++        let compiled = self.compile(template);
++        compiled.execute(data)
+     }
+ }

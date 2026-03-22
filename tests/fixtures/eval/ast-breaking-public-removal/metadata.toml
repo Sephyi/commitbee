@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "ast-breaking-public-removal"
+description = "Removing public API without replacement should signal breaking change"
+language = "rust"
+category = "ast"
+expected_type = "refactor"
+expected_scope = "optional"
+
+[evidence]
+has_new_public_api = false
+public_api_removed_count = 2
+
+[prompt]
+must_contain = ["SYMBOLS CHANGED", "Removed"]
+
+[breaking]
+expected = true

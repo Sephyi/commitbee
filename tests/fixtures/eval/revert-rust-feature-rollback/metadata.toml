@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "revert-rust-feature-rollback"
+description = "Rolling back a feature by deleting new code should produce refactor type"
+language = "rust"
+category = "revert"
+expected_type = "refactor"
+expected_scope = "optional"
+
+[evidence]
+is_mechanical = false
+has_bug_evidence = false
+has_new_public_api = false
+public_api_removed_count = 0
+is_dependency_only = false
+
+[breaking]
+expected = true

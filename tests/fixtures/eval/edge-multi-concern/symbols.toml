@@ -1,0 +1,29 @@
+[[symbols]]
+kind = "Struct"
+name = "MetricsCollector"
+file = "src/services/metrics.rs"
+line = 4
+end_line = 7
+is_public = true
+is_added = true
+signature = "pub struct MetricsCollector"
+
+[[symbols]]
+kind = "Function"
+name = "new"
+file = "src/services/metrics.rs"
+line = 10
+end_line = 15
+is_public = true
+is_added = true
+signature = "pub fn new() -> Self"
+
+[[symbols]]
+kind = "Function"
+name = "elapsed_ms"
+file = "src/services/metrics.rs"
+line = 17
+end_line = 19
+is_public = true
+is_added = true
+signature = "pub fn elapsed_ms(&self) -> u128"

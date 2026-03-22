@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "fix-ts-hotfix"
+description = "TypeScript hotfix comment should produce fix type"
+language = "typescript"
+category = "fix"
+expected_type = "fix"
+expected_scope = "optional"
+
+[evidence]
+is_mechanical = false
+has_bug_evidence = true
+has_new_public_api = false
+public_api_removed_count = 0
+is_dependency_only = false
+
+[prompt]
+must_contain = ["EVIDENCE", "bug-fix comments? yes"]
+
+[breaking]
+expected = false

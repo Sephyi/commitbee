@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "build-dockerfile"
+description = "Dockerfile change should produce build type"
+category = "build"
+expected_type = "build"
+
+[evidence]
+is_mechanical = false
+has_bug_evidence = false
+has_new_public_api = false
+public_api_removed_count = 0
+is_dependency_only = true
+
+[breaking]
+expected = false

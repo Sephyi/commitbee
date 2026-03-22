@@ -1,0 +1,19 @@
+diff --git a/src/services/processor.rs b/src/services/processor.rs
+index abc1234..def5678 100644
+--- a/src/services/processor.rs
++++ b/src/services/processor.rs
+@@ -8,10 +8,12 @@ pub struct Processor {
+     config: Config,
+ }
+
+-/// Process data with default timeout.
+-pub fn process(data: &[u8]) -> Result<Output> {
+-    let processor = Processor::default();
+-    processor.run(data)
++/// Process data with explicit timeout and options.
++pub fn process_with_opts(data: &[u8], timeout: Duration, opts: &ProcessOpts) -> Result<Output> {
++    let processor = Processor::with_opts(opts);
++    processor
++        .run_with_timeout(data, timeout)
++        .map_err(|e| Error::Processing(e.to_string()))
+ }

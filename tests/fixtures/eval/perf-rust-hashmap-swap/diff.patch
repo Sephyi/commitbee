@@ -1,0 +1,20 @@
+diff --git a/src/services/cache.rs b/src/services/cache.rs
+index abc1234..def5678 100644
+--- a/src/services/cache.rs
++++ b/src/services/cache.rs
+@@ -1,10 +1,10 @@
+-use std::collections::HashMap;
++use rustc_hash::FxHashMap;
+
+ pub struct SymbolCache {
+-    entries: HashMap<String, Vec<Symbol>>,
++    entries: FxHashMap<String, Vec<Symbol>>,
+ }
+
+ impl SymbolCache {
+     pub fn new() -> Self {
+-        Self { entries: HashMap::new() }
++        Self { entries: FxHashMap::default() }
+     }
+
+     pub fn insert(&mut self, key: String, symbols: Vec<Symbol>) {

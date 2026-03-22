@@ -1,0 +1,39 @@
+[[symbols]]
+kind = "Struct"
+name = "JsonFormatter"
+file = "src/services/json_format.rs"
+line = 3
+end_line = 3
+is_public = true
+is_added = true
+signature = "pub struct JsonFormatter"
+
+[[symbols]]
+kind = "Function"
+name = "format"
+file = "src/services/json_format.rs"
+line = 6
+end_line = 9
+is_public = true
+is_added = true
+signature = "pub fn format(&self, data: &str) -> Result<String>"
+
+[[symbols]]
+kind = "Struct"
+name = "YamlFormatter"
+file = "src/services/yaml_format.rs"
+line = 3
+end_line = 3
+is_public = true
+is_added = true
+signature = "pub struct YamlFormatter"
+
+[[symbols]]
+kind = "Function"
+name = "format"
+file = "src/services/yaml_format.rs"
+line = 6
+end_line = 9
+is_public = true
+is_added = true
+signature = "pub fn format(&self, data: &str) -> Result<String>"
