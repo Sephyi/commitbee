@@ -123,7 +123,9 @@ impl CommitSplitter {
                 .cloned()
                 .collect();
 
-            let commit_type = ContextBuilder::infer_commit_type(&sub_changes, &sub_symbols);
+            // Whitespace classification requires full build(); pass false here
+            // since sub_symbols are not yet classified via classify_span_change.
+            let commit_type = ContextBuilder::infer_commit_type(&sub_changes, &sub_symbols, false);
             let scope = ContextBuilder::infer_scope(&sub_changes);
 
             groups.push(CommitGroup {

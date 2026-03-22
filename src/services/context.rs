@@ -113,7 +113,11 @@ impl ContextBuilder {
             .collect();
 
         // Infer commit type AFTER classification so it can see whitespace-only data
-        let commit_type = Self::infer_commit_type(changes, &symbols_deduped);
+        let all_modified_ws = !modified_symbols.is_empty()
+            && modified_symbols
+                .iter()
+                .all(|s| s.is_whitespace_only == Some(true));
+        let commit_type = Self::infer_commit_type(changes, &symbols_deduped, all_modified_ws);
         let scope = if config.format.include_scope {
             Self::infer_scope(changes)
         } else {
@@ -260,7 +264,11 @@ impl ContextBuilder {
         Some(old_text == new_text)
     }
 
-    pub fn infer_commit_type(changes: &StagedChanges, symbols: &[CodeSymbol]) -> CommitType {
+    pub fn infer_commit_type(
+        changes: &StagedChanges,
+        symbols: &[CodeSymbol],
+        all_modified_whitespace_only: bool,
+    ) -> CommitType {
         let categories: Vec<_> = changes.files.iter().map(|f| f.category).collect();
 
         // All docs -> docs
@@ -281,6 +289,12 @@ impl ContextBuilder {
         // All build -> build
         if categories.iter().all(|c| *c == FileCategory::Build) {
             return CommitType::Build;
+        }
+
+        // All modified symbols are whitespace-only and no added/removed symbols → style
+        // (catches `cargo fmt` where symbols exist but only spacing changed)
+        if all_modified_whitespace_only && symbols.is_empty() {
+            return CommitType::Style;
         }
 
         // Explicit bug evidence -> fix

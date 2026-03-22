@@ -717,7 +717,7 @@ fn api_replacement_infers_refactor() {
             false,
         ),
     ];
-    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols);
+    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols, false);
     assert_eq!(
         commit_type,
         CommitType::Refactor,
@@ -741,7 +741,7 @@ fn api_addition_without_removal_infers_feat() {
         true,
         true,
     )];
-    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols);
+    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols, false);
     assert_eq!(
         commit_type,
         CommitType::Feat,
@@ -914,6 +914,30 @@ fn modified_symbol_semantic_change_shown() {
         ctx.symbols_modified.contains("foo"),
         "semantic modified symbol should appear in symbols_modified: {}",
         ctx.symbols_modified
+    );
+}
+
+// ─── Whitespace-only formatting detection ────────────────────────────────────
+
+#[test]
+fn all_symbols_whitespace_only_suggests_style() {
+    // Diff only changes indentation inside `foo` — no semantic content change.
+    // Both old and new symbol share the same name/kind/file → classified as modified.
+    // classify_span_change should detect whitespace-only → Style inferred.
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,3 +1,3 @@\n fn foo() {\n-    bar()\n+  bar()\n }",
+        1,
+        1,
+    )]);
+    let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
+    let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert_eq!(
+        ctx.suggested_type,
+        CommitType::Style,
+        "all whitespace-only modified symbols with no added/removed symbols should suggest Style"
     );
 }
 
