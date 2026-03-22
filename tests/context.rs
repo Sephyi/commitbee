@@ -1031,6 +1031,28 @@ fn diff_truncation_multiple_files() {
 // ─── Signature display ───────────────────────────────────────────────────────
 
 #[test]
+fn prompt_shows_signature_diff_for_modified_symbols() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,3 +1,3 @@\n-pub fn validate(input: &str) -> bool {\n+pub fn validate(input: &str, strict: bool) -> Result<()> {\n     // body\n }",
+        1,
+        1,
+    )]);
+    let mut sym_old = make_symbol("validate", SymbolKind::Function, "src/lib.rs", true, false);
+    sym_old.signature = Some("pub fn validate(input: &str) -> bool".to_string());
+    let mut sym_new = make_symbol("validate", SymbolKind::Function, "src/lib.rs", true, true);
+    sym_new.signature =
+        Some("pub fn validate(input: &str, strict: bool) -> Result<()>".to_string());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert!(
+        ctx.symbols_modified.contains('\u{2192}') || ctx.symbols_modified.contains("->"),
+        "modified symbols should show signature transition: {}",
+        ctx.symbols_modified
+    );
+}
+
+#[test]
 fn prompt_shows_signatures_when_available() {
     let changes = make_staged_changes(vec![make_file_change(
         "src/lib.rs",

@@ -125,12 +125,21 @@ impl ContextBuilder {
         let symbols_removed =
             Self::format_symbols_with_budget(&symbols_deduped, false, symbol_budget / 3);
 
+        // Collect the removed-side counterparts for modified symbols (to show old→new signatures)
+        let modified_old: Vec<&CodeSymbol> = symbols
+            .iter()
+            .filter(|s| {
+                !s.is_added && added_keys.contains(&(&s.kind, s.name.as_str(), s.file.as_path()))
+            })
+            .collect();
+
         // Format modified symbols (signature changes), excluding whitespace-only
         let semantic_modified: Vec<&CodeSymbol> = modified_symbols
             .iter()
             .filter(|s| s.is_whitespace_only != Some(true))
             .collect();
-        let symbols_modified = Self::format_modified_symbols(&semantic_modified, symbol_budget / 3);
+        let symbols_modified =
+            Self::format_modified_symbols(&semantic_modified, &modified_old, symbol_budget / 3);
 
         // Highlight removed public symbols — strong signal for breaking changes
         let public_api_removed = Self::format_public_api_removed(&symbols_deduped);
@@ -523,24 +532,56 @@ impl ContextBuilder {
     }
 
     /// Format modified symbols (signature changed: same name+kind+file in both added and removed).
-    fn format_modified_symbols(symbols: &[&CodeSymbol], char_budget: usize) -> String {
-        if symbols.is_empty() {
+    ///
+    /// When both old and new signatures are available and differ, shows the transition as
+    /// `[~] old_sig → new_sig (file:line)`. Falls back to signature-only or kind+name display.
+    fn format_modified_symbols(
+        new_symbols: &[&CodeSymbol],
+        old_symbols: &[&CodeSymbol],
+        char_budget: usize,
+    ) -> String {
+        if new_symbols.is_empty() {
             return String::new();
         }
 
         let mut output = String::new();
         let mut count = 0;
 
-        for sym in symbols {
-            let visibility = if sym.is_public { "pub " } else { "" };
-            let line = format!(
-                "[~] {}{:?} {} ({}:{})",
-                visibility,
-                sym.kind,
-                sym.name,
-                sym.file.display(),
-                sym.line
-            );
+        for new_sym in new_symbols {
+            // Match by name+kind+file to support overloaded languages
+            let old_sym = old_symbols.iter().find(|s| {
+                s.name == new_sym.name && s.kind == new_sym.kind && s.file == new_sym.file
+            });
+
+            let line = match (
+                old_sym.and_then(|s| s.signature.as_ref()),
+                new_sym.signature.as_ref(),
+            ) {
+                (Some(old_sig), Some(new_sig)) if old_sig != new_sig => {
+                    format!(
+                        "[~] {} \u{2192} {} ({}:{})",
+                        old_sig,
+                        new_sig,
+                        new_sym.file.display(),
+                        new_sym.line
+                    )
+                }
+                (_, Some(sig)) => {
+                    format!("[~] {} ({}:{})", sig, new_sym.file.display(), new_sym.line)
+                }
+                _ => {
+                    let visibility = if new_sym.is_public { "pub " } else { "" };
+                    format!(
+                        "[~] {}{:?} {} ({}:{})",
+                        visibility,
+                        new_sym.kind,
+                        new_sym.name,
+                        new_sym.file.display(),
+                        new_sym.line
+                    )
+                }
+            };
+
             if output.len() + line.len() + 1 > char_budget {
                 break;
             }
@@ -551,7 +592,7 @@ impl ContextBuilder {
             count += 1;
         }
 
-        let remaining = symbols.len() - count;
+        let remaining = new_symbols.len() - count;
         if remaining > 0 {
             output.push_str(&format!("\n... and {} more modified symbols", remaining));
         }

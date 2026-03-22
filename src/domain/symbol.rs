@@ -41,13 +41,11 @@ pub struct CodeSymbol {
     pub name: String,
     pub file: PathBuf,
     pub line: usize,
-    #[allow(dead_code)]
     pub end_line: usize,
     pub is_public: bool,
     pub is_added: bool,
     /// For symbols that exist in both HEAD and staged, indicates if only whitespace changed.
     /// None = symbol is purely added or removed, not a modification.
-    #[allow(dead_code)]
     pub is_whitespace_only: Option<bool>,
     /// Full signature extracted from tree-sitter AST (everything before the body).
     /// e.g., "pub fn connect(host: &str, timeout: Duration) -> Result<Connection>"
