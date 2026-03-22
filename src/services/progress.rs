@@ -11,7 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 ///
 /// Suppressed automatically in non-TTY environments (pipes, git hooks).
 /// Falls back to simple status messages when indicatif is not appropriate.
-pub struct Progress {
+pub(crate) struct Progress {
     bar: Option<ProgressBar>,
 }
 

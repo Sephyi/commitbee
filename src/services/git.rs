@@ -11,7 +11,7 @@ use tokio::process::Command;
 use crate::domain::{ChangeStatus, DiffStats, FileCategory, FileChange, StagedChanges};
 use crate::error::{Error, Result};
 
-pub struct GitService {
+pub(crate) struct GitService {
     repo: gix::Repository,
     work_dir: PathBuf,
 }
