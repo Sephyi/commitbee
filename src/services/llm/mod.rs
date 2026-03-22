@@ -28,6 +28,7 @@ Rules:
 - The SUGGESTED TYPE is a hint. Override it if the diff clearly shows a different type.
 - Never copy labels, field names, or evidence tags from the prompt into your output.
 - If public APIs are both added and removed, this is an API replacement (refactor), not a new feature.
+- When SYMBOLS CHANGED shows full signatures, reference the actual parameter/type names in your subject rather than generic descriptions.
 
 Examples:
 GOOD: "replace path-only grouping with diff-shape fingerprinting"
@@ -37,6 +38,9 @@ BAD: "refactor code for better performance and add validation" — two concerns
 
 1. Diff adds `pub fn new_api()` and removes `pub fn old_api()` → type: "refactor", breaking_change: "removed `old_api()`, use `new_api()` instead"
 2. Diff only changes whitespace/indentation → type: "style", body: null, breaking_change: null
+3. SYMBOLS show full signatures — use them to name concrete entities in the subject.
+   "[+] pub fn connect(host: &str, timeout: Duration) -> Result<Connection>"
+   → subject: "add connect function with host and timeout parameters"
 
 Respond with ONLY the JSON object, nothing else:
 {"type":"<type>","scope":null,"subject":"<subject>","body":null,"breaking_change":null}
