@@ -297,6 +297,18 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 - **No think-then-compress**: Explicit `<thought>` prompting is not used — small models (<10B) exhaust their token budget on analysis instead of JSON output. The pre-computed EVIDENCE/CONSTRAINTS/SYMBOLS sections serve this role. Revisit for 70B+/cloud APIs.
 - **Retry**: `validate_and_retry()` runs up to 3 attempts (`MAX_RETRIES: 3`), logging each violation individually before retry. Future: prioritized violation ordering, per-group retry for split commits.
 
+### Commit Generation Test Results
+
+Real-world test results are tracked in auto-memory at `test-results.md`. After every manual test of commit message generation (`commitbee --dry-run`), record:
+
+- The staged changes (files, type of change)
+- Expected vs actual commit type
+- Subject and body quality assessment
+- Prompt observations (signatures, connections, evidence flags)
+- Any issues (retry warnings, display bugs, misclassifications)
+
+Compare new tests against previous results to detect regressions or improvements. The goal is generating fantastic commit messages with small local LLMs (qwen3.5:4b).
+
 ### Deferred Issues
 
 A tracked list of review findings, design decisions, and improvement ideas that were identified but deferred lives in auto-memory at `deferred-issues.md`. Rules:
@@ -308,4 +320,4 @@ A tracked list of review findings, design decisions, and improvement ideas that 
 
 ### Documentation Sync
 
-Keep README.md test count in sync (currently 334).
+Keep README.md test count in sync (currently 339).
