@@ -58,13 +58,14 @@ impl PromptContext {
             )
         };
 
-        // Calculate available chars for subject after type(scope): prefix
+        // Calculate available chars for subject after type(scope)[!]: prefix
         let prefix_len = self.suggested_type.as_str().len()
             + self
                 .suggested_scope
                 .as_ref()
                 .map(|s| s.len() + 2)
                 .unwrap_or(0) // "(scope)"
+            + if self.public_api_removed_count > 0 { 1 } else { 0 } // "!" for breaking
             + 2; // ": "
         let subject_budget = 72_usize.saturating_sub(prefix_len);
 
@@ -107,7 +108,7 @@ impl PromptContext {
             String::new()
         } else {
             format!(
-                "\n⚠ METADATA BREAKING CHANGES DETECTED:\n{}\n",
+                "\nWARNING: METADATA BREAKING CHANGES DETECTED:\n{}\n",
                 self.metadata_breaking_signals
                     .iter()
                     .map(|s| format!("- {}", s))
@@ -198,12 +199,22 @@ Respond with ONLY this JSON:
         }
 
         format!(
-            "\n⚠ PUBLIC API REMOVED — describe this in breaking_change field:\n    {}\n",
+            "\nWARNING: PUBLIC API REMOVED — describe this in breaking_change field:\n    {}\n",
             self.public_api_removed.replace('\n', "\n    ")
         )
     }
 
     fn format_evidence_section(&self) -> String {
+        // Skip when all flags are at default — saves ~200 chars for small models
+        if !self.is_mechanical
+            && !self.has_bug_evidence
+            && self.public_api_removed_count == 0
+            && !self.has_new_public_api
+            && !self.is_dependency_only
+        {
+            return String::new();
+        }
+
         let yn = |b: bool| if b { "yes" } else { "no" };
 
         format!(

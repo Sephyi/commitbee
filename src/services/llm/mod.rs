@@ -29,7 +29,9 @@ Rules:
 - Never copy labels, field names, or evidence tags from the prompt into your output.
 - If public APIs are both added and removed, this is an API replacement (refactor), not a new feature.
 - When SYMBOLS CHANGED shows full signatures, reference the actual parameter/type names in your subject rather than generic descriptions.
-- When CONNECTIONS shows that a caller and callee both changed, mention the relationship in the body (e.g., "updates parse() signature and all call sites").
+- When CONNECTIONS shows that a caller and callee both changed, consider mentioning the relationship in the body.
+
+Symbol markers: [+] added, [-] removed, [~] modified (signature changed).
 
 Examples:
 GOOD: "replace path-only grouping with diff-shape fingerprinting"
@@ -43,8 +45,7 @@ BAD: "refactor code for better performance and add validation" — two concerns
    "[+] pub fn connect(host: &str, timeout: Duration) -> Result<Connection>"
    → subject: "add connect function with host and timeout parameters"
 
-Respond with ONLY the JSON object, nothing else:
-{"type":"<type>","scope":null,"subject":"<subject>","body":null,"breaking_change":null}
+Respond with ONLY the JSON object as specified in the user prompt.
 "#;
 
 pub mod anthropic;
