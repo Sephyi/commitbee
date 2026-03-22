@@ -8,17 +8,45 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 All notable changes to CommitBee are documented here.
 
-## `v0.5.0` — Understand Everything (current)
+## `v0.5.0` — Beyond the Diff (current)
 
-- **Full signature extraction** — The LLM sees `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`, not just "Function connect." Extracted from tree-sitter AST nodes using a two-strategy approach: `child_by_field_name("body")` primary, body-node-kind scan fallback. Works across all 10 languages.
-- **Signature diffs for modified symbols** — When a function signature changes, the prompt shows `[~] old_sig → new_sig` so the LLM understands exactly what was modified.
-- **Cross-file connection detection** — Detects when a changed file calls a symbol defined in another changed file. Shown as `CONNECTIONS: validator calls parse() — both changed` in the prompt.
-- **Semantic change classification** — Modified symbols are classified as whitespace-only or semantic via character-stream comparison. Formatting-only changes (cargo fmt, prettier) auto-detected as `style` type when all modified symbols are whitespace-only.
-- **Dual old/new line tracking** — `classify_span_change` correctly tracks old-file and new-file line numbers independently, handling cases where symbols shift positions due to added/removed lines above them.
-- **Token budget rebalance** — Symbol section gets 30% of budget (up from 20%) when signatures are present, since richer symbols reduce the LLM's dependency on raw diff.
-- **BODY_NODE_KINDS coverage** — Signature extraction verified across all 10 languages with dedicated tests for Java, C, C++, Ruby, and C#.
-- **Connection reliability** — Short symbol names (<4 chars) filtered to prevent false positives, short-circuit after 5 connections, sort+dedup for correctness.
-- **Fixed false positive in breaking change detection** — Modified public symbols were incorrectly counted as "removed APIs", causing spurious `breaking_change` validator violations and retry exhaustion.
+### Semantic Analysis
+
+- **Full signature extraction** — The LLM sees `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`, not just "Function connect." Two-strategy body detection: `child_by_field_name("body")` primary, `BODY_NODE_KINDS` fallback. Works across all 10 languages.
+- **Signature diffs for modified symbols** — When a function signature changes, the prompt shows `[~] old_sig → new_sig`.
+- **Cross-file connection detection** — Detects when a changed file calls a symbol defined in another changed file. Shown as `CONNECTIONS: validator calls parse() — both changed`.
+- **Semantic change classification** — Modified symbols classified as whitespace-only or semantic via character-stream comparison. Formatting-only changes auto-detected as `style`.
+- **Dual old/new line tracking** — Correctly handles symbols shifting positions between HEAD and staged.
+- **Token budget rebalance** — Symbol section gets 30% of budget (up from 20%) when signatures present.
+
+### Security
+
+- **Block project config URL overrides** — `.commitbee.toml` can no longer redirect `openai_base_url`, `anthropic_base_url`, or `ollama_host` to prevent SSRF/exfiltration of API keys and staged code.
+- **Cap streaming line_buffer** — All 3 LLM providers cap `line_buffer` at 1 MB to prevent unbounded memory growth from malicious servers.
+- **Strip URLs from error messages** — `reqwest::Error` display uses `without_url()` to prevent leaking configured base URLs.
+- **Broadened OpenAI secret pattern** — Detects `sk-proj-` and `sk-svcacct-` prefixed keys alongside legacy `sk-` format.
+- **Replaced Box::leak with Cow** — Custom secret pattern names use `Cow<'static, str>` instead of leaked heap allocations.
+
+### Prompt Quality
+
+- **Fixed breaking change subject budget** — Subject character budget now accounts for `!` suffix, preventing guaranteed validator rejection on breaking changes.
+- **Omit empty EVIDENCE section** — Saves ~200 chars when all flags are at default (most changes).
+- **Symbol marker legend** — SYSTEM_PROMPT now explains `[+] added, [-] removed, [~] modified`.
+- **Removed duplicate JSON schema** — System prompt no longer includes a competing schema template.
+- **Replaced emoji with text** — `⚠` replaced with `WARNING:` for better small-model tokenization.
+- **Enhanced Python queries** — Tree-sitter now captures decorated functions and classes.
+
+### Testing & Evaluation
+
+- **Evaluation harness** — 36 fixtures covering all 11 commit types, AST features, and edge cases. Per-type accuracy reporting with `EvalSummary`.
+- **15+ new unit tests** — Coverage for `detect_primary_change`, `detect_metadata_breaking`, `detect_bug_evidence` (all 7 patterns), Deleted/Renamed status, signature edge cases, connection content assertions.
+- **5 fuzz targets** — `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`, `fuzz_signature`, `fuzz_classify_span`.
+- **367 tests** total (up from 308 at v0.4.0).
+
+### API
+
+- **Demoted internal types** — `SymbolChangeType`, `GitService`, `Progress` changed from `pub` to `pub(crate)`.
+- **Added `#[non_exhaustive]`** to `SymbolChangeType` for future-safe extension.
 
 ## `v0.4.0` — See Everything
 
@@ -27,7 +55,7 @@ All notable changes to CommitBee are documented here.
 - **Multi-language commit messages** — Generate messages in any language with `--locale` flag or `locale` config (e.g., `--locale de` for German).
 - **Commit history style learning** — Learns from recent commit history to match your project's style (`learn_from_history`, `history_sample_size` config).
 - **Rename detection** — Detects file renames with similarity percentage via `git diff --find-renames`, displayed as `old → new (N% similar)` in prompts and split suggestions. Configurable threshold (default 70%, set to 0 to disable).
-- **Expanded secret scanning** — 25 built-in patterns across 13 categories (cloud providers, AI/ML, source control, communication, payment, database, cryptographic, generic). Pluggable engine: add custom regex patterns or disable built-ins by name via config.
+- **Expanded secret scanning** — 24 built-in patterns across 13 categories (cloud providers, AI/ML, source control, communication, payment, database, cryptographic, generic). Pluggable engine: add custom regex patterns or disable built-ins by name via config.
 - **Progress indicators** — Contextual `indicatif` spinners during pipeline phases (analyzing, scanning, generating). Auto-suppressed in non-TTY environments (git hooks, pipes).
 - **Evaluation harness** — `cargo test --features eval` for structured LLM output quality benchmarking.
 - **Fuzz testing** — `cargo-fuzz` targets for sanitizer and diff parser robustness.

@@ -86,7 +86,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 ### And there's more
 
 - **🏠 Local-first** — Ollama by default. Your code never leaves your machine. No API keys needed.
-- **🔒 Secret scanning** — 25 built-in patterns across 13 categories (cloud keys, AI/ML tokens, payment, database, crypto). Add custom patterns or disable built-ins via config.
+- **🔒 Secret scanning** — 24 built-in patterns across 13 categories (cloud keys, AI/ML tokens, payment, database, crypto). Add custom patterns or disable built-ins via config.
 - **⚡ Streaming** — Real-time token display from all 3 providers (Ollama, OpenAI, Anthropic) with Ctrl+C cancellation.
 - **📊 Token budget** — Smart truncation that prioritizes the most important files within ~6K tokens.
 - **🎯 Multi-candidate** — Generate up to 5 messages and pick the best one interactively.
@@ -96,7 +96,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 - **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
 - **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
 - **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
-- **🧪 340 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
+- **🧪 367 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -195,7 +195,7 @@ commitbee [OPTIONS] [COMMAND]
 
 ## 🔒 Security
 
-CommitBee scans all content before it's sent to any LLM provider with **25 built-in patterns** across 13 categories:
+CommitBee scans all content before it's sent to any LLM provider with **24 built-in patterns** across 13 categories:
 
 - ☁️ **Cloud providers** — AWS access/secret keys, GCP service accounts & API keys, Azure storage keys
 - 🤖 **AI/ML** — OpenAI, Anthropic, HuggingFace tokens
@@ -219,7 +219,7 @@ The default provider (Ollama) runs entirely on your machine. No data leaves your
 ## 🧪 Testing
 
 ```bash
-cargo test   # 340 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
+cargo test   # 367 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
 See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
@@ -228,7 +228,7 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full version history.
 
-**Current:** `v0.5.0` — Full signature extraction, semantic change classification, cross-file connection detection, and formatting auto-detection.
+**Current:** `v0.5.0` *Beyond the Diff* — Full signature extraction, semantic change classification, cross-file connections, security hardening, and 36-fixture eval harness.
 
 ## 🤝 Contributing
 

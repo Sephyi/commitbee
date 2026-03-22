@@ -175,7 +175,7 @@ think = false
 # Set to 0 to disable rename detection
 rename_threshold = 70
 
-# Custom secret patterns (regex). Added to the 25 built-in patterns.
+# Custom secret patterns (regex). Added to the 24 built-in patterns.
 # custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]
 
 # Disable built-in secret patterns by name (case-insensitive).
@@ -452,7 +452,7 @@ If the sanitizer can't produce a valid commit message, you get a clear error exp
 
 ### Secret Scanning
 
-Before anything is sent to an LLM, CommitBee scans all staged content with **25 built-in patterns** across 13 categories:
+Before anything is sent to an LLM, CommitBee scans all staged content with **24 built-in patterns** across 13 categories:
 
 | Category | Patterns |
 | --- | --- |
@@ -657,7 +657,7 @@ src/
     ├── git.rs           # GitService — gix for discovery, git CLI for diffs
     ├── analyzer.rs      # AnalyzerService — tree-sitter parsing via rayon
     ├── context.rs       # ContextBuilder — evidence flags, token budget
-    ├── safety.rs        # Secret scanning (25 patterns), conflict detection
+    ├── safety.rs        # Secret scanning (24 patterns), conflict detection
     ├── sanitizer.rs     # CommitSanitizer + CommitValidator
     ├── splitter.rs      # CommitSplitter — diff-shape + Jaccard clustering
     ├── progress.rs      # Progress indicators (indicatif spinners, TTY-aware)
@@ -694,7 +694,7 @@ No panics in user-facing code paths. The sanitizer and validator are tested with
 
 ### Testing Strategy
 
-CommitBee has 340 tests across multiple strategies:
+CommitBee has 367 tests across multiple strategies:
 
 | Strategy | What It Covers |
 | --- | --- |
@@ -707,7 +707,7 @@ CommitBee has 340 tests across multiple strategies:
 Run them:
 
 ```bash
-cargo test                    # All 340 tests
+cargo test                    # All 367 tests
 cargo test --test sanitizer   # Just sanitizer tests
 cargo test --test integration # LLM provider mocks
 COMMITBEE_LOG=debug cargo test -- --nocapture  # With logging

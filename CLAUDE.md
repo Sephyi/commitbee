@@ -132,7 +132,7 @@ src/
     ├── analyzer.rs      # AnalyzerService (tree-sitter queries, parallel via rayon)
     ├── context.rs       # ContextBuilder (token budget)
     ├── history.rs       # HistoryService (commit style learning)
-    ├── safety.rs        # Secret scanning (25 patterns), conflict detection
+    ├── safety.rs        # Secret scanning (24 patterns), conflict detection
     ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
     ├── splitter.rs      # CommitSplitter (multi-commit detection)
     ├── template.rs      # TemplateService (custom prompt templates)
@@ -192,7 +192,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (340 tests)
+cargo test                    # All tests (367 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests

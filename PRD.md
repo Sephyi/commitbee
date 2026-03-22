@@ -6,7 +6,7 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 4.1
+**Version**: 4.2
 **Date**: 2026-03-22
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)  
@@ -14,11 +14,12 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 ## Changelog
 
 <details>
-<summary>Revision history (v3.3 → v4.1)</summary>
+<summary>Revision history (v3.3 → v4.2)</summary>
 
 | Version | Date       | Summary |
 |---------|------------|---------|
-| 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 340 tests. |
+| 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 367 tests. |
+| 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 367 tests. |
 | 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |
 | 3.3     | 2026-03-13 | v0.4.0 full feature completion — FR-030 (Custom Prompt Templates), FR-032 (Multi-Language), FR-036 (Tree-sitter Query Patterns), FR-057 (Additional Languages), FR-058 (History Learning), TR-006 (Eval Harness), TR-007 (Fuzzing). 308 tests. |
 | 3.2     | 2026-03-13 | FR-035 (Rename Detection), FR-037 (Expanded Secret Scanning), FR-038 (Progress Indicators). 202 tests. |
@@ -91,7 +92,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Multiple message generation (pick from N)          | Common (aicommits, aicommit2) | ✅ v0.2.0       |
 | Commit splitting (multi-concern detection)         | No competitor has this        | ✅ v0.2.0       |
 | Custom prompt/instruction files                    | Growing (Copilot, aicommit2)  | ✅ v0.4.0       |
-| Unit/integration tests                             | Non-negotiable for quality    | ✅ 340 tests    |
+| Unit/integration tests                             | Non-negotiable for quality    | ✅ 367 tests    |
 
 ## 3. Architecture
 
@@ -158,7 +159,7 @@ commitbee
 │       ├── git.rs           # GitService trait + impl (async, single-diff)
 │       ├── analyzer.rs      # AnalyzerService (parallel parsing via rayon)
 │       ├── context.rs       # ContextBuilder (fixed budget math, fallback ladder)
-│       ├── safety.rs        # Secret scanning (25 patterns, pluggable engine)
+│       ├── safety.rs        # Secret scanning (24 patterns, pluggable engine)
 │       ├── sanitizer.rs     # CommitSanitizer (UTF-8 safe) + CommitValidator (7 rules)
 │       ├── splitter.rs      # CommitSplitter (Jaccard + fingerprinting)
 │       ├── template.rs      # TemplateService (custom prompt templates)
@@ -170,16 +171,19 @@ commitbee
 │           └── anthropic.rs # Anthropic Claude
 ├── tests/
 │   ├── snapshots/           # insta snapshot files
-│   ├── fixtures/            # Test git repos, diff samples, golden semantic fixtures, eval fixtures
-│   ├── languages.rs         # Feature-gated language tests
-│   ├── sanitizer.rs         # Unit + snapshot + proptest
-│   ├── context.rs           # Unit + snapshot
-│   ├── safety.rs            # Unit + proptest
-│   ├── analyzer.rs          # Unit + snapshot with fixture files
-│   ├── git.rs               # Integration with tempfile repos
-│   ├── ollama.rs            # Integration with wiremock
-│   └── cli.rs               # CLI integration with assert_cmd
-├── fuzz/                    # cargo-fuzz targets (sanitizer, safety, diff parser)
+│   ├── fixtures/            # Eval fixtures (36 scenarios), diff samples
+│   ├── helpers.rs           # Shared test helpers (make_file_change, make_staged_changes)
+│   ├── context.rs           # ContextBuilder, type inference, evidence, signatures, connections
+│   ├── sanitizer.rs         # CommitSanitizer + CommitValidator (unit + snapshot + proptest)
+│   ├── splitter.rs          # CommitSplitter grouping and merge logic
+│   ├── languages.rs         # Feature-gated per-language symbol + signature extraction
+│   ├── safety.rs            # Secret scanning patterns + conflict detection
+│   ├── integration.rs       # LLM provider round-trips with wiremock
+│   ├── history.rs           # HistoryService with tempfile git repos
+│   ├── template.rs          # TemplateService custom/default templates
+│   ├── commit_type.rs       # CommitType parsing and ALL sync
+│   └── eval.rs              # Eval harness fixture validation (feature-gated)
+├── fuzz/                    # cargo-fuzz targets (sanitizer, safety, diff parser, signature, classify_span)
 └── completions/             # Generated shell completions
 ```
 
@@ -438,11 +442,11 @@ Config: `learn_from_history` (default `false`), `history_sample_size` (default 5
 
 #### TR-006: Evaluation Harness ✅
 
-`commitbee eval` — runs full pipeline against fixture diffs, compares against expected snapshots. Feature-gated (`eval` feature). Fixtures in `tests/fixtures/eval/`. Pass/fail report with diff of expected vs. actual.
+`commitbee eval` — runs full pipeline against fixture diffs with assertion-based validation. Feature-gated (`eval` feature). 36 fixtures in `tests/fixtures/eval/` covering all 11 commit types, AST features (signatures, connections, whitespace classification), and edge cases. Each fixture has `metadata.toml` (assertions for type, evidence flags, prompt content, connections, breaking changes), `diff.patch`, and optional `symbols.toml` (injected CodeSymbol data). `EvalSummary` reports per-type accuracy and overall score. `run_sync()` method for integration test access.
 
 #### TR-007: Fuzzing ✅
 
-3 `cargo-fuzz` targets: `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`. `fuzz/Cargo.toml` with `libfuzzer-sys`.
+5 `cargo-fuzz` targets: `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`, `fuzz_signature`, `fuzz_classify_span`. `fuzz/Cargo.toml` with `libfuzzer-sys`.
 
 #### FR-031: Exclude Files ✅
 
@@ -465,6 +469,14 @@ Modified symbols (same name+kind+file in both HEAD and staged) are classified as
 #### FR-061: Cross-File Connection Detection ✅
 
 Scans added diff lines for `symbol_name(` call patterns referencing symbols defined in other changed files. Connections displayed in new `CONNECTIONS:` prompt section (e.g., `validator calls parse() — both changed`). Capped at 5 connections to prevent prompt bloat. SYSTEM_PROMPT updated with connection-aware guidance. 1 test + 1 splitter integration test.
+
+#### FR-062: Security Hardening ✅
+
+Project-level `.commitbee.toml` can no longer override `openai_base_url`, `anthropic_base_url`, or `ollama_host` (SSRF/exfiltration prevention). All 3 streaming LLM providers cap `line_buffer` at `MAX_RESPONSE_BYTES` (1 MB) to prevent unbounded memory growth. `reqwest::Error` display stripped of URLs via `without_url()`. OpenAI secret pattern broadened to `sk-proj-` and `sk-svcacct-` prefixes. `Box::leak` replaced with `Cow<'static, str>` for custom secret pattern names.
+
+#### FR-063: Prompt Optimization for Small Models ✅
+
+Subject character budget accounts for `!` suffix on breaking changes. EVIDENCE section omitted when all flags are default (~200 chars saved). Symbol marker legend added to SYSTEM_PROMPT (`[+] added, [-] removed, [~] modified`). Duplicate JSON schema removed from system prompt. Emoji replaced with text labels (`WARNING:` instead of `⚠`). CONNECTIONS instruction softened for small models. Python tree-sitter queries enhanced with `decorated_definition` support.
 
 ### 4.6 Future — v0.6.0+ (Market Leadership)
 
@@ -648,7 +660,7 @@ commitbee eval                         # Run evaluation harness (dev, feature-ga
 
 ## 8. Testing Requirements
 
-**Current test count: 334**
+**Current test count: 367**
 
 ### TR-001: Unit Tests
 
@@ -806,7 +818,7 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | 2 | v0.3.x | ✅ Shipped | Differentiation — heuristics, validation, spec compliance |
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
 | 4 | v0.4.x | ✅ Shipped | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
-| 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 340 tests. |
+| 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 367 tests. |
 | 6 | v0.6.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
