@@ -941,6 +941,33 @@ fn all_symbols_whitespace_only_suggests_style() {
     );
 }
 
+#[test]
+fn whitespace_detection_works_with_shifted_lines() {
+    // Symbol `process` was at line 2 in HEAD, now at line 5 in staged
+    // (3 lines added above it). The whitespace change is inside the function.
+    // classify_span_change must use separate old/new spans to detect this correctly.
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -2,3 +5,3 @@\n fn process() {\n-    do_thing()\n+  do_thing()\n }",
+        1,
+        1,
+    )]);
+    let mut sym_old = make_symbol("process", SymbolKind::Function, "src/lib.rs", true, false);
+    sym_old.line = 2;
+    sym_old.end_line = 4;
+    let mut sym_new = make_symbol("process", SymbolKind::Function, "src/lib.rs", true, true);
+    sym_new.line = 5;
+    sym_new.end_line = 7;
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    // Should detect as whitespace-only despite line shift
+    assert!(
+        !ctx.symbols_modified.contains("process"),
+        "whitespace-only change with shifted lines should not appear in symbols_modified: {}",
+        ctx.symbols_modified
+    );
+}
+
 // ─── Multi-file diff truncation ──────────────────────────────────────────────
 
 // ─── Locale support ──────────────────────────────────────────────────────────

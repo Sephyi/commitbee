@@ -91,11 +91,29 @@ impl ContextBuilder {
             .cloned()
             .collect();
 
-        // Populate is_whitespace_only by comparing diff content within each symbol's span
+        // Populate is_whitespace_only by comparing diff content within each symbol's span.
+        // Uses separate old/new line ranges since the same symbol may be at different
+        // line numbers in HEAD vs staged (e.g., lines added above it shift everything).
         for symbol in &mut modified_symbols {
             if let Some(file_change) = changes.files.iter().find(|f| f.path == symbol.file) {
-                symbol.is_whitespace_only =
-                    Self::classify_span_change(&file_change.diff, symbol.line, symbol.end_line);
+                // Find the old-side counterpart for its line range
+                let old_sym = symbols.iter().find(|s| {
+                    !s.is_added
+                        && s.name == symbol.name
+                        && s.kind == symbol.kind
+                        && s.file == symbol.file
+                });
+                let (old_start, old_end) = old_sym
+                    .map(|s| (s.line, s.end_line))
+                    .unwrap_or((symbol.line, symbol.end_line));
+
+                symbol.is_whitespace_only = Self::classify_span_change(
+                    &file_change.diff,
+                    symbol.line,
+                    symbol.end_line,
+                    old_start,
+                    old_end,
+                );
             }
         }
 
@@ -161,12 +179,14 @@ impl ContextBuilder {
         // Evidence flags for constraint-based anti-hallucination
         let is_mechanical = Self::detect_mechanical_transform(changes, &symbols_deduped);
         let has_bug_evidence = Self::detect_bug_evidence(changes);
-        // RemovedOnly public symbols + modified public symbols both contribute to breaking risk
+        // Only genuinely removed public symbols count as "removed API".
+        // Modified public symbols (same name in old+new) are NOT removals — their
+        // signatures may have changed but the API still exists. Counting them as
+        // removed triggers false "breaking_change required" validator violations.
         let public_api_removed_count = symbols_deduped
             .iter()
             .filter(|s| !s.is_added && s.is_public)
-            .count()
-            + modified_symbols.iter().filter(|s| s.is_public).count();
+            .count();
         let has_new_public_api = symbols_deduped.iter().any(|s| s.is_added && s.is_public);
         let is_dependency_only = Self::detect_dependency_only(changes);
 
@@ -196,10 +216,21 @@ impl ContextBuilder {
     }
 
     /// Classify whether changes within a symbol span are whitespace-only.
-    /// Tracks both old-file and new-file line numbers independently.
+    ///
+    /// Tracks old-file and new-file line numbers independently, using separate
+    /// spans for each: `new_start..new_end` for added lines, `old_start..old_end`
+    /// for removed lines. This correctly handles cases where the same symbol is
+    /// at different line numbers in HEAD vs staged (e.g., lines added above it).
+    ///
     /// Returns `None` if no changes in span, `Some(true)` if whitespace-only,
     /// `Some(false)` if semantic changes detected.
-    fn classify_span_change(diff: &str, start_line: usize, end_line: usize) -> Option<bool> {
+    fn classify_span_change(
+        diff: &str,
+        new_start: usize,
+        new_end: usize,
+        old_start: usize,
+        old_end: usize,
+    ) -> Option<bool> {
         use crate::services::analyzer::DiffHunk;
 
         let hunks = DiffHunk::parse_from_diff(diff);
@@ -227,13 +258,13 @@ impl ContextBuilder {
             }
 
             if let Some(content) = line.strip_prefix('+') {
-                let in_new_span = current_new_line >= start_line && current_new_line <= end_line;
+                let in_new_span = current_new_line >= new_start && current_new_line <= new_end;
                 if in_new_span {
                     added_in_span.push(content);
                 }
                 current_new_line += 1;
             } else if let Some(content) = line.strip_prefix('-') {
-                let in_old_span = current_old_line >= start_line && current_old_line <= end_line;
+                let in_old_span = current_old_line >= old_start && current_old_line <= old_end;
                 if in_old_span {
                     removed_in_span.push(content);
                 }
