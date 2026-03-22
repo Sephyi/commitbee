@@ -34,6 +34,9 @@ cargo build --release
 7. **Simplified user prompt** - Concise format optimized for <4B parameter models
 8. **Commit splitting** - Detects multi-concern changes, suggests splitting into separate commits
 9. **Body line wrapping** - Sanitizer wraps body text at 72 characters
+10. **Signature extraction** - Two-strategy: `child_by_field_name("body")` primary, `BODY_NODE_KINDS` fallback, first-line final fallback. 200-char cap with `floor_char_boundary`. No `.scm` query changes needed.
+11. **Semantic change classification** - Modified symbols classified via character-stream comparison (not bag-of-lines). `build()` restructured: classify → infer_commit_type → format.
+12. **Cross-file connections** - `detect_connections` scans added diff lines for `sym_name(` patterns. Min 4-char name filter, capped at 5, sort+dedup.
 
 ## Commands
 
@@ -118,7 +121,7 @@ src/
 │   ├── mod.rs
 │   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
 │   ├── symbol.rs        # CodeSymbol, SymbolKind, SymbolChangeType
-│   ├── context.rs       # PromptContext
+│   ├── context.rs       # PromptContext (includes connections, evidence flags)
 │   └── commit.rs        # CommitType
 └── services/
     ├── mod.rs
@@ -243,6 +246,9 @@ git add some-file.rs
 
 # Auto-commit
 ./target/release/commitbee --yes
+
+# Test commit message generation with debug logging (shows validation retries)
+COMMITBEE_LOG=debug ./target/release/commitbee --dry-run
 ```
 
 ### Dependency Management
@@ -288,6 +294,10 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 - Tree-sitter is CPU-bound/sync — pre-fetch file content into HashMaps async, then pass `&HashMap<PathBuf, String>` to `extract_symbols()` which uses rayon for parallel parsing
 - `rayon::par_iter()` requires data to be `Sync`; `tree_sitter::Parser` is neither `Send` nor `Sync` — create a new `Parser` per file inside the rayon closure
 - `#[cfg(feature = "secure-storage")]` gates both the error variant and CLI commands for keyring
+- Subagents dispatched without Bash permission can't commit — commit in the main session after verifying their changes
+- Parallel subagents touching the same file will conflict — only parallelize when files don't overlap
+- `SymbolKey` uses `(kind, name, file)` — do NOT add `line` (lines shift between HEAD/staged, breaks modified-symbol matching)
+- `classify_span_change` uses new-file line range — old-file lines may differ when code shifts; known limitation (deferred #9)
 
 ### Known Issues
 
