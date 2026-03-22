@@ -117,7 +117,7 @@ src/
 ├── domain/
 │   ├── mod.rs
 │   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
-│   ├── symbol.rs        # CodeSymbol, SymbolKind
+│   ├── symbol.rs        # CodeSymbol, SymbolKind, SymbolChangeType
 │   ├── context.rs       # PromptContext
 │   └── commit.rs        # CommitType
 └── services/
@@ -141,8 +141,7 @@ src/
 ## References
 
 - **PRD & Roadmap**: `PRD.md`
-- **Conventional Commits spec anchoring**: `.claude/plans/PLAN_CONVENTIONAL_COMMITS_SPEC.md`
-- **v0.3.0 enhancement plan**: `.claude/plans/PLAN_V030_ENHANCEMENTS.md`
+- **Implementation plans**: `.claude/plans/` (gitignored, local only)
 - **Hunk-level splitting discussion**: [GitHub Discussion #2](https://github.com/Sephyi/commitbee/discussions/2)
 
 ## Project Skills
@@ -297,6 +296,15 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 - **Thinking model output**: Models with thinking enabled prepend `<think>...</think>` blocks before their JSON response. The sanitizer strips both `<think>` and `<thought>` blocks (closed and unclosed) during parsing. The `think` config option (default: `false`) controls whether Ollama's thinking separation is used. The default model `qwen3.5:4b` does not use thinking mode and works well with the default `num_predict: 256`.
 - **No think-then-compress**: Explicit `<thought>` prompting is not used — small models (<10B) exhaust their token budget on analysis instead of JSON output. The pre-computed EVIDENCE/CONSTRAINTS/SYMBOLS sections serve this role. Revisit for 70B+/cloud APIs.
 - **Retry**: `validate_and_retry()` runs up to 3 attempts (`MAX_RETRIES: 3`), logging each violation individually before retry. Future: prioritized violation ordering, per-group retry for split commits.
+
+### Deferred Issues
+
+A tracked list of review findings, design decisions, and improvement ideas that were identified but deferred lives in auto-memory at `deferred-issues.md`. Rules:
+
+- **Check the list** when starting work on a related area, before releases, and at PRD updates
+- **Add new items** when deferring anything from a review, plan, or implementation — every deferred item must be recorded with source, context, and "when to address" criteria
+- **Never silently defer** — when deferring issues, explicitly tell the user what is being deferred, why, and when it should be revisited. Present deferred items as decisions that need user acknowledgment, not as internal bookkeeping
+- **Close items** by updating status to `Done` with date when addressed
 
 ### Documentation Sync
 
