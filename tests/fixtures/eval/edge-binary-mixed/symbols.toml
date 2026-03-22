@@ -1,0 +1,19 @@
+[[symbols]]
+kind = "Struct"
+name = "BrandConfig"
+file = "src/services/branding.rs"
+line = 4
+end_line = 7
+is_public = true
+is_added = true
+signature = "pub struct BrandConfig"
+
+[[symbols]]
+kind = "Function"
+name = "new"
+file = "src/services/branding.rs"
+line = 10
+end_line = 15
+is_public = true
+is_added = true
+signature = "pub fn new(logo_path: &str, app_name: &str) -> Self"

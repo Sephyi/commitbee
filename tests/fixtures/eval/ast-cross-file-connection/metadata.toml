@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "ast-cross-file-connection"
+description = "Cross-file call should produce CONNECTIONS section in prompt"
+language = "rust"
+category = "feat"
+expected_type = "feat"
+expected_scope = "optional"
+
+[prompt]
+must_contain = ["CONNECTIONS", "calls validate_input"]
+
+[connections]
+min_count = 1
+must_contain = ["calls validate_input"]

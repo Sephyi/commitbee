@@ -1,0 +1,40 @@
+diff --git a/src/utils/parser.py b/src/utils/parser.py
+index abc1234..def5678 100644
+--- a/src/utils/parser.py
++++ b/src/utils/parser.py
+@@ -10,30 +10,22 @@ class DataParser:
+     def process(self, data: dict) -> dict:
+-        # Validate fields inline
+-        if "name" not in data:
+-            raise ValueError("missing name")
+-        if len(data["name"]) > 100:
+-            raise ValueError("name too long")
+-        if "email" not in data:
+-            raise ValueError("missing email")
+-        if "@" not in data.get("email", ""):
+-            raise ValueError("invalid email format")
+-        if "age" in data and not isinstance(data["age"], int):
+-            raise ValueError("age must be integer")
+-        if "age" in data and data["age"] < 0:
+-            raise ValueError("age must be positive")
+-        if "phone" in data and not data["phone"].isdigit():
+-            raise ValueError("phone must be digits")
+-        if "address" in data and len(data["address"]) > 500:
+-            raise ValueError("address too long")
+-        if "zip" in data and len(data["zip"]) != 5:
+-            raise ValueError("zip must be 5 digits")
++        self._validate_fields(data)
+         result = self._transform(data)
+         return result
+
++    def _validate_fields(self, data: dict) -> None:
++        """Validate required fields before processing."""
++        required = {"name": str, "email": str}
++        for field, ftype in required.items():
++            if field not in data:
++                raise ValueError(f"missing {field}")
++            if not isinstance(data[field], ftype):
++                raise ValueError(f"{field} must be {ftype.__name__}")
++
+     def _transform(self, data: dict) -> dict:
+         return {"processed": True, **data}

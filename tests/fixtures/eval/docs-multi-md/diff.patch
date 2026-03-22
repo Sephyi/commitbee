@@ -1,0 +1,30 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index abc1234..def5678 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,12 @@
+ # Changelog
+
++## v0.4.0
++
++- Added streaming support for Ollama
++- Fixed token counting for multibyte characters
++- Improved error messages for connection failures
++- Updated minimum Rust version to 1.94
++
+ ## v0.3.0
+
+ - Initial release
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index abc1234..def5678 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -8,3 +8,8 @@ Please follow these guidelines:
+ 2. Write tests for new features
+ 3. Run `cargo test` before submitting
+ 4. Follow conventional commits
++
++## Code Review
++
++All PRs require at least one approval.
++Please keep PRs focused and small.

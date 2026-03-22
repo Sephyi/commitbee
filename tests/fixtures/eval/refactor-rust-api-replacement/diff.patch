@@ -1,0 +1,30 @@
+diff --git a/src/services/cache.rs b/src/services/cache.rs
+index abc1234..def5678 100644
+--- a/src/services/cache.rs
++++ b/src/services/cache.rs
+@@ -10,15 +10,20 @@ pub struct Cache {
+     entries: HashMap<String, CacheEntry>,
+ }
+
+-/// Look up a value in the cache by key.
+-pub fn lookup(cache: &Cache, key: &str) -> Option<&CacheEntry> {
+-    cache.entries.get(key)
+-}
+-
+ impl Cache {
+     pub fn new() -> Self {
+         Self {
+             entries: HashMap::new(),
+         }
+     }
++
++    /// Get a cache entry by key, returning None if expired.
++    ///
++    /// Replaces the old free function `lookup()` with a method that
++    /// also checks expiration.
++    pub fn get(&self, key: &str) -> Option<&CacheEntry> {
++        self.entries
++            .get(key)
++            .filter(|entry| !entry.is_expired())
++    }
+ }

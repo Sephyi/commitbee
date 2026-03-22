@@ -1,0 +1,37 @@
+diff --git a/tests/validator.rs b/tests/validator.rs
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/tests/validator.rs
+@@ -0,0 +1,30 @@
++use myproject::services::validator::CommitValidator;
++
++#[test]
++fn test_valid_subject_passes() {
++    let validator = CommitValidator::new(72);
++    assert!(validator.validate_subject("feat: add new parser").is_ok());
++}
++
++#[test]
++fn test_empty_subject_passes() {
++    let validator = CommitValidator::new(72);
++    assert!(validator.validate_subject("").is_ok());
++}
++
++#[test]
++fn test_subject_at_limit_passes() {
++    let validator = CommitValidator::new(10);
++    assert!(validator.validate_subject("1234567890").is_ok());
++}
++
++#[test]
++fn test_subject_over_limit_fails() {
++    let validator = CommitValidator::new(10);
++    assert!(validator.validate_subject("12345678901").is_err());
++}
++
++#[test]
++fn test_unicode_subject_counts_bytes() {
++    let validator = CommitValidator::new(5);
++    assert!(validator.validate_subject("abcde").is_ok());
++}

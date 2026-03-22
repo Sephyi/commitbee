@@ -1,0 +1,32 @@
+diff --git a/src/services/json_format.rs b/src/services/json_format.rs
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/src/services/json_format.rs
+@@ -0,0 +1,10 @@
++use crate::error::Result;
++
++pub struct JsonFormatter;
++
++impl JsonFormatter {
++    pub fn format(&self, data: &str) -> Result<String> {
++        let parsed: serde_json::Value = serde_json::from_str(data)?;
++        Ok(serde_json::to_string_pretty(&parsed)?)
++    }
++}
+diff --git a/src/services/yaml_format.rs b/src/services/yaml_format.rs
+new file mode 100644
+index 0000000..def5678
+--- /dev/null
++++ b/src/services/yaml_format.rs
+@@ -0,0 +1,10 @@
++use crate::error::Result;
++
++pub struct YamlFormatter;
++
++impl YamlFormatter {
++    pub fn format(&self, data: &str) -> Result<String> {
++        let parsed: serde_yaml::Value = serde_yaml::from_str(data)?;
++        Ok(serde_yaml::to_string(&parsed)?)
++    }
++}

@@ -1,0 +1,19 @@
+[[symbols]]
+kind = "Function"
+name = "process"
+file = "src/services/processor.rs"
+line = 11
+end_line = 14
+is_public = true
+is_added = false
+signature = "pub fn process(data: &[u8]) -> Result<Output>"
+
+[[symbols]]
+kind = "Function"
+name = "process_with_opts"
+file = "src/services/processor.rs"
+line = 11
+end_line = 16
+is_public = true
+is_added = true
+signature = "pub fn process_with_opts(data: &[u8], timeout: Duration, opts: &ProcessOpts) -> Result<Output>"

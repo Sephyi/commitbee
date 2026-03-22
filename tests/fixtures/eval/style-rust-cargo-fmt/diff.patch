@@ -1,0 +1,22 @@
+diff --git a/src/services/format.rs b/src/services/format.rs
+index abc1234..def5678 100644
+--- a/src/services/format.rs
++++ b/src/services/format.rs
+@@ -5,12 +5,12 @@ use crate::config::Config;
+ impl Formatter {
+     pub fn new(config: &Config) -> Self {
+         Self {
+-            indent:  config.indent,
+-            max_width:   config.max_width,
+-            tab_size:  config.tab_size,
++            indent: config.indent,
++            max_width: config.max_width,
++            tab_size: config.tab_size,
+         }
+     }
+
+-    pub fn format(&self, input:  &str) -> String {
++    pub fn format(&self, input: &str) -> String {
+         input.trim().to_string()
+     }
+ }

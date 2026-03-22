@@ -1,0 +1,16 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index abc1234..def5678 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -102,9 +102,9 @@ dependencies = [
+
+ [[package]]
+ name = "serde"
+-version = "1.0.210"
++version = "1.0.215"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a]b2c3d4e5f6"
++checksum = "f6e5d4c3b2a1"
+ dependencies = [
+  "serde_derive",
+ ]

@@ -1,0 +1,39 @@
+[[symbols]]
+kind = "Struct"
+name = "Connection"
+file = "src/services/network.rs"
+line = 6
+end_line = 9
+is_public = true
+is_added = true
+signature = "pub struct Connection"
+
+[[symbols]]
+kind = "Function"
+name = "connect"
+file = "src/services/network.rs"
+line = 13
+end_line = 23
+is_public = true
+is_added = true
+signature = "pub async fn connect(host: &str, timeout: Duration) -> Result<Self>"
+
+[[symbols]]
+kind = "Function"
+name = "send"
+file = "src/services/network.rs"
+line = 26
+end_line = 29
+is_public = true
+is_added = true
+signature = "pub async fn send(&self, data: &[u8]) -> Result<usize>"
+
+[[symbols]]
+kind = "Function"
+name = "close"
+file = "src/services/network.rs"
+line = 32
+end_line = 34
+is_public = true
+is_added = true
+signature = "pub async fn close(self) -> Result<()>"

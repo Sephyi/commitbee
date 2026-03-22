@@ -1,0 +1,24 @@
+diff --git a/src/services/validator.rs b/src/services/validator.rs
+index abc1234..def5678 100644
+--- a/src/services/validator.rs
++++ b/src/services/validator.rs
+@@ -5,8 +5,8 @@ use crate::error::Result;
+
+ impl Validator {
+-    pub fn check(&self,  input: &str) -> bool {
+-        !input.is_empty()  &&  input.len() < 1024
++    pub fn check(&self, input: &str) -> bool {
++        !input.is_empty() && input.len() < 1024
+     }
+ }
+
+@@ -15,0 +16,10 @@
++/// Validate a batch of inputs, returning the first error.
++pub fn validate_batch(inputs: &[&str]) -> Result<()> {
++    for input in inputs {
++        if input.is_empty() {
++            return Err(crate::error::Error::Config("empty input in batch".into()));
++        }
++    }
++    Ok(())
++}

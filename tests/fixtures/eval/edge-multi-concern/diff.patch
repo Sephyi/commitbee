@@ -1,0 +1,53 @@
+diff --git a/src/services/metrics.rs b/src/services/metrics.rs
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/src/services/metrics.rs
+@@ -0,0 +1,20 @@
++use std::time::Instant;
++
++/// Simple timing metrics collector.
++pub struct MetricsCollector {
++    start: Instant,
++    labels: Vec<String>,
++}
++
++impl MetricsCollector {
++    pub fn new() -> Self {
++        Self {
++            start: Instant::now(),
++            labels: Vec::new(),
++        }
++    }
++
++    pub fn elapsed_ms(&self) -> u128 {
++        self.start.elapsed().as_millis()
++    }
++}
+diff --git a/tests/metrics.rs b/tests/metrics.rs
+new file mode 100644
+index 0000000..def5678
+--- /dev/null
++++ b/tests/metrics.rs
+@@ -0,0 +1,8 @@
++use myproject::services::metrics::MetricsCollector;
++
++#[test]
++fn test_elapsed_is_non_negative() {
++    let collector = MetricsCollector::new();
++    std::thread::sleep(std::time::Duration::from_millis(10));
++    assert!(collector.elapsed_ms() >= 10);
++}
+diff --git a/README.md b/README.md
+index abc1234..def5678 100644
+--- a/README.md
++++ b/README.md
+@@ -20,3 +20,7 @@ cargo install myproject
+
+ ## Features
+
+ - Fast commit message generation
++
++## Metrics
++
++Built-in timing metrics for performance monitoring.

@@ -1,0 +1,18 @@
+diff --git a/package.json b/package.json
+index abc1234..def5678 100644
+--- a/package.json
++++ b/package.json
+@@ -12,8 +12,8 @@
+   "dependencies": {
+-    "express": "^4.18.2",
+-    "lodash": "^4.17.20",
++    "express": "^4.21.0",
++    "lodash": "^4.17.21",
+     "cors": "^2.8.5"
+   },
+   "devDependencies": {
+-    "typescript": "^5.3.0",
+-    "vitest": "^1.2.0"
++    "typescript": "^5.6.0",
++    "vitest": "^2.1.0"
+   }

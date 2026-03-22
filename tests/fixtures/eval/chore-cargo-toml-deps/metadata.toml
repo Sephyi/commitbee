@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "chore-cargo-toml-deps"
+description = "Dependency-only change in Cargo.toml should produce chore type"
+language = "rust"
+category = "chore"
+expected_type = "chore"
+
+[evidence]
+is_mechanical = true
+has_bug_evidence = false
+has_new_public_api = false
+public_api_removed_count = 0
+is_dependency_only = true
+
+[prompt]
+must_contain = ["EVIDENCE", "dependency/config files? yes"]
+must_not_contain = []
+
+[breaking]
+expected = false

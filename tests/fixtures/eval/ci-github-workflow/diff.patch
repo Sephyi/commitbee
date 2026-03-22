@@ -1,0 +1,32 @@
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/.github/workflows/release.yml
+@@ -0,0 +1,25 @@
++name: Release
++
++on:
++  push:
++    tags:
++      - "v*"
++
++jobs:
++  build:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: dtolnay/rust-toolchain@stable
++      - run: cargo build --release
++      - name: Create Release
++        uses: softprops/action-gh-release@v2
++        with:
++          files: target/release/commitbee
++          generate_release_notes: true
++
++  publish:
++    needs: build
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - run: cargo publish

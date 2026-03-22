@@ -1,0 +1,52 @@
+diff --git a/src/services/experimental.rs b/src/services/experimental.rs
+deleted file mode 100644
+index abc1234..0000000
+--- a/src/services/experimental.rs
++++ /dev/null
+@@ -1,35 +0,0 @@
+-use crate::error::Result;
+-
+-/// Experimental streaming parser that was unstable.
+-pub struct StreamParser {
+-    buffer: Vec<u8>,
+-    chunk_size: usize,
+-}
+-
+-impl StreamParser {
+-    pub fn new(chunk_size: usize) -> Self {
+-        Self {
+-            buffer: Vec::new(),
+-            chunk_size,
+-        }
+-    }
+-
+-    pub fn feed(&mut self, data: &[u8]) -> Result<Vec<String>> {
+-        self.buffer.extend_from_slice(data);
+-        let mut results = Vec::new();
+-        while self.buffer.len() >= self.chunk_size {
+-            let chunk: Vec<u8> = self.buffer.drain(..self.chunk_size).collect();
+-            let parsed = String::from_utf8_lossy(&chunk).to_string();
+-            results.push(parsed);
+-        }
+-        Ok(results)
+-    }
+-
+-    pub fn flush(&mut self) -> Result<Vec<String>> {
+-        if self.buffer.is_empty() {
+-            return Ok(Vec::new());
+-        }
+-        let remaining = std::mem::take(&mut self.buffer);
+-        let parsed = String::from_utf8_lossy(&remaining).to_string();
+-        Ok(vec![parsed])
+-    }
+-}
+diff --git a/src/services/mod.rs b/src/services/mod.rs
+index abc1234..def5678 100644
+--- a/src/services/mod.rs
++++ b/src/services/mod.rs
+@@ -3,5 +3,4 @@ pub mod context;
+ pub mod git;
+ pub mod sanitizer;
+ pub mod splitter;
+-pub mod experimental;
+ pub mod template;

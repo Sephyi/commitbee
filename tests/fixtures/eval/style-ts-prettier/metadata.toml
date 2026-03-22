@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "style-ts-prettier"
+description = "Prettier formatting changes in TS should produce style type"
+language = "typescript"
+category = "style"
+expected_type = "style"
+
+[evidence]
+is_mechanical = true
+has_bug_evidence = false
+has_new_public_api = false
+public_api_removed_count = 0
+is_dependency_only = false
+
+[prompt]
+must_contain = ["EVIDENCE", "mechanical/formatting change? yes"]
+
+[breaking]
+expected = false

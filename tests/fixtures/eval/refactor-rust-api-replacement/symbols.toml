@@ -1,0 +1,18 @@
+[[symbols]]
+kind = "Function"
+name = "lookup"
+file = "src/services/cache.rs"
+line = 13
+end_line = 15
+is_public = true
+is_added = false
+
+[[symbols]]
+kind = "Function"
+name = "get"
+file = "src/services/cache.rs"
+line = 23
+end_line = 28
+is_public = true
+is_added = true
+signature = "pub fn get(&self, key: &str) -> Option<&CacheEntry>"

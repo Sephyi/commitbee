@@ -1,0 +1,36 @@
+diff --git a/tests/auth_spec.ts b/tests/auth_spec.ts
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/tests/auth_spec.ts
+@@ -0,0 +1,28 @@
++import { describe, it, expect } from "vitest";
++import { validateToken, refreshToken } from "../src/services/auth";
++
++describe("validateToken", () => {
++  it("should return true for valid tokens", () => {
++    const token = createTestToken({ exp: Date.now() / 1000 + 3600 });
++    expect(validateToken(token)).toBe(true);
++  });
++
++  it("should return false for expired tokens", () => {
++    const token = createTestToken({ exp: Date.now() / 1000 - 100 });
++    expect(validateToken(token)).toBe(false);
++  });
++
++  it("should throw for malformed tokens", () => {
++    expect(() => validateToken("not-a-jwt")).toThrow();
++  });
++});
++
++describe("refreshToken", () => {
++  it("should return a new token", async () => {
++    const oldToken = createTestToken({ exp: Date.now() / 1000 + 60 });
++    const newToken = await refreshToken(oldToken);
++    expect(newToken).not.toBe(oldToken);
++  });
++});
++
++function createTestToken(payload: Record<string, unknown>): string {
++  return Buffer.from(JSON.stringify(payload)).toString("base64");
++}

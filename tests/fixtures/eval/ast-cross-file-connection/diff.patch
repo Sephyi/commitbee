@@ -1,0 +1,39 @@
+diff --git a/src/services/validator.rs b/src/services/validator.rs
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/src/services/validator.rs
+@@ -0,0 +1,12 @@
++use crate::error::Result;
++
++/// Validate user input before processing.
++pub fn validate_input(input: &str) -> Result<()> {
++    if input.is_empty() {
++        return Err(crate::error::Error::Config("empty input".into()));
++    }
++    if input.len() > 1024 {
++        return Err(crate::error::Error::Config("input too long".into()));
++    }
++    Ok(())
++}
+diff --git a/src/services/handler.rs b/src/services/handler.rs
+new file mode 100644
+index 0000000..def5678
+--- /dev/null
++++ b/src/services/handler.rs
+@@ -0,0 +1,15 @@
++use crate::error::Result;
++use super::validator::validate_input;
++
++pub struct RequestHandler;
++
++impl RequestHandler {
++    pub fn handle(&self, request: &str) -> Result<String> {
++        // Validate first, then process
++        validate_input(request)?;
++
++        // Process the validated input
++        let result = request.to_uppercase();
++        Ok(result)
++    }
++}

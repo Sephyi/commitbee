@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "refactor-py-extract-function"
+description = "Extracting inline code to a function should produce refactor type"
+language = "python"
+category = "refactor"
+expected_type = "refactor"
+expected_scope = "optional"
+
+[evidence]
+is_mechanical = true
+has_bug_evidence = false
+has_new_public_api = false
+public_api_removed_count = 0
+is_dependency_only = false
+
+[breaking]
+expected = false

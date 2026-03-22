@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "ast-mixed-ws-semantic"
+description = "Mix of whitespace and semantic changes should produce feat, not style"
+language = "rust"
+category = "ast"
+expected_type = "feat"
+expected_scope = "optional"
+
+[evidence]
+has_new_public_api = true
+
+[prompt]
+must_contain = ["SYMBOLS CHANGED", "Added"]
+
+[breaking]
+expected = false

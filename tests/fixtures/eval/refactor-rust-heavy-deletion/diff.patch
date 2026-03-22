@@ -1,0 +1,43 @@
+diff --git a/src/services/legacy.rs b/src/services/legacy.rs
+index abc1234..def5678 100644
+--- a/src/services/legacy.rs
++++ b/src/services/legacy.rs
+@@ -5,40 +5,10 @@ use crate::config::Config;
+
+-/// Old helper that manually iterated config entries.
+-fn process_config_entries(config: &Config) -> Vec<String> {
+-    let mut results = Vec::new();
+-    let entries = config.get_entries();
+-    for i in 0..entries.len() {
+-        let entry = &entries[i];
+-        if entry.is_valid() {
+-            let name = entry.name().to_string();
+-            let value = entry.value().to_string();
+-            let formatted = format!("{}={}", name, value);
+-            results.push(formatted);
+-        }
+-    }
+-    results
+-}
+-
+-/// Another old helper that duplicated logic.
+-fn validate_config_entries(config: &Config) -> bool {
+-    let entries = config.get_entries();
+-    for i in 0..entries.len() {
+-        let entry = &entries[i];
+-        if !entry.is_valid() {
+-            return false;
+-        }
+-    }
+-    true
+-}
+-
+ /// Simplified config processing using iterators.
+ fn process_config(config: &Config) -> Vec<String> {
+     config
+         .get_entries()
+         .iter()
+         .filter(|e| e.is_valid())
+         .map(|e| format!("{}={}", e.name(), e.value()))
+         .collect()
+ }

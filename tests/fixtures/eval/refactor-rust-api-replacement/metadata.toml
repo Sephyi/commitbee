@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
+name = "refactor-rust-api-replacement"
+description = "Public API removed and new one added should produce refactor type"
+language = "rust"
+category = "refactor"
+expected_type = "refactor"
+expected_scope = "optional"
+
+[evidence]
+is_mechanical = false
+has_bug_evidence = false
+has_new_public_api = true
+public_api_removed_count = 1
+is_dependency_only = false
+
+[prompt]
+must_contain = ["SYMBOLS CHANGED", "Added", "Removed"]
+must_not_contain = []
+
+[breaking]
+expected = true

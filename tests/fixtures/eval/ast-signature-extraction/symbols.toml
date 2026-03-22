@@ -1,0 +1,29 @@
+[[symbols]]
+kind = "Struct"
+name = "InputValidator"
+file = "src/services/validator.rs"
+line = 3
+end_line = 5
+is_public = true
+is_added = true
+signature = "pub struct InputValidator"
+
+[[symbols]]
+kind = "Function"
+name = "new"
+file = "src/services/validator.rs"
+line = 8
+end_line = 10
+is_public = true
+is_added = true
+signature = "pub fn new(max_length: usize) -> Self"
+
+[[symbols]]
+kind = "Function"
+name = "validate"
+file = "src/services/validator.rs"
+line = 12
+end_line = 17
+is_public = true
+is_added = true
+signature = "pub fn validate(&self, input: &str) -> Result<()>"
