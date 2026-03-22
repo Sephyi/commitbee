@@ -636,4 +636,48 @@ mod tests {
         let sig = AnalyzerService::extract_signature(node, source);
         assert_eq!(sig.as_deref(), Some("pub trait Handler"));
     }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_single_line_function() {
+        let source = "fn foo() {}\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(node, source);
+        assert!(
+            sig.is_some(),
+            "single-line function should have a signature"
+        );
+        assert!(
+            sig.as_ref().unwrap().contains("fn foo()"),
+            "signature should contain fn foo(), got: {:?}",
+            sig
+        );
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_const_item_no_body() {
+        let source = "pub const MAX: usize = 100;\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(node, source);
+        assert!(
+            sig.is_some(),
+            "const item should have a signature (first-line fallback)"
+        );
+        assert!(
+            sig.as_ref().unwrap().contains("MAX"),
+            "signature should contain const name, got: {:?}",
+            sig
+        );
+    }
 }

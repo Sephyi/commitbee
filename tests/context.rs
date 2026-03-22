@@ -1165,3 +1165,203 @@ fn prompt_shows_signatures_when_available() {
         ctx.symbols_added
     );
 }
+
+// ─── Test Coverage: detect_primary_change (#35) ───────────────────────────────
+
+#[test]
+fn primary_change_prefers_new_public_api() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+pub fn new_api() {}",
+        1,
+        0,
+    )]);
+    let sym = make_symbol("new_api", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym], &default_config());
+    assert!(
+        ctx.primary_change.as_ref().unwrap().contains("new_api"),
+        "should mention new public API: {:?}",
+        ctx.primary_change
+    );
+}
+
+#[test]
+fn primary_change_falls_back_to_removed_public() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-pub fn old_api() {}",
+        0,
+        1,
+    )]);
+    let sym = make_symbol("old_api", SymbolKind::Function, "src/lib.rs", true, false);
+    let ctx = ContextBuilder::build(&changes, &[sym], &default_config());
+    assert!(
+        ctx.primary_change.as_ref().unwrap().contains("old_api"),
+        "should mention removed public API: {:?}",
+        ctx.primary_change
+    );
+}
+
+#[test]
+fn primary_change_falls_back_to_largest_file() {
+    let changes = make_staged_changes(vec![
+        make_file_change("src/a.rs", ChangeStatus::Modified, "+x", 1, 0),
+        make_file_change("src/b.rs", ChangeStatus::Modified, "+large change", 50, 10),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.primary_change.as_ref().unwrap().contains("b"),
+        "should mention largest file: {:?}",
+        ctx.primary_change
+    );
+}
+
+// ─── Test Coverage: detect_metadata_breaking (#36) ────────────────────────────
+
+#[test]
+fn metadata_breaking_detects_msrv_change() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "Cargo.toml",
+        ChangeStatus::Modified,
+        "+rust-version = \"1.75\"",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        !ctx.metadata_breaking_signals.is_empty(),
+        "should detect MSRV change"
+    );
+}
+
+#[test]
+fn metadata_breaking_detects_pub_use_removal() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-pub use crate::old_api::*;",
+        0,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.metadata_breaking_signals
+            .iter()
+            .any(|s| s.contains("pub use")),
+        "should detect removed pub use: {:?}",
+        ctx.metadata_breaking_signals
+    );
+}
+
+// ─── Test Coverage: detect_bug_evidence all patterns (#38) ────────────────────
+
+#[test]
+fn bug_evidence_detects_hash_fix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.py",
+        ChangeStatus::Modified,
+        "+# fix: off by one",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect '# fix' pattern");
+}
+
+#[test]
+fn bug_evidence_detects_c_style_fix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.c",
+        ChangeStatus::Modified,
+        "+/* fix: memory leak */",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect '/* fix' pattern");
+}
+
+#[test]
+fn bug_evidence_detects_bug_keyword() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+// bug: incorrect index",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect '// bug' pattern");
+}
+
+#[test]
+fn bug_evidence_detects_fixme() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+// FIXME this is broken",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect 'fixme' pattern");
+}
+
+#[test]
+fn bug_evidence_detects_hotfix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+// hotfix for prod issue",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect 'hotfix' pattern");
+}
+
+// ─── Test Coverage: connection content assertion (#41) ────────────────────────
+
+#[test]
+fn connection_content_mentions_symbol_name() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/validator.rs",
+            ChangeStatus::Modified,
+            "+    let result = parse(input);",
+            1,
+            0,
+        ),
+        make_file_change(
+            "src/services/parser.rs",
+            ChangeStatus::Modified,
+            "-pub fn parse(s: &str) -> Ast {\n+pub fn parse(s: &str, strict: bool) -> Ast {",
+            1,
+            1,
+        ),
+    ]);
+    let symbols = vec![
+        make_symbol(
+            "parse",
+            SymbolKind::Function,
+            "src/services/parser.rs",
+            true,
+            true,
+        ),
+        make_symbol(
+            "parse",
+            SymbolKind::Function,
+            "src/services/parser.rs",
+            true,
+            false,
+        ),
+    ];
+    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    assert!(
+        ctx.connections.iter().any(|c| c.contains("parse")),
+        "connection should mention symbol name 'parse': {:?}",
+        ctx.connections
+    );
+}

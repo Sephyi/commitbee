@@ -536,9 +536,10 @@ fn detects_sendgrid_key() {
 #[test]
 fn build_patterns_default_has_all_builtins() {
     let patterns = build_patterns(&[], &[]);
-    assert!(
-        patterns.len() >= 20,
-        "expected at least 20 built-in patterns, got {}",
+    assert_eq!(
+        patterns.len(),
+        24,
+        "expected exactly 24 built-in patterns, got {}",
         patterns.len()
     );
 }
