@@ -29,6 +29,22 @@ pub fn make_file_change(
     }
 }
 
+/// Create a renamed FileChange for testing
+#[allow(dead_code)]
+pub fn make_renamed_file(old_path: &str, new_path: &str, similarity: u8) -> FileChange {
+    FileChange {
+        path: PathBuf::from(new_path),
+        status: ChangeStatus::Renamed,
+        diff: Arc::from(""),
+        additions: 0,
+        deletions: 0,
+        category: FileCategory::from_path(&PathBuf::from(new_path)),
+        is_binary: false,
+        old_path: Some(PathBuf::from(old_path)),
+        rename_similarity: Some(similarity),
+    }
+}
+
 /// Create StagedChanges from a list of FileChanges
 #[allow(dead_code)]
 pub fn make_staged_changes(files: Vec<FileChange>) -> StagedChanges {

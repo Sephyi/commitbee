@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use commitbee::config::Config;
 use commitbee::domain::{ChangeStatus, CodeSymbol, CommitType, FileCategory, SymbolKind};
 use commitbee::services::context::ContextBuilder;
-use helpers::{make_file_change, make_staged_changes};
+use helpers::{make_file_change, make_renamed_file, make_staged_changes};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1363,5 +1363,97 @@ fn connection_content_mentions_symbol_name() {
         ctx.connections.iter().any(|c| c.contains("parse")),
         "connection should mention symbol name 'parse': {:?}",
         ctx.connections
+    );
+}
+
+// ─── Test Coverage: Deleted/Renamed status (#37) ──────────────────────────────
+
+#[test]
+fn format_files_shows_deleted_marker() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/old.rs",
+        ChangeStatus::Deleted,
+        "-pub fn removed() {}",
+        0,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.file_breakdown.contains("[-]"),
+        "deleted file should show [-] marker: {}",
+        ctx.file_breakdown
+    );
+}
+
+#[test]
+fn format_files_shows_renamed_marker() {
+    let changes = make_staged_changes(vec![make_renamed_file(
+        "src/old_name.rs",
+        "src/new_name.rs",
+        95,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.file_breakdown.contains("[R]"),
+        "renamed file should show [R] marker: {}",
+        ctx.file_breakdown
+    );
+    assert!(
+        ctx.file_breakdown.contains("95% similar"),
+        "renamed file should show similarity: {}",
+        ctx.file_breakdown
+    );
+}
+
+// ─── Test Coverage: classify_span_change None path (#39) ──────────────────────
+
+#[test]
+fn whitespace_detection_returns_none_when_span_has_no_changes() {
+    // Symbol at lines 50-60 but diff hunk is at lines 1-3 — no overlap
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,3 +1,3 @@\n fn other() {\n-    old()\n+    new()\n }",
+        1,
+        1,
+    )]);
+    let mut sym_old = make_symbol("distant", SymbolKind::Function, "src/lib.rs", true, false);
+    sym_old.line = 50;
+    sym_old.end_line = 60;
+    let mut sym_new = make_symbol("distant", SymbolKind::Function, "src/lib.rs", true, true);
+    sym_new.line = 50;
+    sym_new.end_line = 60;
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    // Symbol is outside the hunk — classify_span_change returns None (no changes in span).
+    // The symbol still appears as "modified" (name+kind+file match) but with no
+    // whitespace classification. This is expected: it won't be filtered as whitespace-only.
+    // This test verifies the None path doesn't crash or produce false positives.
+    assert!(
+        ctx.symbols_modified.contains("distant"),
+        "modified symbol outside hunk should still appear (with no ws classification): {}",
+        ctx.symbols_modified
+    );
+}
+
+// ─── Test Coverage: HARD LIMIT dedup check (#28) ─────────────────────────────
+
+#[test]
+fn prompt_hard_limit_includes_char_budget() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+fn foo() {}",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("HARD LIMIT"),
+        "prompt should contain HARD LIMIT section"
+    );
+    assert!(
+        prompt.contains("chars"),
+        "HARD LIMIT should mention char budget"
     );
 }
