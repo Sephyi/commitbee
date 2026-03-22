@@ -1052,6 +1052,49 @@ fn diff_truncation_multiple_files() {
     );
 }
 
+// ─── Cross-file symbol connections ───────────────────────────────────────────
+
+#[test]
+fn prompt_shows_connections_between_modified_symbols() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/validator.rs",
+            ChangeStatus::Modified,
+            "+    let result = parse(input);",
+            1,
+            0,
+        ),
+        make_file_change(
+            "src/services/parser.rs",
+            ChangeStatus::Modified,
+            "-pub fn parse(s: &str) -> Ast {\n+pub fn parse(s: &str, strict: bool) -> Ast {",
+            1,
+            1,
+        ),
+    ]);
+    let symbols = vec![
+        make_symbol(
+            "parse",
+            SymbolKind::Function,
+            "src/services/parser.rs",
+            true,
+            true,
+        ),
+        make_symbol(
+            "parse",
+            SymbolKind::Function,
+            "src/services/parser.rs",
+            true,
+            false,
+        ),
+    ];
+    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    assert!(
+        !ctx.connections.is_empty(),
+        "should detect that validator.rs calls modified symbol parse()"
+    );
+}
+
 // ─── Signature display ───────────────────────────────────────────────────────
 
 #[test]

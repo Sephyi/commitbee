@@ -191,6 +191,7 @@ impl ContextBuilder {
             metadata_breaking_signals: Self::detect_metadata_breaking(changes),
             locale: config.locale.clone(),
             history_context: None, // Set by App when learn_from_history is enabled
+            connections: Self::detect_connections(changes, symbols),
         }
     }
 
@@ -731,6 +732,45 @@ impl ContextBuilder {
         }
 
         None
+    }
+
+    /// Detect cross-file relationships: added lines that call symbols from other changed files.
+    fn detect_connections(changes: &StagedChanges, symbols: &[CodeSymbol]) -> Vec<String> {
+        let mut connections = Vec::new();
+
+        let symbol_files: Vec<(&str, &std::path::Path)> = symbols
+            .iter()
+            .filter(|s| s.is_added)
+            .map(|s| (s.name.as_str(), s.file.as_path()))
+            .collect();
+
+        for file in &changes.files {
+            for (sym_name, sym_file) in &symbol_files {
+                if file.path.as_path() == *sym_file {
+                    continue;
+                }
+
+                let call_pattern = format!("{}(", sym_name);
+                let has_call = file.diff.lines().any(|line| {
+                    line.starts_with('+')
+                        && !line.starts_with("+++")
+                        && line.contains(&call_pattern)
+                });
+
+                if has_call {
+                    let caller = file
+                        .path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("?");
+                    connections.push(format!("{} calls {}() — both changed", caller, sym_name));
+                }
+            }
+        }
+
+        connections.dedup();
+        connections.truncate(5);
+        connections
     }
 
     /// Scan diff content for metadata changes that indicate breaking changes.

@@ -33,6 +33,9 @@ pub struct PromptContext {
     pub locale: Option<String>,
     /// Optional project style context learned from commit history
     pub history_context: Option<String>,
+    /// Cross-symbol relationships detected from diff content.
+    /// e.g., "validate calls parse() — both changed"
+    pub connections: Vec<String>,
 }
 
 impl PromptContext {
@@ -42,6 +45,18 @@ impl PromptContext {
         let breaking_warning = self.format_breaking_warning();
         let evidence_section = self.format_evidence_section();
         let constraints_section = self.format_constraints_section();
+        let connections_section = if self.connections.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\nCONNECTIONS:\n{}\n",
+                self.connections
+                    .iter()
+                    .map(|c| format!("  {}", c))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
 
         // Calculate available chars for subject after type(scope): prefix
         let prefix_len = self.suggested_type.as_str().len()
@@ -107,7 +122,7 @@ impl PromptContext {
 SUMMARY: {summary}
 FILES: {files}
 SUGGESTED TYPE: {commit_type}{scope}
-{group_rationale}{evidence}{primary_change}{symbols}
+{group_rationale}{evidence}{primary_change}{symbols}{connections}
 DIFF:
 {diff}
 {constraints}{breaking}{metadata_breaking}{locale}{focus}{history}
@@ -126,6 +141,7 @@ Respond with ONLY this JSON:
                 .unwrap_or_default(),
             evidence = evidence_section,
             symbols = symbols_section,
+            connections = connections_section,
             breaking = breaking_warning,
             constraints = constraints_section,
             focus = focus_instruction,
