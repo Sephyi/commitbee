@@ -84,7 +84,8 @@ fn builtin_patterns() -> Vec<SecretPattern> {
         // ── AI/ML Provider Keys ──
         SecretPattern {
             name: Cow::Borrowed("OpenAI Key"),
-            regex: Regex::new(r"sk-(?:proj-|svcacct-)?[a-zA-Z0-9\-_]{20,}").unwrap(),
+            regex: Regex::new(r"sk-(?:proj-|svcacct-)[a-zA-Z0-9\-_]{20,}|sk-[a-zA-Z0-9]{48}")
+                .unwrap(),
             description: Cow::Borrowed(
                 "OpenAI API key (legacy, project-scoped, or service account)",
             ),
