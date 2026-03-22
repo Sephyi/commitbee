@@ -446,6 +446,36 @@ fn symbol_dependency_merges_groups() {
     );
 }
 
+#[test]
+fn split_keeps_symbol_connected_files_together() {
+    // File a.rs has added lines calling parse(), file b.rs defines parse()
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/a.rs",
+            ChangeStatus::Modified,
+            "-old\n+new(parse())",
+            1,
+            1,
+        ),
+        make_file_change(
+            "src/b.rs",
+            ChangeStatus::Modified,
+            "-pub fn parse() {}\n+pub fn parse(s: &str) {}",
+            1,
+            1,
+        ),
+    ]);
+    let symbols = vec![
+        make_symbol("parse", SymbolKind::Function, "src/b.rs", true, true),
+        make_symbol("parse", SymbolKind::Function, "src/b.rs", true, false),
+    ];
+    let result = CommitSplitter::analyze(&changes, &symbols);
+    assert!(
+        matches!(result, SplitSuggestion::SingleCommit),
+        "files connected by symbol dependency should stay in one group"
+    );
+}
+
 // ─── Module detection tests ──────────────────────────────────────────────────
 
 #[test]
