@@ -129,7 +129,7 @@ impl AnthropicProvider {
                 } else {
                     Error::Provider {
                         provider: "anthropic".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     }
                 }
             })?;
@@ -160,10 +160,17 @@ impl AnthropicProvider {
 
                     let chunk = chunk.map_err(|e| Error::Provider {
                         provider: "anthropic".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     })?;
 
                     line_buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                    if line_buffer.len() > MAX_RESPONSE_BYTES {
+                        return Err(Error::Provider {
+                            provider: "anthropic".into(),
+                            message: "line buffer exceeded 1 MB limit".into(),
+                        });
+                    }
 
                     while let Some(newline_pos) = line_buffer.find('\n') {
                         // Parse from slice to avoid allocating a String per line

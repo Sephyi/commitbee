@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use commitbee::config::Config;
 use commitbee::domain::{ChangeStatus, CodeSymbol, CommitType, FileCategory, SymbolKind};
 use commitbee::services::context::ContextBuilder;
-use helpers::{make_file_change, make_staged_changes};
+use helpers::{make_file_change, make_renamed_file, make_staged_changes};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1163,5 +1163,297 @@ fn prompt_shows_signatures_when_available() {
         prompt.contains("pub fn connect(host: &str) -> Result<()>"),
         "prompt should contain the full signature, got symbols_added: {}",
         ctx.symbols_added
+    );
+}
+
+// ─── Test Coverage: detect_primary_change (#35) ───────────────────────────────
+
+#[test]
+fn primary_change_prefers_new_public_api() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+pub fn new_api() {}",
+        1,
+        0,
+    )]);
+    let sym = make_symbol("new_api", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym], &default_config());
+    assert!(
+        ctx.primary_change.as_ref().unwrap().contains("new_api"),
+        "should mention new public API: {:?}",
+        ctx.primary_change
+    );
+}
+
+#[test]
+fn primary_change_falls_back_to_removed_public() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-pub fn old_api() {}",
+        0,
+        1,
+    )]);
+    let sym = make_symbol("old_api", SymbolKind::Function, "src/lib.rs", true, false);
+    let ctx = ContextBuilder::build(&changes, &[sym], &default_config());
+    assert!(
+        ctx.primary_change.as_ref().unwrap().contains("old_api"),
+        "should mention removed public API: {:?}",
+        ctx.primary_change
+    );
+}
+
+#[test]
+fn primary_change_falls_back_to_largest_file() {
+    let changes = make_staged_changes(vec![
+        make_file_change("src/a.rs", ChangeStatus::Modified, "+x", 1, 0),
+        make_file_change("src/b.rs", ChangeStatus::Modified, "+large change", 50, 10),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.primary_change.as_ref().unwrap().contains("b"),
+        "should mention largest file: {:?}",
+        ctx.primary_change
+    );
+}
+
+// ─── Test Coverage: detect_metadata_breaking (#36) ────────────────────────────
+
+#[test]
+fn metadata_breaking_detects_msrv_change() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "Cargo.toml",
+        ChangeStatus::Modified,
+        "+rust-version = \"1.75\"",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        !ctx.metadata_breaking_signals.is_empty(),
+        "should detect MSRV change"
+    );
+}
+
+#[test]
+fn metadata_breaking_detects_pub_use_removal() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "-pub use crate::old_api::*;",
+        0,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.metadata_breaking_signals
+            .iter()
+            .any(|s| s.contains("pub use")),
+        "should detect removed pub use: {:?}",
+        ctx.metadata_breaking_signals
+    );
+}
+
+// ─── Test Coverage: detect_bug_evidence all patterns (#38) ────────────────────
+
+#[test]
+fn bug_evidence_detects_hash_fix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.py",
+        ChangeStatus::Modified,
+        "+# fix: off by one",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect '# fix' pattern");
+}
+
+#[test]
+fn bug_evidence_detects_c_style_fix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.c",
+        ChangeStatus::Modified,
+        "+/* fix: memory leak */",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect '/* fix' pattern");
+}
+
+#[test]
+fn bug_evidence_detects_bug_keyword() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+// bug: incorrect index",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect '// bug' pattern");
+}
+
+#[test]
+fn bug_evidence_detects_fixme() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+// FIXME this is broken",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect 'fixme' pattern");
+}
+
+#[test]
+fn bug_evidence_detects_hotfix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+// hotfix for prod issue",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.has_bug_evidence, "should detect 'hotfix' pattern");
+}
+
+// ─── Test Coverage: connection content assertion (#41) ────────────────────────
+
+#[test]
+fn connection_content_mentions_symbol_name() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/validator.rs",
+            ChangeStatus::Modified,
+            "+    let result = parse(input);",
+            1,
+            0,
+        ),
+        make_file_change(
+            "src/services/parser.rs",
+            ChangeStatus::Modified,
+            "-pub fn parse(s: &str) -> Ast {\n+pub fn parse(s: &str, strict: bool) -> Ast {",
+            1,
+            1,
+        ),
+    ]);
+    let symbols = vec![
+        make_symbol(
+            "parse",
+            SymbolKind::Function,
+            "src/services/parser.rs",
+            true,
+            true,
+        ),
+        make_symbol(
+            "parse",
+            SymbolKind::Function,
+            "src/services/parser.rs",
+            true,
+            false,
+        ),
+    ];
+    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    assert!(
+        ctx.connections.iter().any(|c| c.contains("parse")),
+        "connection should mention symbol name 'parse': {:?}",
+        ctx.connections
+    );
+}
+
+// ─── Test Coverage: Deleted/Renamed status (#37) ──────────────────────────────
+
+#[test]
+fn format_files_shows_deleted_marker() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/old.rs",
+        ChangeStatus::Deleted,
+        "-pub fn removed() {}",
+        0,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.file_breakdown.contains("[-]"),
+        "deleted file should show [-] marker: {}",
+        ctx.file_breakdown
+    );
+}
+
+#[test]
+fn format_files_shows_renamed_marker() {
+    let changes = make_staged_changes(vec![make_renamed_file(
+        "src/old_name.rs",
+        "src/new_name.rs",
+        95,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(
+        ctx.file_breakdown.contains("[R]"),
+        "renamed file should show [R] marker: {}",
+        ctx.file_breakdown
+    );
+    assert!(
+        ctx.file_breakdown.contains("95% similar"),
+        "renamed file should show similarity: {}",
+        ctx.file_breakdown
+    );
+}
+
+// ─── Test Coverage: classify_span_change None path (#39) ──────────────────────
+
+#[test]
+fn whitespace_detection_returns_none_when_span_has_no_changes() {
+    // Symbol at lines 50-60 but diff hunk is at lines 1-3 — no overlap
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,3 +1,3 @@\n fn other() {\n-    old()\n+    new()\n }",
+        1,
+        1,
+    )]);
+    let mut sym_old = make_symbol("distant", SymbolKind::Function, "src/lib.rs", true, false);
+    sym_old.line = 50;
+    sym_old.end_line = 60;
+    let mut sym_new = make_symbol("distant", SymbolKind::Function, "src/lib.rs", true, true);
+    sym_new.line = 50;
+    sym_new.end_line = 60;
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    // Symbol is outside the hunk — classify_span_change returns None (no changes in span).
+    // The symbol still appears as "modified" (name+kind+file match) but with no
+    // whitespace classification. This is expected: it won't be filtered as whitespace-only.
+    // This test verifies the None path doesn't crash or produce false positives.
+    assert!(
+        ctx.symbols_modified.contains("distant"),
+        "modified symbol outside hunk should still appear (with no ws classification): {}",
+        ctx.symbols_modified
+    );
+}
+
+// ─── Test Coverage: HARD LIMIT dedup check (#28) ─────────────────────────────
+
+#[test]
+fn prompt_hard_limit_includes_char_budget() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+fn foo() {}",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("HARD LIMIT"),
+        "prompt should contain HARD LIMIT section"
+    );
+    assert!(
+        prompt.contains("chars"),
+        "HARD LIMIT should mention char budget"
     );
 }

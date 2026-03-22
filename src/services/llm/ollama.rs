@@ -90,7 +90,7 @@ impl OllamaProvider {
             } else {
                 Error::Provider {
                     provider: "ollama".into(),
-                    message: e.to_string(),
+                    message: e.without_url().to_string(),
                 }
             }
         })?;
@@ -162,7 +162,7 @@ impl OllamaProvider {
                 } else {
                     Error::Provider {
                         provider: "ollama".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     }
                 }
             })?;
@@ -197,11 +197,20 @@ impl OllamaProvider {
 
                     let chunk = chunk.map_err(|e| Error::Provider {
                         provider: "ollama".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     })?;
 
                     // Append chunk to buffer
                     line_buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                    // Cap line_buffer to prevent unbounded growth from servers
+                    // that send continuous bytes without newlines
+                    if line_buffer.len() > MAX_RESPONSE_BYTES {
+                        return Err(Error::Provider {
+                            provider: "ollama".into(),
+                            message: "line buffer exceeded 1 MB limit".into(),
+                        });
+                    }
 
                     // Process complete lines (newline-delimited JSON)
                     while let Some(newline_pos) = line_buffer.find('\n') {

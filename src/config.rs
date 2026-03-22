@@ -296,12 +296,16 @@ impl Config {
                 config.api_key = None;
             }
             if table.contains_key("openai_base_url") {
-                warn!("project .commitbee.toml overrides openai_base_url — verify this is trusted");
+                warn!("project .commitbee.toml sets openai_base_url — blocked for security");
+                config.openai_base_url = None;
             }
             if table.contains_key("anthropic_base_url") {
-                warn!(
-                    "project .commitbee.toml overrides anthropic_base_url — verify this is trusted"
-                );
+                warn!("project .commitbee.toml sets anthropic_base_url — blocked for security");
+                config.anthropic_base_url = None;
+            }
+            if table.contains_key("ollama_host") {
+                warn!("project .commitbee.toml sets ollama_host — blocked for security");
+                config.ollama_host = Config::default().ollama_host;
             }
         }
 

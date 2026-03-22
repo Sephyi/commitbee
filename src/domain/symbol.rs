@@ -21,8 +21,9 @@ pub enum SymbolKind {
 
 /// How a symbol was affected by the change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 #[allow(dead_code)]
-pub enum SymbolChangeType {
+pub(crate) enum SymbolChangeType {
     /// Symbol only exists in staged content (new symbol)
     Added,
     /// Symbol only exists in HEAD content (removed symbol)
@@ -57,7 +58,7 @@ impl CodeSymbol {
     /// Determine the change type for this symbol.
     #[must_use]
     #[allow(dead_code)]
-    pub fn change_type(&self) -> SymbolChangeType {
+    pub(crate) fn change_type(&self) -> SymbolChangeType {
         match (self.is_added, self.is_whitespace_only) {
             (true, None) => SymbolChangeType::Added,
             (false, None) => SymbolChangeType::Removed,
