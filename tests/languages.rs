@@ -786,3 +786,153 @@ mod go_signature {
         );
     }
 }
+
+// ─── BODY_NODE_KINDS coverage tests ──────────────────────────────────────────
+// Verify that signature extraction uses body-node detection (not first-line fallback)
+// for languages beyond Rust/TS/Python/Go.
+
+#[cfg(feature = "lang-java")]
+mod java_signature {
+    use super::*;
+
+    #[test]
+    fn java_method_signature_extracted() {
+        let source = "public class Handler {\n    public void process(String input, int count) {\n        System.out.println(input);\n    }\n}\n";
+        let diff = "@@ -0,0 +1,5 @@\n+public class Handler {\n+    public void process(String input, int count) {\n";
+        let change = make_file_change("src/Handler.java", diff, 5, 0);
+        let staged_map = HashMap::from([(PathBuf::from("src/Handler.java"), source.to_string())]);
+        let head_map = HashMap::new();
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let method = symbols.iter().find(|s| s.name == "process");
+        assert!(
+            method.is_some(),
+            "expected symbol 'process', got: {symbols:?}"
+        );
+        let sig = method
+            .unwrap()
+            .signature
+            .as_ref()
+            .expect("signature should be Some");
+        assert!(
+            sig.contains("process") && sig.contains("String"),
+            "Java method signature should contain params, got: {sig}"
+        );
+    }
+}
+
+#[cfg(feature = "lang-c")]
+mod c_signature {
+    use super::*;
+
+    #[test]
+    fn c_function_signature_extracted() {
+        let source = "int calculate(int a, int b) {\n    return a + b;\n}\n";
+        let diff = "@@ -0,0 +1,3 @@\n+int calculate(int a, int b) {\n";
+        let change = make_file_change("src/math.c", diff, 3, 0);
+        let staged_map = HashMap::from([(PathBuf::from("src/math.c"), source.to_string())]);
+        let head_map = HashMap::new();
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let func = symbols.iter().find(|s| s.name == "calculate");
+        assert!(
+            func.is_some(),
+            "expected symbol 'calculate', got: {symbols:?}"
+        );
+        let sig = func
+            .unwrap()
+            .signature
+            .as_ref()
+            .expect("signature should be Some");
+        assert!(
+            sig.contains("int a") && sig.contains("int b"),
+            "C function signature should contain params, got: {sig}"
+        );
+    }
+}
+
+#[cfg(feature = "lang-cpp")]
+mod cpp_signature {
+    use super::*;
+
+    #[test]
+    fn cpp_method_signature_extracted() {
+        let source = "class Parser {\npublic:\n    void parse(const std::string& input) {\n        // body\n    }\n};\n";
+        let diff = "@@ -0,0 +1,6 @@\n+class Parser {\n";
+        let change = make_file_change("src/parser.cpp", diff, 6, 0);
+        let staged_map = HashMap::from([(PathBuf::from("src/parser.cpp"), source.to_string())]);
+        let head_map = HashMap::new();
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let cls = symbols.iter().find(|s| s.name == "Parser");
+        assert!(cls.is_some(), "expected symbol 'Parser', got: {symbols:?}");
+        let sig = cls
+            .unwrap()
+            .signature
+            .as_ref()
+            .expect("signature should be Some");
+        assert!(
+            sig.contains("Parser"),
+            "C++ class signature should contain class name, got: {sig}"
+        );
+    }
+}
+
+#[cfg(feature = "lang-ruby")]
+mod ruby_signature {
+    use super::*;
+
+    #[test]
+    fn ruby_method_signature_extracted() {
+        let source = "class Greeter\n  def greet(name)\n    puts name\n  end\nend\n";
+        let diff = "@@ -0,0 +1,5 @@\n+class Greeter\n";
+        let change = make_file_change("src/greeter.rb", diff, 5, 0);
+        let staged_map = HashMap::from([(PathBuf::from("src/greeter.rb"), source.to_string())]);
+        let head_map = HashMap::new();
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let cls = symbols.iter().find(|s| s.name == "Greeter");
+        assert!(cls.is_some(), "expected symbol 'Greeter', got: {symbols:?}");
+        let sig = cls
+            .unwrap()
+            .signature
+            .as_ref()
+            .expect("signature should be Some");
+        assert!(
+            sig.contains("Greeter"),
+            "Ruby class signature should contain class name, got: {sig}"
+        );
+    }
+}
+
+#[cfg(feature = "lang-csharp")]
+mod csharp_signature {
+    use super::*;
+
+    #[test]
+    fn csharp_method_signature_extracted() {
+        let source = "public class Service {\n    public string Process(int id, string name) {\n        return name;\n    }\n}\n";
+        let diff = "@@ -0,0 +1,5 @@\n+public class Service {\n";
+        let change = make_file_change("src/Service.cs", diff, 5, 0);
+        let staged_map = HashMap::from([(PathBuf::from("src/Service.cs"), source.to_string())]);
+        let head_map = HashMap::new();
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let cls = symbols.iter().find(|s| s.name == "Service");
+        assert!(cls.is_some(), "expected symbol 'Service', got: {symbols:?}");
+        let sig = cls
+            .unwrap()
+            .signature
+            .as_ref()
+            .expect("signature should be Some");
+        assert!(
+            sig.contains("Service"),
+            "C# class signature should contain class name, got: {sig}"
+        );
+    }
+}

@@ -746,7 +746,8 @@ impl ContextBuilder {
 
         for file in &changes.files {
             for (sym_name, sym_file) in &symbol_files {
-                if file.path.as_path() == *sym_file {
+                // Skip self-references and short names that cause false positives
+                if file.path.as_path() == *sym_file || sym_name.len() < 4 {
                     continue;
                 }
 
@@ -765,9 +766,17 @@ impl ContextBuilder {
                         .unwrap_or("?");
                     connections.push(format!("{} calls {}() — both changed", caller, sym_name));
                 }
+
+                if connections.len() >= 5 {
+                    break;
+                }
+            }
+            if connections.len() >= 5 {
+                break;
             }
         }
 
+        connections.sort();
         connections.dedup();
         connections.truncate(5);
         connections
