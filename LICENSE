@@ -1,15 +1,17 @@
-<!--
-SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
-
-SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
--->
-
-# License
-
 CommitBee is dual-licensed:
 
-- **[AGPL-3.0-only](LICENSES/AGPL-3.0-only.txt)** — the open-source license. You may use, modify, and distribute freely under AGPL terms. If you modify CommitBee and distribute it (including as a network service), you must release your changes under AGPL.
+- AGPL-3.0-only (LICENSES/AGPL-3.0-only.txt) — the open-source license.
+  You may use, modify, and distribute freely under AGPL terms. If you
+  modify CommitBee and distribute it (including as a network service),
+  you must release your changes under AGPL.
 
-- **Commercial License** — for organizations that cannot comply with AGPL obligations (e.g., embedding in proprietary software, offering as a hosted service without source disclosure). Contact [me@sephy.io](mailto:me@sephy.io) for commercial licensing.
+- Commercial License (LICENSES/LicenseRef-Commercial.txt) — for
+  organizations that cannot comply with AGPL obligations. Includes
+  rights to rebrand, remove copyright notices, embed in proprietary
+  software, and offer as a hosted service without source disclosure.
+  Contact me@sephy.io for commercial licensing.
 
-This project is [REUSE](https://reuse.software/) compliant. Every source file carries SPDX headers identifying its copyright and license.
+This project is REUSE (https://reuse.software/) compliant. Every source
+file carries SPDX headers identifying its copyright and license.
+
+Copyright 2026 Sephyi <me@sephy.io>
