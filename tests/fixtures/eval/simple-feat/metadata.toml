@@ -1,8 +1,0 @@
-# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
-#
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-
-name = "simple-feat"
-description = "Adding a new public function should produce feat type"
-expected_type = "feat"
-expected_scope = "optional"

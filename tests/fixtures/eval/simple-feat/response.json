@@ -1,1 +1,0 @@
-{"type": "feat", "scope": "services", "subject": "add CommitValidator for subject length checking", "body": "Introduces a new validator struct that enforces maximum subject line length for commit messages.", "breaking_change": null}

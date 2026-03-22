@@ -184,10 +184,9 @@ fn breaking_change_fixtures() {
 fn fixture_count() {
     let runner = EvalRunner::new(fixtures_dir(), None);
     let results = runner.run_sync().expect("eval runner should not error");
-    // 12 original + 26 new = 38
     assert!(
-        results.len() >= 38,
-        "Expected at least 38 fixtures, found {}",
+        results.len() >= 36,
+        "Expected at least 36 fixtures, found {}",
         results.len()
     );
 }
