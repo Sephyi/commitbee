@@ -987,3 +987,25 @@ fn diff_truncation_multiple_files() {
         "huge multi-file diff should show truncation indicators"
     );
 }
+
+// ─── Signature display ───────────────────────────────────────────────────────
+
+#[test]
+fn prompt_shows_signatures_when_available() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+pub fn connect(host: &str) -> Result<()> {\n+    Ok(())\n+}",
+        3,
+        0,
+    )]);
+    let mut sym = make_symbol("connect", SymbolKind::Function, "src/lib.rs", true, true);
+    sym.signature = Some("pub fn connect(host: &str) -> Result<()>".to_string());
+    let ctx = ContextBuilder::build(&changes, &[sym], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("pub fn connect(host: &str) -> Result<()>"),
+        "prompt should contain the full signature, got symbols_added: {}",
+        ctx.symbols_added
+    );
+}

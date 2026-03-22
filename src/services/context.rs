@@ -55,8 +55,15 @@ impl ContextBuilder {
         let used = SYSTEM_PROMPT_RESERVE + change_summary.len() + file_breakdown.len();
         let remaining = max_context.saturating_sub(used);
 
-        // Symbols get 20% of remaining, diff gets 80% (minimum MIN_DIFF_BUDGET)
-        let diff_budget = remaining.saturating_sub(remaining / 5).max(MIN_DIFF_BUDGET);
+        // Symbols get 30% when signatures are present (richer content), 20% otherwise
+        let symbol_pct = if symbols.iter().any(|s| s.signature.is_some()) {
+            30
+        } else {
+            20
+        };
+        let diff_budget = remaining
+            .saturating_sub(remaining * symbol_pct / 100)
+            .max(MIN_DIFF_BUDGET);
         let symbol_budget = remaining.saturating_sub(diff_budget);
 
         // Tri-state symbol classification:
