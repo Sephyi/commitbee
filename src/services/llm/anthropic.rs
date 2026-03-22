@@ -129,7 +129,7 @@ impl AnthropicProvider {
                 } else {
                     Error::Provider {
                         provider: "anthropic".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     }
                 }
             })?;
@@ -160,7 +160,7 @@ impl AnthropicProvider {
 
                     let chunk = chunk.map_err(|e| Error::Provider {
                         provider: "anthropic".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     })?;
 
                     line_buffer.push_str(&String::from_utf8_lossy(&chunk));

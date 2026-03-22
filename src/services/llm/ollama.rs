@@ -90,7 +90,7 @@ impl OllamaProvider {
             } else {
                 Error::Provider {
                     provider: "ollama".into(),
-                    message: e.to_string(),
+                    message: e.without_url().to_string(),
                 }
             }
         })?;
@@ -162,7 +162,7 @@ impl OllamaProvider {
                 } else {
                     Error::Provider {
                         provider: "ollama".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     }
                 }
             })?;
@@ -197,7 +197,7 @@ impl OllamaProvider {
 
                     let chunk = chunk.map_err(|e| Error::Provider {
                         provider: "ollama".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     })?;
 
                     // Append chunk to buffer

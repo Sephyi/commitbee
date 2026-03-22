@@ -93,7 +93,7 @@ impl OpenAiProvider {
             .await
             .map_err(|e| Error::Provider {
                 provider: "openai".into(),
-                message: e.to_string(),
+                message: e.without_url().to_string(),
             })?;
 
         if response.status() == reqwest::StatusCode::UNAUTHORIZED {
@@ -146,7 +146,7 @@ impl OpenAiProvider {
                 } else {
                     Error::Provider {
                         provider: "openai".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     }
                 }
             })?;
@@ -177,7 +177,7 @@ impl OpenAiProvider {
 
                     let chunk = chunk.map_err(|e| Error::Provider {
                         provider: "openai".into(),
-                        message: e.to_string(),
+                        message: e.without_url().to_string(),
                     })?;
 
                     line_buffer.push_str(&String::from_utf8_lossy(&chunk));
