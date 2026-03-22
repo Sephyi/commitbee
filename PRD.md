@@ -6,18 +6,19 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # CommitBee — Product Requirements Document
 
-**Version**: 4.0  
-**Date**: 2026-03-13  
+**Version**: 4.1
+**Date**: 2026-03-22
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)  
 
 ## Changelog
 
 <details>
-<summary>Revision history (v3.3 → v4.0)</summary>
+<summary>Revision history (v3.3 → v4.1)</summary>
 
 | Version | Date       | Summary |
 |---------|------------|---------|
+| 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 334 tests. |
 | 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |
 | 3.3     | 2026-03-13 | v0.4.0 full feature completion — FR-030 (Custom Prompt Templates), FR-032 (Multi-Language), FR-036 (Tree-sitter Query Patterns), FR-057 (Additional Languages), FR-058 (History Learning), TR-006 (Eval Harness), TR-007 (Fuzzing). 308 tests. |
 | 3.2     | 2026-03-13 | FR-035 (Rename Detection), FR-037 (Expanded Secret Scanning), FR-038 (Progress Indicators). 202 tests. |
@@ -90,7 +91,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Multiple message generation (pick from N)          | Common (aicommits, aicommit2) | ✅ v0.2.0       |
 | Commit splitting (multi-concern detection)         | No competitor has this        | ✅ v0.2.0       |
 | Custom prompt/instruction files                    | Growing (Copilot, aicommit2)  | ✅ v0.4.0       |
-| Unit/integration tests                             | Non-negotiable for quality    | ✅ 308 tests    |
+| Unit/integration tests                             | Non-negotiable for quality    | ✅ 334 tests    |
 
 ## 3. Architecture
 
@@ -149,7 +150,7 @@ commitbee
 │   ├── app.rs               # Orchestrator (decomposed into small methods)
 │   ├── domain/
 │   │   ├── change.rs        # FileChange, StagedChanges
-│   │   ├── symbol.rs        # CodeSymbol, SymbolKind
+│   │   ├── symbol.rs        # CodeSymbol, SymbolKind, SymbolChangeType
 │   │   ├── context.rs       # PromptContext (includes symbols in prompt)
 │   │   └── commit.rs        # CommitType (single source of truth for types)
 │   ├── queries/             # Tree-sitter .scm query files per language
@@ -451,7 +452,21 @@ Config: `learn_from_history` (default `false`), `history_sample_size` (default 5
 
 `--clipboard` flag copies generated message to system clipboard and prints to stdout. Skips commit confirmation prompt. Uses platform-specific commands: `pbcopy` (macOS), `clip` (Windows), `xclip -selection clipboard` (Linux). Descriptive error if clipboard command unavailable. 3 CLI parsing tests.
 
-### 4.5 Future — v0.5.0+ (Market Leadership)
+### 4.5 Shipped — v0.5.0 (AST Context Overhaul)
+
+#### FR-059: Full Signature Extraction ✅
+
+Tree-sitter AST nodes now yield complete function/struct/trait signatures (e.g., `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`) instead of bare names. Two-strategy body detection: `child_by_field_name("body")` primary, `BODY_NODE_KINDS` constant fallback (12 node kinds across 10 languages), first-line final fallback. Multi-line signatures collapsed to single line, capped at 200 chars with UTF-8-safe truncation (`floor_char_boundary`). Token budget rebalanced to 30/70 symbol/diff when signatures present. 7 unit tests + 6 per-language integration tests.
+
+#### FR-060: Semantic Change Classification ✅
+
+Modified symbols (same name+kind+file in both HEAD and staged) are classified as whitespace-only or semantic via character-stream comparison of non-whitespace content within symbol spans. Dual old-file/new-file line tracking for correct span attribution. Old → new signature diffs displayed in prompt (`[~] old_sig → new_sig`). Whitespace-only symbols filtered from modified display. Formatting-only changes auto-detected as `CommitType::Style` when all modified symbols are whitespace-only. `build()` restructured to classify before `infer_commit_type`. 3 tests.
+
+#### FR-061: Cross-File Connection Detection ✅
+
+Scans added diff lines for `symbol_name(` call patterns referencing symbols defined in other changed files. Connections displayed in new `CONNECTIONS:` prompt section (e.g., `validator calls parse() — both changed`). Capped at 5 connections to prevent prompt bloat. SYSTEM_PROMPT updated with connection-aware guidance. 1 test + 1 splitter integration test.
+
+### 4.6 Future — v0.6.0+ (Market Leadership)
 
 #### FR-050: MCP Server Mode
 
@@ -791,7 +806,8 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | 2 | v0.3.x | ✅ Shipped | Differentiation — heuristics, validation, spec compliance |
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
 | 4 | v0.4.x | ✅ Shipped | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
-| 5 | v0.5.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
+| 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 334 tests. |
+| 6 | v0.6.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
 
