@@ -4,10 +4,15 @@
 
 //! Tests for feature-gated language support (Java, C, C++, Ruby, C#).
 //!
+//! Also tests signature extraction for Rust, TypeScript, Python, and Go.
 //! Each test is gated behind its corresponding Cargo feature flag.
 //! Run with: `cargo test --test languages --features all-languages`
 
 #[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python",
+    feature = "lang-go",
     feature = "lang-java",
     feature = "lang-c",
     feature = "lang-cpp",
@@ -16,6 +21,10 @@
 ))]
 use std::collections::HashMap;
 #[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python",
+    feature = "lang-go",
     feature = "lang-java",
     feature = "lang-c",
     feature = "lang-cpp",
@@ -24,6 +33,10 @@ use std::collections::HashMap;
 ))]
 use std::path::PathBuf;
 #[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python",
+    feature = "lang-go",
     feature = "lang-java",
     feature = "lang-c",
     feature = "lang-cpp",
@@ -33,6 +46,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 #[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python",
+    feature = "lang-go",
     feature = "lang-java",
     feature = "lang-c",
     feature = "lang-cpp",
@@ -41,6 +58,10 @@ use std::sync::Arc;
 ))]
 use commitbee::domain::{ChangeStatus, FileCategory, FileChange, SymbolKind};
 #[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python",
+    feature = "lang-go",
     feature = "lang-java",
     feature = "lang-c",
     feature = "lang-cpp",
@@ -50,6 +71,10 @@ use commitbee::domain::{ChangeStatus, FileCategory, FileChange, SymbolKind};
 use commitbee::services::analyzer::AnalyzerService;
 
 #[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python",
+    feature = "lang-go",
     feature = "lang-java",
     feature = "lang-c",
     feature = "lang-cpp",
@@ -546,6 +571,218 @@ mod csharp {
         assert!(
             strct.is_public,
             "public struct should be detected as public"
+        );
+    }
+}
+
+// ─── Signature extraction ─────────────────────────────────────────────────────
+
+#[cfg(feature = "lang-rust")]
+mod rust_signature {
+    use super::*;
+
+    #[test]
+    fn rust_function_signature_extracted() {
+        let source = r#"pub fn connect(host: &str, timeout: u64) -> bool {
+    true
+}
+"#;
+        // Hunk covers all 3 lines of the function
+        let diff = "@@ -0,0 +1,3 @@\n+pub fn connect(host: &str, timeout: u64) -> bool {\n";
+        let change = make_file_change("src/net.rs", diff, 3, 0);
+
+        let staged_map = HashMap::from([(PathBuf::from("src/net.rs"), source.to_string())]);
+        let head_map = HashMap::new();
+
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let func = symbols
+            .iter()
+            .find(|s| s.name == "connect")
+            .expect("expected a symbol named 'connect'");
+        assert_eq!(func.kind, SymbolKind::Function);
+
+        let sig = func
+            .signature
+            .as_ref()
+            .expect("expected signature to be extracted for Rust function");
+        assert!(
+            sig.contains("host"),
+            "signature should contain parameter 'host', got: {sig}"
+        );
+        assert!(
+            sig.contains("timeout"),
+            "signature should contain parameter 'timeout', got: {sig}"
+        );
+        assert!(
+            sig.contains("->"),
+            "signature should contain return type arrow, got: {sig}"
+        );
+        assert!(
+            sig.contains("bool"),
+            "signature should contain return type 'bool', got: {sig}"
+        );
+    }
+
+    #[test]
+    fn rust_method_signature_extracted() {
+        let source = r#"impl Cache {
+    pub fn get(&self, key: &str) -> Option<String> {
+        None
+    }
+}
+"#;
+        let diff = "@@ -0,0 +1,5 @@\n+impl Cache {\n";
+        let change = make_file_change("src/cache.rs", diff, 5, 0);
+
+        let staged_map = HashMap::from([(PathBuf::from("src/cache.rs"), source.to_string())]);
+        let head_map = HashMap::new();
+
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let method = symbols
+            .iter()
+            .find(|s| s.name == "get")
+            .expect("expected a symbol named 'get'");
+        assert_eq!(method.kind, SymbolKind::Function);
+
+        let sig = method
+            .signature
+            .as_ref()
+            .expect("expected signature for Rust method");
+        assert!(
+            sig.contains("key"),
+            "signature should contain parameter 'key', got: {sig}"
+        );
+        assert!(
+            sig.contains("Option"),
+            "signature should contain return type 'Option', got: {sig}"
+        );
+    }
+}
+
+#[cfg(feature = "lang-typescript")]
+mod typescript_signature {
+    use super::*;
+
+    #[test]
+    fn typescript_function_signature_extracted() {
+        let source = r#"function fetchUser(id: number, baseUrl: string): Promise<string> {
+    return Promise.resolve("");
+}
+"#;
+        let diff = "@@ -0,0 +1,3 @@\n+function fetchUser(id: number, baseUrl: string): Promise<string> {\n";
+        let change = make_file_change("src/api.ts", diff, 3, 0);
+
+        let staged_map = HashMap::from([(PathBuf::from("src/api.ts"), source.to_string())]);
+        let head_map = HashMap::new();
+
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let func = symbols
+            .iter()
+            .find(|s| s.name == "fetchUser")
+            .expect("expected a symbol named 'fetchUser'");
+        assert_eq!(func.kind, SymbolKind::Function);
+
+        let sig = func
+            .signature
+            .as_ref()
+            .expect("expected signature to be extracted for TypeScript function");
+        assert!(
+            sig.contains("id"),
+            "signature should contain parameter 'id', got: {sig}"
+        );
+        assert!(
+            sig.contains("baseUrl"),
+            "signature should contain parameter 'baseUrl', got: {sig}"
+        );
+    }
+}
+
+#[cfg(feature = "lang-python")]
+mod python_signature {
+    use super::*;
+
+    #[test]
+    fn python_function_signature_extracted() {
+        let source = r#"def calculate_total(price: float, quantity: int) -> float:
+    return price * quantity
+"#;
+        let diff = "@@ -0,0 +1,2 @@\n+def calculate_total(price: float, quantity: int) -> float:\n";
+        let change = make_file_change("src/billing.py", diff, 2, 0);
+
+        let staged_map = HashMap::from([(PathBuf::from("src/billing.py"), source.to_string())]);
+        let head_map = HashMap::new();
+
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let func = symbols
+            .iter()
+            .find(|s| s.name == "calculate_total")
+            .expect("expected a symbol named 'calculate_total'");
+        assert_eq!(func.kind, SymbolKind::Function);
+
+        let sig = func
+            .signature
+            .as_ref()
+            .expect("expected signature to be extracted for Python function");
+        assert!(
+            sig.contains("price"),
+            "signature should contain parameter 'price', got: {sig}"
+        );
+        assert!(
+            sig.contains("quantity"),
+            "signature should contain parameter 'quantity', got: {sig}"
+        );
+    }
+}
+
+#[cfg(feature = "lang-go")]
+mod go_signature {
+    use super::*;
+
+    #[test]
+    fn go_function_signature_extracted() {
+        let source = r#"func ParseConfig(path string, strict bool) (*Config, error) {
+	return nil, nil
+}
+"#;
+        let diff =
+            "@@ -0,0 +1,3 @@\n+func ParseConfig(path string, strict bool) (*Config, error) {\n";
+        let change = make_file_change("config/parser.go", diff, 3, 0);
+
+        let staged_map = HashMap::from([(PathBuf::from("config/parser.go"), source.to_string())]);
+        let head_map = HashMap::new();
+
+        let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+
+        let func = symbols
+            .iter()
+            .find(|s| s.name == "ParseConfig")
+            .expect("expected a symbol named 'ParseConfig'");
+        assert_eq!(func.kind, SymbolKind::Function);
+
+        let sig = func
+            .signature
+            .as_ref()
+            .expect("expected signature to be extracted for Go function");
+        assert!(
+            sig.contains("path"),
+            "signature should contain parameter 'path', got: {sig}"
+        );
+        assert!(
+            sig.contains("strict"),
+            "signature should contain parameter 'strict', got: {sig}"
+        );
+        assert!(
+            sig.contains("error"),
+            "signature should contain return type 'error', got: {sig}"
         );
     }
 }
