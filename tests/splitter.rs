@@ -28,6 +28,7 @@ fn make_symbol(
         is_public,
         is_added,
         is_whitespace_only: None,
+        signature: None,
     }
 }
 

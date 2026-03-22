@@ -49,6 +49,10 @@ pub struct CodeSymbol {
     /// None = symbol is purely added or removed, not a modification.
     #[allow(dead_code)]
     pub is_whitespace_only: Option<bool>,
+    /// Full signature extracted from tree-sitter AST (everything before the body).
+    /// e.g., "pub fn connect(host: &str, timeout: Duration) -> Result<Connection>"
+    /// None for languages or constructs where signature extraction isn't supported.
+    pub signature: Option<String>,
 }
 
 impl CodeSymbol {
@@ -69,17 +73,28 @@ impl CodeSymbol {
 
 impl std::fmt::Display for CodeSymbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let visibility = if self.is_public { "pub " } else { "" };
         let action = if self.is_added { "+" } else { "-" };
-        write!(
-            f,
-            "[{}] {}{:?} {} ({}:{})",
-            action,
-            visibility,
-            self.kind,
-            self.name,
-            self.file.display(),
-            self.line
-        )
+        if let Some(sig) = &self.signature {
+            write!(
+                f,
+                "[{}] {} ({}:{})",
+                action,
+                sig,
+                self.file.display(),
+                self.line
+            )
+        } else {
+            let visibility = if self.is_public { "pub " } else { "" };
+            write!(
+                f,
+                "[{}] {}{:?} {} ({}:{})",
+                action,
+                visibility,
+                self.kind,
+                self.name,
+                self.file.display(),
+                self.line
+            )
+        }
     }
 }
