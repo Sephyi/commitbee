@@ -113,6 +113,24 @@ struct LanguageConfig {
 pub struct AnalyzerService;
 
 impl AnalyzerService {
+    /// Body-like node kinds across all supported languages.
+    const BODY_NODE_KINDS: &[&str] = &[
+        "block",                          // Rust (fn), Python, Go, Java, C#
+        "statement_block",                // TypeScript, JavaScript
+        "compound_statement",             // C, C++
+        "class_body",                     // TypeScript, JavaScript, Java
+        "interface_body",                 // Java, C#
+        "enum_body",                      // Java
+        "field_declaration_list",         // Rust (struct), C, C++
+        "ordered_field_declaration_list", // Rust (tuple structs)
+        "enum_variant_list",              // Rust (enum variants)
+        "declaration_list",               // Rust (impl, trait)
+        "body_statement",                 // Ruby (method/class body)
+        "enum_member_declaration_list",   // C# (enum body)
+    ];
+
+    const MAX_SIGNATURE_LEN: usize = 200;
+
     pub fn new() -> Result<Self> {
         Ok(Self)
     }
@@ -314,6 +332,8 @@ impl AnalyzerService {
 
                 let is_public = Self::detect_visibility(def_node, file_ext, &symbol_name, source);
 
+                let signature = Self::extract_signature(def_node, source);
+
                 if let Some(kind) = kind {
                     symbols.push(CodeSymbol {
                         kind,
@@ -324,7 +344,7 @@ impl AnalyzerService {
                         is_public,
                         is_added,
                         is_whitespace_only: None,
-                        signature: None,
+                        signature,
                     });
                 }
             }
@@ -434,6 +454,50 @@ impl AnalyzerService {
         false
     }
 
+    /// Extract the signature from a definition node by taking text before the body.
+    /// Two-strategy: child_by_field_name("body") primary, BODY_NODE_KINDS fallback.
+    fn extract_signature(node: tree_sitter::Node, source: &str) -> Option<String> {
+        let node_start = node.start_byte();
+
+        // Strategy 1: named "body" field (most grammars)
+        // Strategy 2: scan children for known body node kinds
+        let body_start = node
+            .child_by_field_name("body")
+            .map(|child| child.start_byte())
+            .or_else(|| {
+                (0..node.child_count())
+                    .filter_map(|i| {
+                        #[allow(clippy::cast_possible_truncation)]
+                        node.child(i as u32)
+                    })
+                    .find(|child| Self::BODY_NODE_KINDS.contains(&child.kind()))
+                    .map(|child| child.start_byte())
+            });
+
+        let sig_text = if let Some(body_byte) = body_start {
+            &source[node_start..body_byte]
+        } else {
+            // No body found — take first line as fallback
+            let text = node.utf8_text(source.as_bytes()).ok()?;
+            return Some(Self::normalize_signature(
+                text.lines().next().unwrap_or("").trim(),
+            ));
+        };
+
+        Some(Self::normalize_signature(sig_text))
+    }
+
+    /// Collapse multi-line signature to single line and cap length.
+    fn normalize_signature(raw: &str) -> String {
+        let normalized: String = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+        if normalized.len() > Self::MAX_SIGNATURE_LEN {
+            let end = normalized.floor_char_boundary(Self::MAX_SIGNATURE_LEN);
+            format!("{}...", &normalized[..end])
+        } else {
+            normalized
+        }
+    }
+
     /// Check if a C# node has a `modifier` child with text "public"
     fn has_csharp_public_modifier(node: tree_sitter::Node) -> bool {
         let child_count = node.child_count();
@@ -456,5 +520,120 @@ impl AnalyzerService {
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_rust_function() {
+        let source =
+            "pub fn connect(host: &str, timeout: u64) -> Result<Connection> {\n    // body\n}\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let func_node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(func_node, source);
+        assert_eq!(
+            sig.as_deref(),
+            Some("pub fn connect(host: &str, timeout: u64) -> Result<Connection>")
+        );
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_rust_struct() {
+        let source = "pub struct Config {\n    pub timeout: u64,\n}\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(node, source);
+        assert_eq!(sig.as_deref(), Some("pub struct Config"));
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_rust_enum() {
+        let source = "pub enum Status {\n    Active,\n    Inactive,\n}\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(node, source);
+        assert_eq!(sig.as_deref(), Some("pub enum Status"));
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_multiline_params() {
+        let source = "fn process(\n    items: Vec<Item>,\n    filter: &str,\n) -> Vec<Item> {\n    items\n}\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(node, source);
+        assert_eq!(
+            sig.as_deref(),
+            Some("fn process( items: Vec<Item>, filter: &str, ) -> Vec<Item>")
+        );
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_caps_length() {
+        let params = (0..20)
+            .map(|i| format!("p{i}: SomeLongTypeName"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let source = format!("fn huge({params}) {{\n}}\n");
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(&source, None).unwrap();
+        let node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(node, &source);
+        assert!(sig.as_ref().is_some_and(|s| s.len() <= 203)); // 200 + "..."
+        assert!(sig.as_ref().is_some_and(|s| s.ends_with("...")));
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_impl_block() {
+        let source = "impl Display for Config {\n    fn fmt(&self, f: &mut Formatter) -> Result {\n        Ok(())\n    }\n}\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(node, source);
+        assert_eq!(sig.as_deref(), Some("impl Display for Config"));
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn extract_signature_trait_def() {
+        let source = "pub trait Handler {\n    fn handle(&self);\n}\n";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let node = tree.root_node().child(0).unwrap();
+        let sig = AnalyzerService::extract_signature(node, source);
+        assert_eq!(sig.as_deref(), Some("pub trait Handler"));
     }
 }
