@@ -1,0 +1,29 @@
+CommitBee Commercial License
+
+Copyright 2026 Sephyi <me@sephy.io>
+
+This software is dual-licensed under the GNU Affero General Public
+License v3.0 (AGPL-3.0-only) and a commercial license.
+
+The AGPL license requires that any modifications to this software, or
+any software that incorporates it and is made available over a network,
+must also be released under the AGPL with full source code. If this
+requirement is incompatible with your use case, a commercial license
+is available.
+
+The commercial license grants you the right to:
+
+  - Use, modify, and distribute this software without AGPL obligations
+  - Keep your modifications and integrations proprietary
+  - Deploy as part of a commercial SaaS or managed service without
+    source code disclosure
+  - Receive priority support and maintenance
+
+To purchase a commercial license, please contact:
+
+  Email: me@sephy.io
+  Web:   https://sephy.io
+
+Licensees holding a valid commercial license may use this software in
+accordance with the terms contained in a written agreement between you
+and the copyright holder.
