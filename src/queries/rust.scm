@@ -1,6 +1,6 @@
 ; SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 ;
-; SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+; SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 (function_item name: (identifier) @name) @definition
 (struct_item name: (type_identifier) @name) @definition

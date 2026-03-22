@@ -1,7 +1,7 @@
 <!--
 SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 
-SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 -->
 
 # 🐝 CommitBee &emsp; [![Build Status]][ci] [![MSRV]][rust-1.94] [![License]][license-file] [![Total Downloads]][crates-io]
@@ -10,8 +10,8 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 [ci]: https://github.com/sephyi/commitbee/actions/workflows/ci.yml
 [MSRV]: https://img.shields.io/badge/MSRV-1.94-orange.svg
 [rust-1.94]: https://blog.rust-lang.org/2026/03/05/Rust-1.94.0
-[License]: https://img.shields.io/badge/license-PolyForm--Noncommercial-blue.svg
-[license-file]: LICENSES/PolyForm-Noncommercial-1.0.0.txt
+[License]: https://img.shields.io/badge/license-AGPL--3.0-blue.svg
+[license-file]: LICENSE
 [Total Downloads]: https://img.shields.io/crates/d/commitbee?style=social&logo=iCloud&logoColor=black
 [crates-io]: https://crates.io/crates/commitbee
 
@@ -240,7 +240,7 @@ If you find CommitBee useful, consider [**sponsoring my work**](https://github.c
 
 ## 📄 License
 
-This project is licensed under [PolyForm-Noncommercial-1.0.0](LICENSES/PolyForm-Noncommercial-1.0.0.txt).
+This project is dual-licensed under [AGPL-3.0-only](LICENSES/AGPL-3.0-only.txt) and a commercial license. See [LICENSE](LICENSE) for details.
 
 REUSE compliant — every file carries SPDX headers.
 

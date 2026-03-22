@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 #
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 name = "edge-binary-mixed"
 description = "Source change alongside binary file should focus on source change"

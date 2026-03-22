@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 #
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 name = "style-rust-cargo-fmt"
 description = "Whitespace-only formatting changes should produce style type"

@@ -1,7 +1,7 @@
 <!--
 SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
 
-SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 -->
 
 # Contributing to CommitBee
@@ -60,7 +60,7 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings
 All files must have SPDX headers. Use:
 
 ```bash
-reuse annotate --copyright "Sephyi <me@sephy.io>" --license PolyForm-Noncommercial-1.0.0 --year 2026 <file>
+reuse annotate --copyright "Sephyi <me@sephy.io>" --license "AGPL-3.0-only OR LicenseRef-Commercial" --year 2026 <file>
 ```
 
 ## Reporting Bugs
