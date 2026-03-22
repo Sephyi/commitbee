@@ -23,7 +23,7 @@ Most tools in this space pipe raw `git diff` to an LLM and hope for the best. Co
 
 ### 🌳 It reads your code, not just your diffs
 
-CommitBee uses tree-sitter to parse both the staged and HEAD versions of every changed file — in parallel across CPU cores. It extracts 10 symbol types (functions, methods, structs, enums, traits, impls, classes, interfaces, constants, type aliases) and maps diff hunks to their spans. The LLM doesn't see "lines 42-58 changed" — it sees "the `validate()` function in `sanitizer.rs` was modified, and a new `retry()` method was added." Symbols are tracked in three states: **added**, **removed**, and **modified-signature**.
+CommitBee uses tree-sitter to parse both the staged and HEAD versions of every changed file — in parallel across CPU cores. It extracts 10 symbol types (functions, methods, structs, enums, traits, impls, classes, interfaces, constants, type aliases) with **full signatures** — the LLM sees `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`, not just "Function connect." Modified symbols show old → new signature diffs so the LLM understands exactly what changed. Cross-file relationships are detected automatically: if `validator.rs` calls `parse()` and both changed, the prompt says so. Symbols are tracked in three states: **added**, **removed**, and **modified-signature**.
 
 Supported languages: **Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, Ruby, C#** — all enabled by default, individually toggleable via Cargo feature flags. Files in other languages still get full diff context — just without symbol extraction.
 
@@ -32,7 +32,7 @@ Supported languages: **Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, R
 Before the LLM generates anything, CommitBee computes deterministic evidence from your code and encodes it as hard constraints in the prompt:
 
 - **Bug-fix evidence** in the diff → `fix`. No bug evidence → the LLM can't call it a `fix`.
-- **Formatting-only changes** (whitespace, import reordering) → `style`. Not `feat`, not `fix`.
+- **Formatting-only changes** (whitespace, import reordering) → `style`. Detected both heuristically and via per-symbol whitespace classification.
 - **Dependency-only changes** → `chore`. Always.
 - **Public API removed** → breaking change flagged automatically.
 - **MSRV bumps, `engines.node`, `requires-python` changes** → metadata-aware breaking detection.
@@ -96,7 +96,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 - **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
 - **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
 - **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
-- **🧪 334 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
+- **🧪 340 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -219,63 +219,16 @@ The default provider (Ollama) runs entirely on your machine. No data leaves your
 ## 🧪 Testing
 
 ```bash
-cargo test   # 334 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
+cargo test   # 340 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
 See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
 ## 🗺️ Changelog
 
-### 🔎 `v0.4.0` — See Everything (current)
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history.
 
-- **10-language tree-sitter support** — Added Java, C, C++, Ruby, and C# to the existing Rust, TypeScript, JavaScript, Python, and Go. All languages are individually feature-gated and enabled by default. Disable any with `--no-default-features` + selective `--features lang-rust,lang-go,...`.
-- **Custom prompt templates** — User-defined templates with `{{diff}}`, `{{symbols}}`, `{{files}}`, `{{type}}`, `{{scope}}` variables via `template_path` config.
-- **Multi-language commit messages** — Generate messages in any language with `--locale` flag or `locale` config (e.g., `--locale de` for German).
-- **Commit history style learning** — Learns from recent commit history to match your project's style (`learn_from_history`, `history_sample_size` config).
-- **Rename detection** — Detects file renames with similarity percentage via `git diff --find-renames`, displayed as `old → new (N% similar)` in prompts and split suggestions. Configurable threshold (default 70%, set to 0 to disable).
-- **Expanded secret scanning** — 25 built-in patterns across 13 categories (cloud providers, AI/ML, source control, communication, payment, database, cryptographic, generic). Pluggable engine: add custom regex patterns or disable built-ins by name via config.
-- **Progress indicators** — Contextual `indicatif` spinners during pipeline phases (analyzing, scanning, generating). Auto-suppressed in non-TTY environments (git hooks, pipes).
-- **Evaluation harness** — `cargo test --features eval` for structured LLM output quality benchmarking.
-- **Fuzz testing** — `cargo-fuzz` targets for sanitizer and diff parser robustness.
-- **Exclude files** — `--exclude <GLOB>` flag (repeatable) and `exclude_patterns` config option. Glob patterns filter files from analysis (e.g., `*.lock`, `**/*.generated.*`, `vendor/**`). CLI patterns additive with config.
-- **Copy to clipboard** — `--clipboard` flag copies the generated message to the system clipboard and prints to stdout, skipping commit confirmation.
-
-### 🔬 `v0.3.1` — Trust, but Verify
-
-- **Multi-pass corrective retry** — Validator checks LLM output against 7 rules and retries up to 3 times with targeted correction instructions
-- **Subject length enforcement** — Rejects subjects exceeding 72-char first line with a clear error instead of silent truncation
-- **Stronger prompt budget** — Character limit embedded directly in JSON template, "HARD LIMIT" phrasing for better small-model compliance
-- **Default model: `qwen3.5:4b`** — Smaller (3.4GB), no thinking overhead, clean JSON output out of the box
-- **Configurable thinking mode** — `think` config option for Ollama models that support reasoning separation
-
-### 🚀 `v0.3.0` — Read Between the Lines
-
-- **Diff-shape fingerprinting + Jaccard clustering** — Splitter groups files by change shape and content vocabulary, not just directory
-- **Evidence-based type inference** — Constraint rules from code analysis drive commit type selection (bug evidence → fix, mechanical → style, dependency-only → chore)
-- **Robust LLM output parsing** — Sanitizer handles `<think>`/`<thought>` blocks, conversational preambles, noisy JSON extraction
-- **Metadata-aware breaking change detection** — Detects MSRV bumps, engines.node, requires-python changes
-- **Symbol tri-state tracking** — Added/removed/modified-signature differentiation in tree-sitter analysis
-- **Primary change detection** — Identifies the single most significant change for subject anchoring
-- **Post-generation validation** — Subject specificity validator ensures concrete entity naming
-- **NUL-delimited git parsing** — Safe handling of paths with special characters
-- **Parallel tree-sitter parsing** — rayon for CPU-bound parsing, tokio JoinSet for concurrent git fetching
-- **Anti-hallucination prompt engineering** — EVIDENCE/CONSTRAINTS sections, negative examples, anti-copy rules
-
-### ✨ `v0.2.0` — Commit, Don't Think
-
-- **Cloud providers** — OpenAI-compatible and Anthropic streaming support
-- **Commit splitting** — Automatic detection and splitting of multi-concern staged changes
-- **Git hook integration** — `commitbee hook install/uninstall/status`
-- **Shell completions** — bash, zsh, fish, powershell via `clap_complete`
-- **Rich error diagnostics** — `miette` for actionable error messages
-- **Multiple message generation** — `--generate N` with interactive candidate selection
-- **Hierarchical config** — `figment`-based layering (CLI > Env > File > Defaults)
-- **Structured logging** — `tracing` with `COMMITBEE_LOG` env filter
-- **Doctor command** — `commitbee doctor` for connectivity and config checks
-- **Secure key storage** — OS keychain via `keyring` (optional feature)
-- **Body line wrapping** — Commit body text wrapped at 72 characters
-
-See [`PRD.md`](PRD.md) for the full product requirements document.
+**Current:** `v0.5.0` — Full signature extraction, semantic change classification, cross-file connection detection, and formatting auto-detection.
 
 ## 🤝 Contributing
 

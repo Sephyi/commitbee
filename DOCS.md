@@ -86,11 +86,11 @@ Here's what each step actually does:
 
 **1. Git Service** reads your staged changes using `gix` for repo discovery and the git CLI for diffs. Paths are parsed with NUL-delimited output (`-z` flag) so filenames with spaces or special characters work correctly.
 
-**2. Tree-sitter Analyzer** parses both the staged version and the HEAD version of every changed file — in parallel, using `rayon` across CPU cores. It maps diff hunks to symbol spans, so instead of just knowing "lines 42-58 changed", CommitBee knows "the `validate()` function in `sanitizer.rs` was modified". Symbols are tracked in three states: added, removed, or modified-signature.
+**2. Tree-sitter Analyzer** parses both the staged version and the HEAD version of every changed file — in parallel, using `rayon` across CPU cores. It extracts **full signatures** (e.g., `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`) by taking the definition node text before the body child. Modified symbols show old → new signature diffs. Cross-file connections are detected (caller+callee both changed). Symbols are tracked in three states: added, removed, or modified-signature.
 
 **3. Commit Splitter** looks at your staged changes and decides whether they contain logically independent work. It uses diff-shape fingerprinting (what kind of changes — additions, deletions, modifications) combined with Jaccard similarity on content vocabulary to group files. If it finds multiple concerns, it offers to split them into separate commits.
 
-**4. Context Builder** assembles a budget-aware prompt. It computes evidence flags from the code analysis (is this a mechanical change? are public APIs removed? is there bug-fix evidence?), calculates the character budget for the subject line, and packs as much useful context as possible within the token limit (~6K tokens by default).
+**4. Context Builder** assembles a budget-aware prompt. It classifies modified symbols as whitespace-only or semantic (via character-stream comparison), computes evidence flags (mechanical change? public APIs removed? bug-fix evidence?), detects cross-file connections, calculates the character budget for the subject line, and packs context within the token limit (~6K tokens, 30/70 symbol/diff split when signatures present).
 
 **5. LLM Provider** streams the prompt to your chosen model (Ollama, OpenAI, or Anthropic) and collects the response token by token.
 
@@ -105,7 +105,9 @@ CommitBee doesn't just send a diff. The prompt includes:
 - **File summary** with per-file line counts (`+additions -deletions`)
 - **Suggested commit type** inferred from code analysis (not guessed)
 - **Evidence flags** telling the LLM deterministic facts about the change
-- **Symbol changes** — which functions, structs, and methods were added, removed, or modified
+- **Symbol changes with full signatures** — `[+] pub fn connect(host: &str) -> Result<()>`, not just "Function connect"
+- **Signature diffs** — `[~] old_sig → new_sig` for modified symbols
+- **Cross-file connections** — `validator calls parse() — both changed`
 - **Primary change detection** — which file has the most significant changes
 - **Constraints** — rules the LLM must follow based on evidence (e.g., "no bug-fix comments found, prefer refactor over fix")
 - **Character budget** — exact number of chars available for the subject line
@@ -692,7 +694,7 @@ No panics in user-facing code paths. The sanitizer and validator are tested with
 
 ### Testing Strategy
 
-CommitBee has 334 tests across multiple strategies:
+CommitBee has 340 tests across multiple strategies:
 
 | Strategy | What It Covers |
 | --- | --- |
@@ -705,7 +707,7 @@ CommitBee has 334 tests across multiple strategies:
 Run them:
 
 ```bash
-cargo test                    # All 334 tests
+cargo test                    # All 340 tests
 cargo test --test sanitizer   # Just sanitizer tests
 cargo test --test integration # LLM provider mocks
 COMMITBEE_LOG=debug cargo test -- --nocapture  # With logging
