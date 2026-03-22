@@ -29,6 +29,7 @@ Rules:
 - Never copy labels, field names, or evidence tags from the prompt into your output.
 - If public APIs are both added and removed, this is an API replacement (refactor), not a new feature.
 - When SYMBOLS CHANGED shows full signatures, reference the actual parameter/type names in your subject rather than generic descriptions.
+- When CONNECTIONS shows that a caller and callee both changed, mention the relationship in the body (e.g., "updates parse() signature and all call sites").
 
 Examples:
 GOOD: "replace path-only grouping with diff-shape fingerprinting"

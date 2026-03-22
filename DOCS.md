@@ -692,7 +692,7 @@ No panics in user-facing code paths. The sanitizer and validator are tested with
 
 ### Testing Strategy
 
-CommitBee has 308 tests across multiple strategies:
+CommitBee has 334 tests across multiple strategies:
 
 | Strategy | What It Covers |
 | --- | --- |
@@ -705,7 +705,7 @@ CommitBee has 308 tests across multiple strategies:
 Run them:
 
 ```bash
-cargo test                    # All 308 tests
+cargo test                    # All 334 tests
 cargo test --test sanitizer   # Just sanitizer tests
 cargo test --test integration # LLM provider mocks
 COMMITBEE_LOG=debug cargo test -- --nocapture  # With logging

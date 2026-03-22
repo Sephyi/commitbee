@@ -186,7 +186,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (308 tests)
+cargo test                    # All tests (334 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -308,4 +308,4 @@ A tracked list of review findings, design decisions, and improvement ideas that 
 
 ### Documentation Sync
 
-Keep README.md test count in sync (currently 308).
+Keep README.md test count in sync (currently 334).

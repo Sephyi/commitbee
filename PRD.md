@@ -633,7 +633,7 @@ commitbee eval                         # Run evaluation harness (dev, feature-ga
 
 ## 8. Testing Requirements
 
-**Current test count: 308**
+**Current test count: 334**
 
 ### TR-001: Unit Tests
 
@@ -805,7 +805,7 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | Commit message quality | > 80% "good enough" first try | Manual evaluation + `commitbee eval` |
 | Secret leak rate | 0 | Integration tests with known patterns |
 | MSRV | Rust 1.94 (edition 2024) | CI matrix (stable + 1.94) |
-| Test count | ≥ 308 | `cargo test` (current: 308) |
+| Test count | ≥ 308 | `cargo test` (current: 334) |
 
 ## 13. Non-Goals
 

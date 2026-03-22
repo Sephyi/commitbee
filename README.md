@@ -96,7 +96,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 - **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
 - **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
 - **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
-- **🧪 308 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
+- **🧪 334 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -219,7 +219,7 @@ The default provider (Ollama) runs entirely on your machine. No data leaves your
 ## 🧪 Testing
 
 ```bash
-cargo test   # 308 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
+cargo test   # 334 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
 See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
