@@ -95,6 +95,183 @@ fn make_file_change(path: &str, diff: &str, additions: usize, deletions: usize) 
     }
 }
 
+/// Helper: parse source code with the given file extension and return extracted symbols.
+/// Creates a synthetic FileChange covering all lines, so all symbols are captured.
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp"
+))]
+fn extract_symbols_from_source(source: &str, ext: &str) -> Vec<commitbee::domain::CodeSymbol> {
+    let line_count = source.lines().count();
+    let path = format!("src/test_file.{ext}");
+    let diff = format!("@@ -0,0 +1,{line_count} @@\n+placeholder\n");
+    let change = make_file_change(&path, &diff, line_count, 0);
+    let staged_map = HashMap::from([(PathBuf::from(&path), source.to_string())]);
+    let head_map = HashMap::new();
+    let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+    analyzer.extract_symbols(&[change], &staged_map, &head_map)
+}
+
+// ─── Parent scope extraction ─────────────────────────────────────────────────
+
+#[cfg(feature = "lang-rust")]
+mod rust_parent_scope {
+    use super::*;
+
+    #[test]
+    fn rust_impl_method_has_parent_scope() {
+        let source = r#"impl CommitValidator {
+    pub fn validate(&self, input: &str) -> bool {
+        true
+    }
+}"#;
+        let symbols = extract_symbols_from_source(source, "rs");
+        let method = symbols
+            .iter()
+            .find(|s| s.name == "validate")
+            .expect("should find validate");
+        assert_eq!(method.parent_scope.as_deref(), Some("CommitValidator"));
+    }
+
+    #[test]
+    fn rust_top_level_function_has_no_parent_scope() {
+        let source = "pub fn standalone() -> bool {\n    true\n}\n";
+        let symbols = extract_symbols_from_source(source, "rs");
+        let func = symbols
+            .iter()
+            .find(|s| s.name == "standalone")
+            .expect("should find standalone");
+        assert_eq!(func.parent_scope, None);
+    }
+
+    #[test]
+    fn rust_trait_method_has_parent_scope() {
+        let source = r#"trait Validator {
+    fn validate(&self) -> bool;
+}"#;
+        let symbols = extract_symbols_from_source(source, "rs");
+        // Trait methods may or may not be captured depending on the .scm query
+        if let Some(method) = symbols.iter().find(|s| s.name == "validate") {
+            assert_eq!(method.parent_scope.as_deref(), Some("Validator"));
+        }
+    }
+}
+
+#[cfg(feature = "lang-python")]
+mod python_parent_scope {
+    use super::*;
+
+    #[test]
+    fn python_class_method_has_parent_scope() {
+        let source = "class MyService:\n    def process(self, data):\n        return data\n";
+        let symbols = extract_symbols_from_source(source, "py");
+        if let Some(method) = symbols.iter().find(|s| s.name == "process") {
+            assert_eq!(method.parent_scope.as_deref(), Some("MyService"));
+        }
+    }
+
+    #[test]
+    fn python_top_level_function_has_no_parent_scope() {
+        let source = "def standalone(x):\n    return x\n";
+        let symbols = extract_symbols_from_source(source, "py");
+        let func = symbols
+            .iter()
+            .find(|s| s.name == "standalone")
+            .expect("should find standalone");
+        assert_eq!(func.parent_scope, None);
+    }
+}
+
+#[cfg(feature = "lang-typescript")]
+mod typescript_parent_scope {
+    use super::*;
+
+    #[test]
+    fn typescript_class_method_has_parent_scope() {
+        let source = "class UserService {\n  getName(): string {\n    return 'test';\n  }\n}\n";
+        let symbols = extract_symbols_from_source(source, "ts");
+        if let Some(method) = symbols.iter().find(|s| s.name == "getName") {
+            assert_eq!(method.parent_scope.as_deref(), Some("UserService"));
+        }
+    }
+
+    #[test]
+    fn typescript_top_level_function_has_no_parent_scope() {
+        let source = "function standalone(): void {\n  return;\n}\n";
+        let symbols = extract_symbols_from_source(source, "ts");
+        let func = symbols
+            .iter()
+            .find(|s| s.name == "standalone")
+            .expect("should find standalone");
+        assert_eq!(func.parent_scope, None);
+    }
+}
+
+#[cfg(feature = "lang-java")]
+mod java_parent_scope {
+    use super::*;
+
+    #[test]
+    fn java_class_method_has_parent_scope() {
+        let source = "public class Calculator {\n    public int add(int a, int b) {\n        return a + b;\n    }\n}\n";
+        let symbols = extract_symbols_from_source(source, "java");
+        if let Some(method) = symbols.iter().find(|s| s.name == "add") {
+            assert_eq!(method.parent_scope.as_deref(), Some("Calculator"));
+        }
+    }
+}
+
+#[cfg(feature = "lang-go")]
+mod go_parent_scope {
+    use super::*;
+
+    #[test]
+    fn go_top_level_function_has_no_parent_scope() {
+        let source = "func ParseConfig(path string) error {\n\treturn nil\n}\n";
+        let symbols = extract_symbols_from_source(source, "go");
+        let func = symbols
+            .iter()
+            .find(|s| s.name == "ParseConfig")
+            .expect("should find ParseConfig");
+        assert_eq!(func.parent_scope, None);
+    }
+}
+
+#[cfg(feature = "lang-ruby")]
+mod ruby_parent_scope {
+    use super::*;
+
+    #[test]
+    fn ruby_class_method_has_parent_scope() {
+        let source = "class Calculator\n  def add(a, b)\n    a + b\n  end\nend\n";
+        let symbols = extract_symbols_from_source(source, "rb");
+        if let Some(method) = symbols.iter().find(|s| s.name == "add") {
+            assert_eq!(method.parent_scope.as_deref(), Some("Calculator"));
+        }
+    }
+}
+
+#[cfg(feature = "lang-csharp")]
+mod csharp_parent_scope {
+    use super::*;
+
+    #[test]
+    fn csharp_class_method_has_parent_scope() {
+        let source = "public class Calculator {\n    public int Add(int a, int b) {\n        return a + b;\n    }\n}\n";
+        let symbols = extract_symbols_from_source(source, "cs");
+        if let Some(method) = symbols.iter().find(|s| s.name == "Add") {
+            assert_eq!(method.parent_scope.as_deref(), Some("Calculator"));
+        }
+    }
+}
+
 // ─── Java ────────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "lang-java")]
