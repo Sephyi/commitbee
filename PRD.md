@@ -18,8 +18,8 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 | Version | Date       | Summary |
 |---------|------------|---------|
-| 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 367 tests. |
-| 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 367 tests. |
+| 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 359 tests. |
+| 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 359 tests. |
 | 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |
 | 3.3     | 2026-03-13 | v0.4.0 full feature completion — FR-030 (Custom Prompt Templates), FR-032 (Multi-Language), FR-036 (Tree-sitter Query Patterns), FR-057 (Additional Languages), FR-058 (History Learning), TR-006 (Eval Harness), TR-007 (Fuzzing). 308 tests. |
 | 3.2     | 2026-03-13 | FR-035 (Rename Detection), FR-037 (Expanded Secret Scanning), FR-038 (Progress Indicators). 202 tests. |
@@ -92,7 +92,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Multiple message generation (pick from N)          | Common (aicommits, aicommit2) | ✅ v0.2.0       |
 | Commit splitting (multi-concern detection)         | No competitor has this        | ✅ v0.2.0       |
 | Custom prompt/instruction files                    | Growing (Copilot, aicommit2)  | ✅ v0.4.0       |
-| Unit/integration tests                             | Non-negotiable for quality    | ✅ 367 tests    |
+| Unit/integration tests                             | Non-negotiable for quality    | ✅ 359 tests    |
 
 ## 3. Architecture
 
@@ -734,7 +734,7 @@ proptest! {
 
 ### TR-007: Fuzzing ✅
 
-3 `cargo-fuzz` targets. See §4.3.
+5 `cargo-fuzz` targets. See §4.3.
 
 ## 9. Distribution Requirements
 
@@ -818,7 +818,8 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | 2 | v0.3.x | ✅ Shipped | Differentiation — heuristics, validation, spec compliance |
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
 | 4 | v0.4.x | ✅ Shipped | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
-| 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 367 tests. |
+| 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 359 tests. |
+| 5.5 | v0.5.x | 🔨 Next | Deep semantic understanding — parent scope, imports, doc-vs-code (T2), structural AST diffs (T1), language markers + change intent (T3). Plans dialectic-verified 2026-03-26. |
 | 6 | v0.6.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
@@ -833,7 +834,7 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | Commit message quality | > 80% "good enough" first try | Manual evaluation + `commitbee eval` |
 | Secret leak rate | 0 | Integration tests with known patterns |
 | MSRV | Rust 1.94 (edition 2024) | CI matrix (stable + 1.94) |
-| Test count | ≥ 308 | `cargo test` (current: 334) |
+| Test count | ≥ 308 | `cargo test` (current: 359) |
 
 ## 13. Non-Goals
 

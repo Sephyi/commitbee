@@ -192,7 +192,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (367 tests)
+cargo test                    # All tests (359 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
