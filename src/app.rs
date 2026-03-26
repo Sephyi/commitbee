@@ -121,26 +121,47 @@ impl App {
             }
 
             // Cloud providers: always block when secrets detected
-            if self.config.provider != crate::config::Provider::Ollama {
-                return Err(Error::SecretsDetected {
-                    patterns: secrets.iter().map(|s| s.pattern_name.clone()).collect(),
-                });
-            }
-
-            // Ollama: only allow with --allow-secrets and verified-local host
             if !self.cli.allow_secrets {
                 return Err(Error::SecretsDetected {
                     patterns: secrets.iter().map(|s| s.pattern_name.clone()).collect(),
                 });
             }
 
-            if !Self::is_local_host(&self.config.ollama_host) {
+            // --allow-secrets passed: always require interactive confirmation
+            if std::io::stdin().is_terminal() {
+                progress.finish();
+                eprintln!("\nwarning: Potential secrets detected in staged changes.");
+                for s in &secrets {
+                    eprintln!(
+                        "  {} in {} (line ~{})",
+                        s.pattern_name,
+                        s.file,
+                        s.line.unwrap_or(0)
+                    );
+                }
+                eprintln!(
+                    "Provider: {} ({})",
+                    self.config.provider,
+                    if self.config.provider == crate::config::Provider::Ollama {
+                        &self.config.ollama_host
+                    } else {
+                        "cloud API"
+                    }
+                );
+                eprint!("Send diff to LLM anyway? [y/N] ");
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input).ok();
+                if !input.trim().eq_ignore_ascii_case("y") {
+                    return Err(Error::SecretsDetected {
+                        patterns: secrets.iter().map(|s| s.pattern_name.clone()).collect(),
+                    });
+                }
+            } else {
+                // Non-interactive: always block even with --allow-secrets
                 return Err(Error::SecretsDetected {
                     patterns: secrets.iter().map(|s| s.pattern_name.clone()).collect(),
                 });
             }
-
-            progress.info("Proceeding with local Ollama (data stays local)");
         }
 
         if self.cancel_token.is_cancelled() {
@@ -1382,24 +1403,5 @@ fi
         }
 
         Ok(())
-    }
-
-    // ─── Security Helpers ───
-
-    /// Check if a URL host resolves to a loopback address (localhost, 127.0.0.1, ::1).
-    fn is_local_host(url: &str) -> bool {
-        // Parse out the host from the URL
-        let host = url
-            .strip_prefix("http://")
-            .or_else(|| url.strip_prefix("https://"))
-            .unwrap_or(url)
-            .split('/')
-            .next()
-            .unwrap_or("")
-            .split(':')
-            .next()
-            .unwrap_or("");
-
-        matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
     }
 }
