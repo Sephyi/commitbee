@@ -516,6 +516,7 @@ impl EvalRunner {
                 is_public: def.is_public,
                 is_added: def.is_added,
                 is_whitespace_only: def.is_whitespace_only,
+                span_change_kind: None,
                 signature: def.signature,
                 parent_scope: def.parent_scope,
             })

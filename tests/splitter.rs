@@ -28,6 +28,7 @@ fn make_symbol(
         is_public,
         is_added,
         is_whitespace_only: None,
+        span_change_kind: None,
         signature: None,
         parent_scope: None,
     }

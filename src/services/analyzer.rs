@@ -346,6 +346,7 @@ impl AnalyzerService {
                         is_public,
                         is_added,
                         is_whitespace_only: None,
+                        span_change_kind: None,
                         signature,
                         parent_scope,
                     });

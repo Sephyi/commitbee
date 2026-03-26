@@ -19,6 +19,22 @@ pub enum SymbolKind {
     Type,
 }
 
+/// Richer classification of what changed within a symbol's span.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
+pub enum SpanChangeKind {
+    /// No changes within the symbol span
+    Unchanged,
+    /// Only whitespace/indentation changed
+    WhitespaceOnly,
+    /// Only doc comments changed (code unchanged)
+    DocsOnly,
+    /// Both doc comments and code changed
+    Mixed,
+    /// Code changed (no doc changes, or docs not present)
+    Semantic,
+}
+
 /// How a symbol was affected by the change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -48,6 +64,9 @@ pub struct CodeSymbol {
     /// For symbols that exist in both HEAD and staged, indicates if only whitespace changed.
     /// None = symbol is purely added or removed, not a modification.
     pub is_whitespace_only: Option<bool>,
+    /// Richer classification of what changed within this symbol's span.
+    /// None for purely added or removed symbols.
+    pub span_change_kind: Option<SpanChangeKind>,
     /// Full signature extracted from tree-sitter AST (everything before the body).
     /// e.g., "pub fn connect(host: &str, timeout: Duration) -> Result<Connection>"
     /// None for languages or constructs where signature extraction isn't supported.

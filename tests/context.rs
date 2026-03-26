@@ -33,6 +33,7 @@ fn make_symbol(
         is_public,
         is_added,
         is_whitespace_only: None,
+        span_change_kind: None,
         signature: None,
         parent_scope: None,
     }
@@ -718,7 +719,7 @@ fn api_replacement_infers_refactor() {
             false,
         ),
     ];
-    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols, false);
+    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols, false, false);
     assert_eq!(
         commit_type,
         CommitType::Refactor,
@@ -742,7 +743,7 @@ fn api_addition_without_removal_infers_feat() {
         true,
         true,
     )];
-    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols, false);
+    let commit_type = ContextBuilder::infer_commit_type(&changes, &symbols, false, false);
     assert_eq!(
         commit_type,
         CommitType::Feat,
@@ -1535,5 +1536,155 @@ fn prompt_hard_limit_includes_char_budget() {
     assert!(
         prompt.contains("chars"),
         "HARD LIMIT should mention char budget"
+    );
+}
+
+// ─── Test-to-code ratio inference ────────────────────────────────────────────
+
+#[test]
+fn mostly_test_additions_suggests_test_type() {
+    // 90 test additions + 10 source additions → test
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "tests/foo.rs",
+            ChangeStatus::Modified,
+            &"+test line\n".repeat(9),
+            90,
+            0,
+        ),
+        make_file_change("src/lib.rs", ChangeStatus::Modified, "+code\n", 10, 0),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(ctx.suggested_type, CommitType::Test);
+}
+
+#[test]
+fn balanced_test_and_source_does_not_suggest_test() {
+    // 50/50 split → should NOT be test
+    let changes = make_staged_changes(vec![
+        make_file_change("tests/foo.rs", ChangeStatus::Modified, "+test\n", 50, 0),
+        make_file_change("src/lib.rs", ChangeStatus::Modified, "+code\n", 50, 0),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_ne!(ctx.suggested_type, CommitType::Test);
+}
+
+// ─── Doc-vs-code change distinction (SpanChangeKind) ─────────────────────────
+
+#[test]
+fn doc_only_change_classified_as_docs() {
+    // Diff changes only a doc comment inside function `foo` (lines 1-4)
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,4 +1,4 @@\n fn foo() {\n-    /// old doc\n+    /// new doc\n }",
+        1,
+        1,
+    )]);
+    let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
+    let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert_eq!(
+        ctx.suggested_type,
+        CommitType::Docs,
+        "all-doc-only modified symbols with no added/removed symbols should suggest Docs"
+    );
+}
+
+#[test]
+fn mixed_doc_and_code_change_not_docs_type() {
+    // Diff changes both a doc comment and a code line inside function `foo`
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,5 +1,5 @@\n fn foo() {\n-    /// old doc\n+    /// new doc\n-    let x = 1;\n+    let x = 2;\n }",
+        2,
+        2,
+    )]);
+    let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
+    let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert_ne!(
+        ctx.suggested_type,
+        CommitType::Docs,
+        "mixed doc + code change should not suggest Docs"
+    );
+}
+
+#[test]
+fn doc_only_modified_symbol_shows_docs_suffix() {
+    // Diff changes only a doc comment — the symbol should appear in symbols_modified
+    // with a [docs only] suffix (it's not whitespace-only, so it passes the filter)
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,4 +1,4 @@\n fn foo() {\n-    /// old doc\n+    /// new doc\n }",
+        1,
+        1,
+    )]);
+    let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
+    let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert!(
+        ctx.symbols_modified.contains("[docs only]"),
+        "doc-only modified symbol should show [docs only] suffix: {}",
+        ctx.symbols_modified
+    );
+}
+
+#[test]
+fn mixed_doc_code_modified_symbol_shows_mixed_suffix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,5 +1,5 @@\n fn foo() {\n-    /// old doc\n+    /// new doc\n-    let x = 1;\n+    let x = 2;\n }",
+        2,
+        2,
+    )]);
+    let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
+    let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert!(
+        ctx.symbols_modified.contains("[docs + code]"),
+        "mixed doc+code modified symbol should show [docs + code] suffix: {}",
+        ctx.symbols_modified
+    );
+}
+
+#[test]
+fn semantic_only_change_has_no_suffix() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "@@ -1,3 +1,3 @@\n fn foo() {\n-    bar()\n+    baz()\n }",
+        1,
+        1,
+    )]);
+    let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
+    let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert!(
+        !ctx.symbols_modified.contains("[docs"),
+        "purely semantic change should have no doc suffix: {}",
+        ctx.symbols_modified
+    );
+}
+
+#[test]
+fn python_comment_only_change_classified_as_docs() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "app/main.py",
+        ChangeStatus::Modified,
+        "@@ -1,3 +1,3 @@\n def process():\n-    # old comment\n+    # new comment\n     pass",
+        1,
+        1,
+    )]);
+    let sym_old = make_symbol("process", SymbolKind::Function, "app/main.py", true, false);
+    let sym_new = make_symbol("process", SymbolKind::Function, "app/main.py", true, true);
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    assert_eq!(
+        ctx.suggested_type,
+        CommitType::Docs,
+        "Python comment-only change should suggest Docs"
     );
 }

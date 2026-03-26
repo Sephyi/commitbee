@@ -6,7 +6,8 @@ use std::collections::HashSet;
 
 use crate::config::Config;
 use crate::domain::{
-    ChangeStatus, CodeSymbol, CommitType, FileCategory, PromptContext, StagedChanges, SymbolKind,
+    ChangeStatus, CodeSymbol, CommitType, FileCategory, PromptContext, SpanChangeKind,
+    StagedChanges, SymbolKind,
 };
 
 const SYSTEM_PROMPT_RESERVE: usize = 2_000;
@@ -114,6 +115,13 @@ impl ContextBuilder {
                     old_start,
                     old_end,
                 );
+                symbol.span_change_kind = Self::classify_span_change_rich(
+                    &file_change.diff,
+                    symbol.line,
+                    symbol.end_line,
+                    old_start,
+                    old_end,
+                );
             }
         }
 
@@ -135,7 +143,16 @@ impl ContextBuilder {
             && modified_symbols
                 .iter()
                 .all(|s| s.is_whitespace_only == Some(true));
-        let commit_type = Self::infer_commit_type(changes, &symbols_deduped, all_modified_ws);
+        let all_modified_docs = !modified_symbols.is_empty()
+            && modified_symbols
+                .iter()
+                .all(|s| s.span_change_kind == Some(SpanChangeKind::DocsOnly));
+        let commit_type = Self::infer_commit_type(
+            changes,
+            &symbols_deduped,
+            all_modified_ws,
+            all_modified_docs,
+        );
         let scope = if config.format.include_scope {
             Self::infer_scope(changes)
         } else {
@@ -297,10 +314,114 @@ impl ContextBuilder {
         Some(old_text == new_text)
     }
 
+    /// Classify changes within a symbol span with doc-vs-code distinction.
+    ///
+    /// Returns a richer `SpanChangeKind` that distinguishes whitespace-only,
+    /// doc-only, mixed, and semantic changes. Returns `None` if no changes
+    /// fall within the symbol span.
+    pub(crate) fn classify_span_change_rich(
+        diff: &str,
+        new_start: usize,
+        new_end: usize,
+        old_start: usize,
+        old_end: usize,
+    ) -> Option<SpanChangeKind> {
+        use crate::services::analyzer::DiffHunk;
+
+        let hunks = DiffHunk::parse_from_diff(diff);
+        let mut added_in_span: Vec<&str> = Vec::new();
+        let mut removed_in_span: Vec<&str> = Vec::new();
+
+        let mut current_old_line: usize = 0;
+        let mut current_new_line: usize = 0;
+        let mut hunk_idx: usize = 0;
+        let mut in_hunk = false;
+
+        for line in diff.lines() {
+            if line.starts_with("@@") {
+                if hunk_idx < hunks.len() {
+                    current_old_line = hunks[hunk_idx].old_start;
+                    current_new_line = hunks[hunk_idx].new_start;
+                    hunk_idx += 1;
+                    in_hunk = true;
+                }
+                continue;
+            }
+
+            if !in_hunk || line.starts_with("+++") || line.starts_with("---") {
+                continue;
+            }
+
+            if let Some(content) = line.strip_prefix('+') {
+                if current_new_line >= new_start && current_new_line <= new_end {
+                    added_in_span.push(content);
+                }
+                current_new_line += 1;
+            } else if let Some(content) = line.strip_prefix('-') {
+                if current_old_line >= old_start && current_old_line <= old_end {
+                    removed_in_span.push(content);
+                }
+                current_old_line += 1;
+            } else {
+                current_old_line += 1;
+                current_new_line += 1;
+            }
+        }
+
+        if added_in_span.is_empty() && removed_in_span.is_empty() {
+            return None;
+        }
+
+        // Check whitespace-only first (same logic as classify_span_change)
+        let old_text: String = removed_in_span
+            .iter()
+            .flat_map(|l| l.chars())
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        let new_text: String = added_in_span
+            .iter()
+            .flat_map(|l| l.chars())
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        if old_text == new_text {
+            return Some(SpanChangeKind::WhitespaceOnly);
+        }
+
+        // Classify each changed line as doc or code
+        let has_doc = added_in_span
+            .iter()
+            .chain(removed_in_span.iter())
+            .any(|l| Self::is_doc_comment(l));
+        let has_code = added_in_span.iter().chain(removed_in_span.iter()).any(|l| {
+            let trimmed = l.trim();
+            !trimmed.is_empty() && !Self::is_doc_comment(l)
+        });
+
+        match (has_doc, has_code) {
+            (true, false) => Some(SpanChangeKind::DocsOnly),
+            (true, true) => Some(SpanChangeKind::Mixed),
+            (false, _) => Some(SpanChangeKind::Semantic),
+        }
+    }
+
+    /// Check if a line looks like a doc comment or regular comment.
+    fn is_doc_comment(line: &str) -> bool {
+        let trimmed = line.trim();
+        trimmed.starts_with("///")
+            || trimmed.starts_with("//!")
+            || trimmed.starts_with("/**")
+            || trimmed.starts_with("* ") // inside /** */ block
+            || trimmed.starts_with("*/")
+            || trimmed.starts_with('#') // Python/Ruby comments
+            || trimmed.starts_with("\"\"\"") // Python docstrings
+            || (trimmed.starts_with("//") && !trimmed.starts_with("///") && !trimmed.starts_with("//!"))
+    }
+
     pub fn infer_commit_type(
         changes: &StagedChanges,
         symbols: &[CodeSymbol],
         all_modified_whitespace_only: bool,
+        all_modified_docs_only: bool,
     ) -> CommitType {
         let categories: Vec<_> = changes.files.iter().map(|f| f.category).collect();
 
@@ -311,6 +432,20 @@ impl ContextBuilder {
 
         // All tests -> test
         if categories.iter().all(|c| *c == FileCategory::Test) {
+            return CommitType::Test;
+        }
+
+        // Predominantly test additions (>80%) → test type
+        // Cross-multiply to avoid integer division truncation (F-009):
+        // test_additions/total_additions > 80/100  ⟹  test_additions * 100 > total_additions * 80
+        let test_additions: usize = changes
+            .files
+            .iter()
+            .filter(|f| f.category == FileCategory::Test)
+            .map(|f| f.additions)
+            .sum();
+        let total_additions: usize = changes.files.iter().map(|f| f.additions).sum();
+        if total_additions > 0 && test_additions * 100 > total_additions * 80 {
             return CommitType::Test;
         }
 
@@ -328,6 +463,12 @@ impl ContextBuilder {
         // (catches `cargo fmt` where symbols exist but only spacing changed)
         if all_modified_whitespace_only && symbols.is_empty() {
             return CommitType::Style;
+        }
+
+        // All modified symbols are docs-only and no added/removed symbols → docs
+        // (catches doc comment edits inside existing functions/structs)
+        if all_modified_docs_only && symbols.is_empty() {
+            return CommitType::Docs;
         }
 
         // Explicit bug evidence -> fix
@@ -628,6 +769,14 @@ impl ContextBuilder {
                     )
                 }
             };
+
+            // Append doc-vs-code suffix when span_change_kind is informative
+            let suffix = match new_sym.span_change_kind {
+                Some(SpanChangeKind::DocsOnly) => " [docs only]",
+                Some(SpanChangeKind::Mixed) => " [docs + code]",
+                _ => "",
+            };
+            let line = format!("{}{}", line, suffix);
 
             if output.len() + line.len() + 1 > char_budget {
                 break;
