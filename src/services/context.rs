@@ -230,6 +230,7 @@ impl ContextBuilder {
             history_context: None, // Set by App when learn_from_history is enabled
             connections: Self::detect_connections(changes, symbols),
             import_changes: Self::detect_import_changes(changes),
+            test_correlations: Self::detect_test_correlation(changes),
         }
     }
 
@@ -995,6 +996,37 @@ impl ContextBuilder {
 
         imports.truncate(10); // Cap to avoid prompt bloat
         imports
+    }
+
+    /// Detect source-to-test file relationships among staged changes.
+    fn detect_test_correlation(changes: &StagedChanges) -> Vec<String> {
+        let mut correlations = Vec::new();
+        let source_files: Vec<_> = changes
+            .files
+            .iter()
+            .filter(|f| f.category == FileCategory::Source)
+            .collect();
+        let test_files: Vec<_> = changes
+            .files
+            .iter()
+            .filter(|f| f.category == FileCategory::Test)
+            .collect();
+
+        for src in &source_files {
+            let src_stem = src.path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            for test in &test_files {
+                let test_stem = test.path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if test_stem == src_stem || test_stem.starts_with(src_stem) {
+                    correlations.push(format!(
+                        "{} <-> {} (test file)",
+                        src.path.display(),
+                        test.path.display()
+                    ));
+                }
+            }
+        }
+        correlations.truncate(5);
+        correlations
     }
 
     fn is_import_line(line: &str) -> bool {

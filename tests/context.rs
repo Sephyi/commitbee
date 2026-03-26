@@ -1670,6 +1670,82 @@ fn semantic_only_change_has_no_suffix() {
     );
 }
 
+// ─── Test file correlation detection ──────────────────────────────────────────
+
+#[test]
+fn detect_test_file_correlation() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/context.rs",
+            ChangeStatus::Modified,
+            "+code\n",
+            1,
+            0,
+        ),
+        make_file_change("tests/context.rs", ChangeStatus::Modified, "+test\n", 1, 0),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(ctx.test_correlations.len(), 1);
+    assert!(ctx.test_correlations[0].contains("context"));
+}
+
+#[test]
+fn no_correlation_without_matching_test() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/context.rs",
+            ChangeStatus::Modified,
+            "+code\n",
+            1,
+            0,
+        ),
+        make_file_change("tests/other.rs", ChangeStatus::Modified, "+test\n", 1, 0),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.test_correlations.is_empty());
+}
+
+#[test]
+fn test_correlation_shown_in_prompt() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/context.rs",
+            ChangeStatus::Modified,
+            "+code\n",
+            1,
+            0,
+        ),
+        make_file_change("tests/context.rs", ChangeStatus::Modified, "+test\n", 1, 0),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(prompt.contains("RELATED FILES:"));
+}
+
+#[test]
+fn test_correlations_capped_at_5() {
+    let mut files = Vec::new();
+    for i in 0..8 {
+        files.push(make_file_change(
+            &format!("src/mod{i}.rs"),
+            ChangeStatus::Modified,
+            "+code\n",
+            1,
+            0,
+        ));
+        files.push(make_file_change(
+            &format!("tests/mod{i}.rs"),
+            ChangeStatus::Modified,
+            "+test\n",
+            1,
+            0,
+        ));
+    }
+    let changes = make_staged_changes(files);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert!(ctx.test_correlations.len() <= 5);
+}
+
 #[test]
 fn python_comment_only_change_classified_as_docs() {
     let changes = make_staged_changes(vec![make_file_change(

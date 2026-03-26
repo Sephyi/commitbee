@@ -39,6 +39,9 @@ pub struct PromptContext {
     /// Import/use statement changes detected from diff.
     /// e.g., "analyzer: added use crate::domain::DiffHunk"
     pub import_changes: Vec<String>,
+    /// Source-to-test file correlations detected from staged changes.
+    /// e.g., "src/services/context.rs <-> tests/context.rs (test file)"
+    pub test_correlations: Vec<String>,
 }
 
 impl PromptContext {
@@ -69,6 +72,19 @@ impl PromptContext {
                 self.import_changes
                     .iter()
                     .map(|i| format!("  {}", i))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
+
+        let related_section = if self.test_correlations.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\nRELATED FILES:\n{}\n",
+                self.test_correlations
+                    .iter()
+                    .map(|c| format!("  {}", c))
                     .collect::<Vec<_>>()
                     .join("\n")
             )
@@ -139,7 +155,7 @@ impl PromptContext {
 SUMMARY: {summary}
 FILES: {files}
 SUGGESTED TYPE: {commit_type}{scope}
-{group_rationale}{evidence}{primary_change}{symbols}{connections}{imports}
+{group_rationale}{evidence}{primary_change}{symbols}{connections}{imports}{related}
 DIFF:
 {diff}
 {constraints}{breaking}{metadata_breaking}{locale}{focus}{history}
@@ -160,6 +176,7 @@ Respond with ONLY this JSON:
             symbols = symbols_section,
             connections = connections_section,
             imports = imports_section,
+            related = related_section,
             breaking = breaking_warning,
             constraints = constraints_section,
             focus = focus_instruction,
