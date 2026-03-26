@@ -212,6 +212,7 @@ impl ContextBuilder {
             locale: config.locale.clone(),
             history_context: None, // Set by App when learn_from_history is enabled
             connections: Self::detect_connections(changes, symbols),
+            import_changes: Self::detect_import_changes(changes),
         }
     }
 
@@ -811,6 +812,49 @@ impl ContextBuilder {
         connections.dedup();
         connections.truncate(5);
         connections
+    }
+
+    /// Detect added/removed import statements from diff lines.
+    fn detect_import_changes(changes: &StagedChanges) -> Vec<String> {
+        let mut imports = Vec::new();
+
+        for file in &changes.files {
+            for line in file.diff.lines() {
+                // Skip diff headers
+                if line.starts_with("+++") || line.starts_with("---") {
+                    continue;
+                }
+                // Detect added/removed import lines
+                if (line.starts_with('+') && Self::is_import_line(&line[1..]))
+                    || (line.starts_with('-') && Self::is_import_line(&line[1..]))
+                {
+                    let action = if line.starts_with('+') {
+                        "added"
+                    } else {
+                        "removed"
+                    };
+                    let stem = file
+                        .path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("?");
+                    let content = line[1..].trim();
+                    imports.push(format!("{}: {} {}", stem, action, content));
+                }
+            }
+        }
+
+        imports.truncate(10); // Cap to avoid prompt bloat
+        imports
+    }
+
+    fn is_import_line(line: &str) -> bool {
+        let trimmed = line.trim();
+        trimmed.starts_with("use ")
+            || trimmed.starts_with("import ")
+            || trimmed.starts_with("from ")
+            || trimmed.starts_with("require(")
+            || trimmed.starts_with("#include") // C/C++
     }
 
     /// Scan diff content for metadata changes that indicate breaking changes.

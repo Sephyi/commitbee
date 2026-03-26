@@ -36,6 +36,9 @@ pub struct PromptContext {
     /// Cross-symbol relationships detected from diff content.
     /// e.g., "validate calls parse() — both changed"
     pub connections: Vec<String>,
+    /// Import/use statement changes detected from diff.
+    /// e.g., "analyzer: added use crate::domain::DiffHunk"
+    pub import_changes: Vec<String>,
 }
 
 impl PromptContext {
@@ -53,6 +56,19 @@ impl PromptContext {
                 self.connections
                     .iter()
                     .map(|c| format!("  {}", c))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
+
+        let imports_section = if self.import_changes.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\nIMPORTS CHANGED:\n{}\n",
+                self.import_changes
+                    .iter()
+                    .map(|i| format!("  {}", i))
                     .collect::<Vec<_>>()
                     .join("\n")
             )
@@ -123,7 +139,7 @@ impl PromptContext {
 SUMMARY: {summary}
 FILES: {files}
 SUGGESTED TYPE: {commit_type}{scope}
-{group_rationale}{evidence}{primary_change}{symbols}{connections}
+{group_rationale}{evidence}{primary_change}{symbols}{connections}{imports}
 DIFF:
 {diff}
 {constraints}{breaking}{metadata_breaking}{locale}{focus}{history}
@@ -143,6 +159,7 @@ Respond with ONLY this JSON:
             evidence = evidence_section,
             symbols = symbols_section,
             connections = connections_section,
+            imports = imports_section,
             breaking = breaking_warning,
             constraints = constraints_section,
             focus = focus_instruction,

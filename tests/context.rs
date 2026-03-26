@@ -1436,6 +1436,85 @@ fn whitespace_detection_returns_none_when_span_has_no_changes() {
     );
 }
 
+// ─── Import change detection ─────────────────────────────────────────────────
+
+#[test]
+fn detect_rust_import_changes() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/analyzer.rs",
+        ChangeStatus::Modified,
+        "+use crate::domain::DiffHunk;\n-use crate::old_module::OldType;\n context line",
+        1,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(ctx.import_changes.len(), 2);
+    assert!(ctx.import_changes[0].contains("added"));
+    assert!(ctx.import_changes[0].contains("use crate::domain::DiffHunk"));
+    assert!(ctx.import_changes[1].contains("removed"));
+}
+
+#[test]
+fn detect_python_import_changes() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "app/main.py",
+        ChangeStatus::Modified,
+        "+from flask import Blueprint\n+import os\n",
+        2,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(ctx.import_changes.len(), 2);
+}
+
+#[test]
+fn detect_cpp_include_changes() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/main.cpp",
+        ChangeStatus::Modified,
+        "+#include <vector>\n-#include <list>\n",
+        1,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(ctx.import_changes.len(), 2);
+    assert!(ctx.import_changes[0].contains("#include <vector>"));
+}
+
+#[test]
+fn import_changes_capped_at_10() {
+    let diff: String = (0..15)
+        .map(|i| format!("+use crate::mod_{i}::Type;\n"))
+        .collect();
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        &diff,
+        15,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    assert_eq!(ctx.import_changes.len(), 10);
+}
+
+#[test]
+fn import_changes_shown_in_prompt() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+use crate::new_dep::Thing;\n",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("IMPORTS CHANGED:"),
+        "prompt should contain imports section"
+    );
+    assert!(prompt.contains("use crate::new_dep::Thing"));
+}
+
 // ─── Test Coverage: HARD LIMIT dedup check (#28) ─────────────────────────────
 
 #[test]
