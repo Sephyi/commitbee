@@ -140,6 +140,8 @@ struct SymbolDef {
     is_whitespace_only: Option<bool>,
     #[serde(default)]
     signature: Option<String>,
+    #[serde(default)]
+    parent_scope: Option<String>,
 }
 
 fn default_line() -> usize {
@@ -515,6 +517,7 @@ impl EvalRunner {
                 is_added: def.is_added,
                 is_whitespace_only: def.is_whitespace_only,
                 signature: def.signature,
+                parent_scope: def.parent_scope,
             })
             .collect()
     }

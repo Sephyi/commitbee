@@ -334,6 +334,8 @@ impl AnalyzerService {
 
                 let signature = Self::extract_signature(def_node, source);
 
+                let parent_scope = Self::extract_parent_scope(def_node, source);
+
                 if let Some(kind) = kind {
                     symbols.push(CodeSymbol {
                         kind,
@@ -345,6 +347,7 @@ impl AnalyzerService {
                         is_added,
                         is_whitespace_only: None,
                         signature,
+                        parent_scope,
                     });
                 }
             }
@@ -496,6 +499,40 @@ impl AnalyzerService {
         } else {
             normalized
         }
+    }
+
+    /// Walk up the AST to find the enclosing scope (impl, class, trait).
+    /// Skips intermediate wrapper nodes like `declaration_list`, `class_body`, etc.
+    fn extract_parent_scope(node: tree_sitter::Node, source: &str) -> Option<String> {
+        let mut current = node.parent();
+        while let Some(parent) = current {
+            match parent.kind() {
+                "impl_item" | "impl_block" => {
+                    // Rust: impl Type { fn method() }
+                    return parent
+                        .child_by_field_name("type")
+                        .and_then(|t| t.utf8_text(source.as_bytes()).ok())
+                        .map(|s| s.to_string());
+                }
+                "class_declaration" | "class_definition" | "class" | "class_specifier" => {
+                    // Most languages: class Foo { method() }
+                    return parent
+                        .child_by_field_name("name")
+                        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+                        .map(|s| s.to_string());
+                }
+                "trait_item" => {
+                    return parent
+                        .child_by_field_name("name")
+                        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+                        .map(|s| s.to_string());
+                }
+                _ => {
+                    current = parent.parent();
+                }
+            }
+        }
+        None
     }
 
     /// Check if a C# node has a `modifier` child with text "public"

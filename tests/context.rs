@@ -34,6 +34,7 @@ fn make_symbol(
         is_added,
         is_whitespace_only: None,
         signature: None,
+        parent_scope: None,
     }
 }
 

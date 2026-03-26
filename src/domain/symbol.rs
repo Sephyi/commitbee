@@ -52,6 +52,9 @@ pub struct CodeSymbol {
     /// e.g., "pub fn connect(host: &str, timeout: Duration) -> Result<Connection>"
     /// None for languages or constructs where signature extraction isn't supported.
     pub signature: Option<String>,
+    /// Parent scope name (e.g., "CommitValidator" for methods inside `impl CommitValidator`).
+    /// None for top-level definitions.
+    pub parent_scope: Option<String>,
 }
 
 impl CodeSymbol {
@@ -74,10 +77,16 @@ impl std::fmt::Display for CodeSymbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let action = if self.is_added { "+" } else { "-" };
         if let Some(sig) = &self.signature {
+            let scope_prefix = self
+                .parent_scope
+                .as_ref()
+                .map(|s| format!("{s} > "))
+                .unwrap_or_default();
             write!(
                 f,
-                "[{}] {} ({}:{})",
+                "[{}] {}{} ({}:{})",
                 action,
+                scope_prefix,
                 sig,
                 self.file.display(),
                 self.line
