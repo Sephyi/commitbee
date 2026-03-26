@@ -5,6 +5,7 @@
 mod change;
 mod commit;
 mod context;
+pub mod diff;
 mod symbol;
 
 pub use change::*;

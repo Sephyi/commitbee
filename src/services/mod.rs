@@ -4,6 +4,7 @@
 
 pub mod analyzer;
 pub mod context;
+pub mod differ;
 pub mod git;
 pub mod history;
 pub mod llm;
