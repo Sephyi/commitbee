@@ -6,8 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 # CommitBee — Product Requirements Document
 
-**Version**: 4.3
-**Date**: 2026-03-27
+**Version**: 4.3  
+**Date**: 2026-03-27  
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)  
 
@@ -18,7 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 | Version | Date       | Summary |
 |---------|------------|---------|
-| 4.3     | 2026-03-27 | v0.6.0 deep semantic understanding (in progress): Tier 2 — parent scope extraction for impl/class/trait methods (7 languages), import change detection (Rust/TS/JS/Python/Go/C/C++), doc-vs-code SpanChangeKind classification with Mixed variant, test-to-code ratio type inference, test file correlation. Tier 1 — SymbolDiff types + ChangeDetail enum (15 variants), AstDiffer for structural function diffing (params, return type, visibility, async, body), pipeline integration into extract_symbols/ContextBuilder. Plans dialectic-verified by GLM5 + Codex gpt-5.4 + Gemini 2.5 Pro with 12 fixes applied. 401+ tests. |
+| 4.3     | 2026-03-27 | v0.6.0-rc.1 deep semantic understanding: parent scope, import detection, doc-vs-code classification, structural AST diffs (AstDiffer + SymbolDiff), STRUCTURED CHANGES prompt section, token budget rebalance. 410 tests. |
 | 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 359 tests. |
 | 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 359 tests. |
 | 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |
@@ -61,6 +61,8 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | v0.3.0  | Differentiation core (splitter enhancements, validation, heuristics) | None |
 | v0.3.1  | Patch — default model → `qwen3.5:4b`, subject length validation, `think` config | None |
 | v0.4.0  | Feature completion (templates, languages, rename detection, history learning) | None |
+| v0.5.0  | AST context overhaul (signatures, semantic classification, cross-file connections) | None |
+| v0.6.0-rc.1 | Deep semantic understanding (parent scope, imports, doc-vs-code, structural AST diffs) | None |
 
 ## 2. Competitive Landscape
 
@@ -93,7 +95,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Multiple message generation (pick from N)          | Common (aicommits, aicommit2) | ✅ v0.2.0       |
 | Commit splitting (multi-concern detection)         | No competitor has this        | ✅ v0.2.0       |
 | Custom prompt/instruction files                    | Growing (Copilot, aicommit2)  | ✅ v0.4.0       |
-| Unit/integration tests                             | Non-negotiable for quality    | ✅ 359 tests    |
+| Unit/integration tests                             | Non-negotiable for quality    | ✅ 410 tests    |
 
 ## 3. Architecture
 
@@ -479,7 +481,37 @@ Project-level `.commitbee.toml` can no longer override `openai_base_url`, `anthr
 
 Subject character budget accounts for `!` suffix on breaking changes. EVIDENCE section omitted when all flags are default (~200 chars saved). Symbol marker legend added to SYSTEM_PROMPT (`[+] added, [-] removed, [~] modified`). Duplicate JSON schema removed from system prompt. Emoji replaced with text labels (`WARNING:` instead of `⚠`). CONNECTIONS instruction softened for small models. Python tree-sitter queries enhanced with `decorated_definition` support.
 
-### 4.6 Future — v0.6.0+ (Market Leadership)
+### 4.6 Shipped — v0.6.0-rc.1 (Deep Semantic Understanding)
+
+#### FR-064: Parent Scope Extraction ✅
+
+Tree-sitter AST walker extracts enclosing `impl`/`class`/`trait` scope for methods, displaying `Parent > signature` format in symbol output. Walks through intermediate nodes (`declaration_list`, `class_body`). Verified across 7 languages (Rust, Python, TypeScript, Java, Go, Ruby, C#). 10 per-language tests.
+
+#### FR-065: Import Change Detection ✅
+
+`detect_import_changes()` scans diff lines for added/removed import statements, producing an `IMPORTS CHANGED:` prompt section with file stem and action. Supports Rust `use`, JS/TS `import`, Python `from`/`import`, Node `require()`, C/C++ `#include`. Capped at 10 entries. 5 tests.
+
+#### FR-066: Doc-vs-Code Change Classification ✅
+
+`SpanChangeKind` enum (`Unchanged`, `WhitespaceOnly`, `DocsOnly`, `Mixed`, `Semantic`) replaces binary `is_whitespace_only` for richer modified-symbol classification. `classify_span_change_rich()` detects comment-line prefixes (`///`, `//!`, `#`, `"""`, `/**`). Doc-only modifications suggest `docs` type. Modified symbols show `[docs only]` or `[docs + code]` suffix in prompt output. 7 tests.
+
+#### FR-067: Test-to-Code Ratio Inference ✅
+
+In `infer_commit_type`, when >80% of additions are in `FileCategory::Test` files, returns `CommitType::Test` even with source files present. Uses cross-multiplication (`test * 100 > total * 80`) to avoid integer truncation. 2 tests.
+
+#### FR-068: Test File Correlation ✅
+
+`detect_test_correlation()` matches staged source files to test files by file stem, producing a `RELATED FILES:` prompt section (e.g., `src/services/context.rs <-> tests/context.rs (test file)`). Capped at 5 entries. 4 tests.
+
+#### FR-069: Structural AST Diffs ✅
+
+`AstDiffer` in `src/services/differ.rs` compares old and new tree-sitter AST nodes for modified symbols, producing `SymbolDiff` with `Vec<ChangeDetail>` (15-variant enum: `ParamAdded`, `ParamRemoved`, `ParamTypeChanged`, `ReturnTypeChanged`, `VisibilityChanged`, `AttributeAdded`/`Removed`, `AsyncChanged`, `GenericChanged`, `BodyModified`, `BodyUnchanged`, `FieldAdded`/`Removed`/`TypeChanged`). Runs inside `extract_for_file()` while both Trees are alive (Node lifetime constraint). `extract_symbols()` returns `(Vec<CodeSymbol>, Vec<SymbolDiff>)`. Struct/enum field diffing stubbed for future. Whitespace-aware body comparison via character-stream stripping. 7 unit tests + 6 per-language integration tests.
+
+#### FR-070: Structured Changes Prompt Section ✅
+
+`STRUCTURED CHANGES:` section in LLM prompt renders `SymbolDiff::format_oneline()` descriptions (e.g., `CommitValidator::validate(): +param strict: bool, return bool → Result<()>, body modified (+5 -2)`). Omitted when no structural diffs exist. Token budget rebalanced: symbol budget reduced from 30% to 20% when structural diffs available, freeing space for raw diff. SYSTEM_PROMPT updated to guide LLM to prefer structured changes for signature details. 3 tests.
+
+### 4.7 Future — v0.7.0+ (Market Leadership)
 
 #### FR-050: MCP Server Mode
 
@@ -661,7 +693,7 @@ commitbee eval                         # Run evaluation harness (dev, feature-ga
 
 ## 8. Testing Requirements
 
-**Current test count: 367**
+**Current test count: 410**
 
 ### TR-001: Unit Tests
 
@@ -819,9 +851,9 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | 2 | v0.3.x | ✅ Shipped | Differentiation — heuristics, validation, spec compliance |
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
 | 4 | v0.4.x | ✅ Shipped | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
-| 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 359 tests. |
-| 5.5 | v0.5.x | 🔨 Next | Deep semantic understanding — parent scope, imports, doc-vs-code (T2), structural AST diffs (T1), language markers + change intent (T3). Plans dialectic-verified 2026-03-26. |
-| 6 | v0.6.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
+| 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 367 tests. |
+| 6 | v0.6.0-rc.1 | ✅ Shipped | Deep semantic understanding — parent scope, import detection, doc-vs-code classification, structural AST diffs, structured changes prompt section. 410 tests. |
+| 7 | v0.7.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
 
@@ -835,7 +867,7 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | Commit message quality | > 80% "good enough" first try | Manual evaluation + `commitbee eval` |
 | Secret leak rate | 0 | Integration tests with known patterns |
 | MSRV | Rust 1.94 (edition 2024) | CI matrix (stable + 1.94) |
-| Test count | ≥ 308 | `cargo test` (current: 359) |
+| Test count | ≥ 308 | `cargo test` (current: 410) |
 
 ## 13. Non-Goals
 

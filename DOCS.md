@@ -86,11 +86,11 @@ Here's what each step actually does:
 
 **1. Git Service** reads your staged changes using `gix` for repo discovery and the git CLI for diffs. Paths are parsed with NUL-delimited output (`-z` flag) so filenames with spaces or special characters work correctly.
 
-**2. Tree-sitter Analyzer** parses both the staged version and the HEAD version of every changed file — in parallel, using `rayon` across CPU cores. It extracts **full signatures** (e.g., `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`) by taking the definition node text before the body child. Modified symbols show old → new signature diffs. Cross-file connections are detected (caller+callee both changed). Symbols are tracked in three states: added, removed, or modified-signature.
+**2. Tree-sitter Analyzer** parses both the staged version and the HEAD version of every changed file — in parallel, using `rayon` across CPU cores. It extracts **full signatures** (e.g., `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`) by taking the definition node text before the body child. Methods include their **parent scope** (enclosing impl, class, or trait — e.g., `CommitValidator::validate`). Modified symbols show old → new signature diffs, with **structural AST diffs** that describe exactly what changed (parameters added/removed, return type changed, visibility changed, etc.). Cross-file connections are detected (caller+callee both changed). Symbols are tracked in three states: added, removed, or modified-signature, with a **doc-vs-code distinction** indicating whether changes were documentation-only, code-only, or mixed.
 
 **3. Commit Splitter** looks at your staged changes and decides whether they contain logically independent work. It uses diff-shape fingerprinting (what kind of changes — additions, deletions, modifications) combined with Jaccard similarity on content vocabulary to group files. If it finds multiple concerns, it offers to split them into separate commits.
 
-**4. Context Builder** assembles a budget-aware prompt. It classifies modified symbols as whitespace-only or semantic (via character-stream comparison), computes evidence flags (mechanical change? public APIs removed? bug-fix evidence?), detects cross-file connections, calculates the character budget for the subject line, and packs context within the token limit (~6K tokens, 30/70 symbol/diff split when signatures present).
+**4. Context Builder** assembles a budget-aware prompt. It classifies modified symbols as whitespace-only or semantic (via character-stream comparison), computes evidence flags (mechanical change? public APIs removed? bug-fix evidence?), detects cross-file connections, identifies import changes and test file correlations, calculates the character budget for the subject line, and packs context within the token limit (~6K tokens). The token budget adapts: when structural AST diffs are available, symbols get 20% of the budget (diffs carry more detail); when only signatures are available, symbols get 30%.
 
 **5. LLM Provider** streams the prompt to your chosen model (Ollama, OpenAI, or Anthropic) and collects the response token by token.
 
@@ -107,6 +107,10 @@ CommitBee doesn't just send a diff. The prompt includes:
 - **Evidence flags** telling the LLM deterministic facts about the change
 - **Symbol changes with full signatures** — `[+] pub fn connect(host: &str) -> Result<()>`, not just "Function connect"
 - **Signature diffs** — `[~] old_sig → new_sig` for modified symbols
+- **Structured AST diffs** — `CommitValidator::validate(): +param timeout, return Result<()> → Result<Error>` (precise semantic changes from AST comparison)
+- **Import changes** — `analyzer: added use crate::domain::DiffHunk` (tracked per file)
+- **Test file correlations** — `src/services/context.rs <-> tests/context.rs (test file)`
+- **Doc-vs-code annotations** — modified symbols tagged `[docs only]` or `[docs + code]` when change is documentation-only or mixed
 - **Cross-file connections** — `validator calls parse() — both changed`
 - **Primary change detection** — which file has the most significant changes
 - **Constraints** — rules the LLM must follow based on evidence (e.g., "no bug-fix comments found, prefer refactor over fix")
@@ -570,7 +574,9 @@ For supported languages, symbols are tracked in three states:
 - **Removed** `[-]` — Deleted symbol
 - **Modified (signature changed)** `[~]` — Symbol exists in both versions but its signature changed
 
-This information appears in the prompt as a `SYMBOLS CHANGED` section, giving the LLM precise knowledge of what was structurally modified.
+Modified symbols include additional annotations: `[docs only]` when only documentation/comments changed, `[docs + code]` when both documentation and code changed. Methods show their parent scope (e.g., `CommitValidator::validate` rather than just `validate`).
+
+This information appears in the prompt as a `SYMBOLS CHANGED` section. When structural AST diffs are available, a separate `STRUCTURED CHANGES` section provides precise details like `+param timeout`, `return Result<()> → Result<Error>`, or `+field name`.
 
 ## 🔧 Troubleshooting
 
@@ -650,13 +656,15 @@ src/
 ├── error.rs             # Error types (thiserror + miette diagnostics)
 ├── domain/
 │   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
-│   ├── symbol.rs        # CodeSymbol, SymbolKind (Added/Removed/Modified)
+│   ├── symbol.rs        # CodeSymbol, SymbolKind, SpanChangeKind
+│   ├── diff.rs          # SymbolDiff, ChangeDetail (structural AST diffs)
 │   ├── context.rs       # PromptContext — assembles the LLM prompt
 │   └── commit.rs        # CommitType enum (single source of truth)
 └── services/
     ├── git.rs           # GitService — gix for discovery, git CLI for diffs
     ├── analyzer.rs      # AnalyzerService — tree-sitter parsing via rayon
     ├── context.rs       # ContextBuilder — evidence flags, token budget
+    ├── differ.rs        # AstDiffer — structural comparison of old/new symbols
     ├── safety.rs        # Secret scanning (24 patterns), conflict detection
     ├── sanitizer.rs     # CommitSanitizer + CommitValidator
     ├── splitter.rs      # CommitSplitter — diff-shape + Jaccard clustering
@@ -678,7 +686,7 @@ src/
 
 **Streaming with Cancellation** — All providers support Ctrl+C cancellation via `tokio_util::CancellationToken`. The streaming display runs in a separate tokio task with `tokio::select!` for responsive cancellation.
 
-**Token Budget** — The context builder tracks character usage (~4 chars per token) and truncates the diff if it exceeds the budget, prioritizing the most important files. The default 24K char budget (~6K tokens) is safe for 8K context models.
+**Token Budget** — The context builder tracks character usage (~4 chars per token) and truncates the diff if it exceeds the budget, prioritizing the most important files. The budget adapts based on available information: when structural AST diffs are present, the symbol allocation shrinks (20%) since the diffs carry precise detail; when only signatures are available, symbols get 30%. The default 24K char budget (~6K tokens) is safe for 8K context models.
 
 **Single Source of Truth for Types** — `CommitType::ALL` is a const array that defines all valid commit types. The system prompt's type list is verified at compile time (via a `#[test]`) to match this array exactly.
 
@@ -694,7 +702,7 @@ No panics in user-facing code paths. The sanitizer and validator are tested with
 
 ### Testing Strategy
 
-CommitBee has 367 tests across multiple strategies:
+CommitBee has 410 tests across multiple strategies:
 
 | Strategy | What It Covers |
 | --- | --- |
@@ -707,7 +715,7 @@ CommitBee has 367 tests across multiple strategies:
 Run them:
 
 ```bash
-cargo test                    # All 367 tests
+cargo test                    # All 410 tests
 cargo test --test sanitizer   # Just sanitizer tests
 cargo test --test integration # LLM provider mocks
 COMMITBEE_LOG=debug cargo test -- --nocapture  # With logging

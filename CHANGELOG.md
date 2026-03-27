@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 All notable changes to CommitBee are documented here.
 
-## `v0.6.0` — Deep Understanding (current, in progress)
+## `v0.6.0-rc.1` — Deep Understanding (release candidate)
 
 ### Semantic Analysis
 
@@ -18,10 +18,19 @@ All notable changes to CommitBee are documented here.
 - **Test file correlation** — New `RELATED FILES:` prompt section shows when source files and their matching test files are both staged. Stem-based matching, capped at 5 entries.
 - **Structural AST diffs** — `AstDiffer` compares old and new tree-sitter nodes for modified symbols, producing structured `SymbolDiff` descriptions (parameter added, return type changed, visibility changed, async toggled, body modified). Shown as `STRUCTURED CHANGES:` section in the prompt.
 - **Whitespace-aware body comparison** — Body diff uses character-stream stripping so reformatting doesn't produce false `BodyModified` results.
+- **Structured changes in prompt** — New `STRUCTURED CHANGES:` section in the LLM prompt shows concise one-line descriptions of what changed per symbol (e.g., `CommitValidator::validate(): +param strict: bool, return bool → Result<()>, body modified`). Omitted when no structural diffs exist.
 
 ### Type Inference
 
 - **Test-to-code ratio** — When >80% of additions are in test files, suggests `test` type even with source files present. Uses cross-multiplication to avoid integer truncation.
+
+### Prompt Quality
+
+- **Token budget rebalance** — Symbol budget reduced from 30% to 20% when structural diffs are available, freeing space for the raw diff. SYSTEM_PROMPT updated to guide the LLM to prefer STRUCTURED CHANGES for signature details.
+
+### Testing
+
+- **410 tests** total (up from 367 at v0.5.0).
 
 ## `v0.5.0` — Beyond the Diff
 
@@ -56,7 +65,7 @@ All notable changes to CommitBee are documented here.
 - **Evaluation harness** — 36 fixtures covering all 11 commit types, AST features, and edge cases. Per-type accuracy reporting with `EvalSummary`.
 - **15+ new unit tests** — Coverage for `detect_primary_change`, `detect_metadata_breaking`, `detect_bug_evidence` (all 7 patterns), Deleted/Renamed status, signature edge cases, connection content assertions.
 - **5 fuzz targets** — `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`, `fuzz_signature`, `fuzz_classify_span`.
-- **367 tests** total (up from 308 at v0.4.0).
+- **367 tests** total (up from 308 at v0.4.0). Current count at v0.6.0-rc.1: 410.
 
 ### API
 
