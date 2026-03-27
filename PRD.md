@@ -18,7 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 | Version | Date       | Summary |
 |---------|------------|---------|
-| 4.3     | 2026-03-27 | v0.6.0-rc.1 deep semantic understanding: parent scope, import detection, doc-vs-code classification, structural AST diffs (AstDiffer + SymbolDiff), STRUCTURED CHANGES prompt section, token budget rebalance. 410 tests. |
+| 4.3     | 2026-03-27 | v0.6.0-rc.1 deep semantic understanding: parent scope, import detection, doc-vs-code classification, structural AST diffs (AstDiffer + SymbolDiff), STRUCTURED CHANGES prompt section, token budget rebalance, T3 semantic markers (FR-071), change intent detection (FR-072). 424 tests. |
 | 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 359 tests. |
 | 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 359 tests. |
 | 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |
@@ -95,7 +95,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | Multiple message generation (pick from N)          | Common (aicommits, aicommit2) | ✅ v0.2.0       |
 | Commit splitting (multi-concern detection)         | No competitor has this        | ✅ v0.2.0       |
 | Custom prompt/instruction files                    | Growing (Copilot, aicommit2)  | ✅ v0.4.0       |
-| Unit/integration tests                             | Non-negotiable for quality    | ✅ 410 tests    |
+| Unit/integration tests                             | Non-negotiable for quality    | ✅ 424 tests    |
 
 ## 3. Architecture
 
@@ -511,6 +511,14 @@ In `infer_commit_type`, when >80% of additions are in `FileCategory::Test` files
 
 `STRUCTURED CHANGES:` section in LLM prompt renders `SymbolDiff::format_oneline()` descriptions (e.g., `CommitValidator::validate(): +param strict: bool, return bool → Result<()>, body modified (+5 -2)`). Omitted when no structural diffs exist. Token budget rebalanced: symbol budget reduced from 30% to 20% when structural diffs available, freeing space for raw diff. SYSTEM_PROMPT updated to guide LLM to prefer structured changes for signature details. 3 tests.
 
+#### FR-071: Semantic Marker Detection ✅
+
+`AstDiffer` extended with 10 marker variants in `ChangeDetail`: `UnsafeAdded`/`Removed`, `DeriveAdded`/`Removed`, `DecoratorAdded`/`Removed`, `ExportAdded`/`Removed`, `MutabilityChanged`, `GenericConstraintChanged`. Extracts unsafe keyword, derive attributes, and mutability from tree-sitter nodes during function comparison. Unsafe additions set `has_unsafe_addition` evidence flag and trigger a CONSTRAINTS rule requiring safety justification in the commit body. 4 unit tests.
+
+#### FR-072: Change Intent Detection ✅
+
+`detect_intents()` scans added diff lines for error handling patterns (9 patterns including `Result<>`, `?`, `Err()`, `.map_err()`), test patterns (6 patterns including `#[test]`, `assert!`), logging patterns (9 patterns including `tracing::`, `debug!()`, `info!()`), and dependency updates (version changes in manifests). `INTENT:` prompt section shows detected patterns with confidence scores. `refine_type_with_intents()` conservatively overrides base type only for high-confidence performance optimization. 7 tests.
+
 ### 4.7 Future — v0.7.0+ (Market Leadership)
 
 #### FR-050: MCP Server Mode
@@ -693,7 +701,7 @@ commitbee eval                         # Run evaluation harness (dev, feature-ga
 
 ## 8. Testing Requirements
 
-**Current test count: 410**
+**Current test count: 424**
 
 ### TR-001: Unit Tests
 
@@ -852,7 +860,7 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
 | 4 | v0.4.x | ✅ Shipped | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
 | 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 367 tests. |
-| 6 | v0.6.0-rc.1 | ✅ Shipped | Deep semantic understanding — parent scope, import detection, doc-vs-code classification, structural AST diffs, structured changes prompt section. 410 tests. |
+| 6 | v0.6.0-rc.1 | ✅ Shipped | Deep semantic understanding — parent scope, import detection, doc-vs-code classification, structural AST diffs, structured changes prompt section, semantic markers, change intent detection. 424 tests. |
 | 7 | v0.7.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
@@ -867,7 +875,7 @@ Invalid JSON → retry once with repair prompt. Second failure → heuristic ext
 | Commit message quality | > 80% "good enough" first try | Manual evaluation + `commitbee eval` |
 | Secret leak rate | 0 | Integration tests with known patterns |
 | MSRV | Rust 1.94 (edition 2024) | CI matrix (stable + 1.94) |
-| Test count | ≥ 308 | `cargo test` (current: 410) |
+| Test count | ≥ 308 | `cargo test` (current: 424) |
 
 ## 13. Non-Goals
 

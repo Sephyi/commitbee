@@ -19,18 +19,25 @@ All notable changes to CommitBee are documented here.
 - **Structural AST diffs** — `AstDiffer` compares old and new tree-sitter nodes for modified symbols, producing structured `SymbolDiff` descriptions (parameter added, return type changed, visibility changed, async toggled, body modified). Shown as `STRUCTURED CHANGES:` section in the prompt.
 - **Whitespace-aware body comparison** — Body diff uses character-stream stripping so reformatting doesn't produce false `BodyModified` results.
 - **Structured changes in prompt** — New `STRUCTURED CHANGES:` section in the LLM prompt shows concise one-line descriptions of what changed per symbol (e.g., `CommitValidator::validate(): +param strict: bool, return bool → Result<()>, body modified`). Omitted when no structural diffs exist.
+- **Semantic markers** — `AstDiffer` now detects `unsafe` added/removed, `#[derive()]` changes, decorator additions/removals, export changes, mutability changes, and generic constraint changes. Shown as `+unsafe`, `+derive(Debug, Clone)`, etc. in the STRUCTURED CHANGES section.
 
 ### Type Inference
 
 - **Test-to-code ratio** — When >80% of additions are in test files, suggests `test` type even with source files present. Uses cross-multiplication to avoid integer truncation.
 
+### Change Intent Detection
+
+- **Diff-based intent patterns** — Scans added lines for error handling (`Result`, `?`, `Err()`), test additions (`#[test]`, `assert!`), logging (`tracing::`, `debug!`), and dependency updates. Shown as `INTENT:` section in the prompt with confidence scores.
+- **Conservative type refinement** — High-confidence performance optimization patterns can override the base type to `perf`.
+
 ### Prompt Quality
 
 - **Token budget rebalance** — Symbol budget reduced from 30% to 20% when structural diffs are available, freeing space for the raw diff. SYSTEM_PROMPT updated to guide the LLM to prefer STRUCTURED CHANGES for signature details.
+- **Unsafe constraint rule** — When `unsafe` is added to a function, a CONSTRAINTS rule instructs the LLM to mention safety justification in the commit body.
 
 ### Testing
 
-- **410 tests** total (up from 367 at v0.5.0).
+- **424 tests** total (up from 367 at v0.5.0).
 
 ## `v0.5.0` — Beyond the Diff
 

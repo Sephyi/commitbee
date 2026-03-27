@@ -86,11 +86,11 @@ Here's what each step actually does:
 
 **1. Git Service** reads your staged changes using `gix` for repo discovery and the git CLI for diffs. Paths are parsed with NUL-delimited output (`-z` flag) so filenames with spaces or special characters work correctly.
 
-**2. Tree-sitter Analyzer** parses both the staged version and the HEAD version of every changed file — in parallel, using `rayon` across CPU cores. It extracts **full signatures** (e.g., `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`) by taking the definition node text before the body child. Methods include their **parent scope** (enclosing impl, class, or trait — e.g., `CommitValidator::validate`). Modified symbols show old → new signature diffs, with **structural AST diffs** that describe exactly what changed (parameters added/removed, return type changed, visibility changed, etc.). Cross-file connections are detected (caller+callee both changed). Symbols are tracked in three states: added, removed, or modified-signature, with a **doc-vs-code distinction** indicating whether changes were documentation-only, code-only, or mixed.
+**2. Tree-sitter Analyzer** parses both the staged version and the HEAD version of every changed file — in parallel, using `rayon` across CPU cores. It extracts **full signatures** (e.g., `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`) by taking the definition node text before the body child. Methods include their **parent scope** (enclosing impl, class, or trait — e.g., `CommitValidator::validate`). Modified symbols show old → new signature diffs, with **structural AST diffs** that describe exactly what changed (parameters added/removed, return type changed, visibility changed, semantic markers like `unsafe`, `derive`, decorators, `export`, mutability, generic constraints, etc.). Cross-file connections are detected (caller+callee both changed). Symbols are tracked in three states: added, removed, or modified-signature, with a **doc-vs-code distinction** indicating whether changes were documentation-only, code-only, or mixed.
 
 **3. Commit Splitter** looks at your staged changes and decides whether they contain logically independent work. It uses diff-shape fingerprinting (what kind of changes — additions, deletions, modifications) combined with Jaccard similarity on content vocabulary to group files. If it finds multiple concerns, it offers to split them into separate commits.
 
-**4. Context Builder** assembles a budget-aware prompt. It classifies modified symbols as whitespace-only or semantic (via character-stream comparison), computes evidence flags (mechanical change? public APIs removed? bug-fix evidence?), detects cross-file connections, identifies import changes and test file correlations, calculates the character budget for the subject line, and packs context within the token limit (~6K tokens). The token budget adapts: when structural AST diffs are available, symbols get 20% of the budget (diffs carry more detail); when only signatures are available, symbols get 30%.
+**4. Context Builder** assembles a budget-aware prompt. It classifies modified symbols as whitespace-only or semantic (via character-stream comparison), computes evidence flags (mechanical change? public APIs removed? bug-fix evidence?), detects **change intent** (error handling, test, logging, dependency update patterns) for the `INTENT:` prompt section, detects cross-file connections, identifies import changes and test file correlations, calculates the character budget for the subject line, and packs context within the token limit (~6K tokens). The token budget adapts: when structural AST diffs are available, symbols get 20% of the budget (diffs carry more detail); when only signatures are available, symbols get 30%.
 
 **5. LLM Provider** streams the prompt to your chosen model (Ollama, OpenAI, or Anthropic) and collects the response token by token.
 
@@ -107,12 +107,13 @@ CommitBee doesn't just send a diff. The prompt includes:
 - **Evidence flags** telling the LLM deterministic facts about the change
 - **Symbol changes with full signatures** — `[+] pub fn connect(host: &str) -> Result<()>`, not just "Function connect"
 - **Signature diffs** — `[~] old_sig → new_sig` for modified symbols
-- **Structured AST diffs** — `CommitValidator::validate(): +param timeout, return Result<()> → Result<Error>` (precise semantic changes from AST comparison)
+- **Structured AST diffs** — `CommitValidator::validate(): +param timeout, return Result<()> → Result<Error>` (precise semantic changes from AST comparison, including semantic markers like `+unsafe`, `+derive(Clone)`, `export added`, `mutability changed`)
 - **Import changes** — `analyzer: added use crate::domain::DiffHunk` (tracked per file)
 - **Test file correlations** — `src/services/context.rs <-> tests/context.rs (test file)`
 - **Doc-vs-code annotations** — modified symbols tagged `[docs only]` or `[docs + code]` when change is documentation-only or mixed
 - **Cross-file connections** — `validator calls parse() — both changed`
 - **Primary change detection** — which file has the most significant changes
+- **Change intent** — detected patterns like error handling, test additions, logging, or dependency updates, surfaced as an `INTENT:` section
 - **Constraints** — rules the LLM must follow based on evidence (e.g., "no bug-fix comments found, prefer refactor over fix")
 - **Character budget** — exact number of chars available for the subject line
 - **Group rationale** — when splitting, why these files are grouped together
@@ -657,7 +658,7 @@ src/
 ├── domain/
 │   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
 │   ├── symbol.rs        # CodeSymbol, SymbolKind, SpanChangeKind
-│   ├── diff.rs          # SymbolDiff, ChangeDetail (structural AST diffs)
+│   ├── diff.rs          # SymbolDiff, ChangeDetail (structural AST diffs + 10 semantic marker variants)
 │   ├── context.rs       # PromptContext — assembles the LLM prompt
 │   └── commit.rs        # CommitType enum (single source of truth)
 └── services/
@@ -702,7 +703,7 @@ No panics in user-facing code paths. The sanitizer and validator are tested with
 
 ### Testing Strategy
 
-CommitBee has 410 tests across multiple strategies:
+CommitBee has 424 tests across multiple strategies:
 
 | Strategy | What It Covers |
 | --- | --- |
@@ -715,7 +716,7 @@ CommitBee has 410 tests across multiple strategies:
 Run them:
 
 ```bash
-cargo test                    # All 410 tests
+cargo test                    # All 424 tests
 cargo test --test sanitizer   # Just sanitizer tests
 cargo test --test integration # LLM provider mocks
 COMMITBEE_LOG=debug cargo test -- --nocapture  # With logging
