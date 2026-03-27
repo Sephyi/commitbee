@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+
 version = 1
 SPDX-PackageName = "commitbee"
 SPDX-PackageSupplier = "Sephyi <me@sephy.io>"
@@ -37,3 +41,10 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
 SPDX-License-Identifier = "AGPL-3.0-only OR LicenseRef-Commercial"
 SPDX-FileComment = "Fuzz testing crate manifest"
+
+[[annotations]]
+path = "tests/*.proptest-regressions"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Sephyi <me@sephy.io>"
+SPDX-License-Identifier = "AGPL-3.0-only OR LicenseRef-Commercial"
+SPDX-FileComment = "Proptest regression seeds"
