@@ -1746,6 +1746,69 @@ fn test_correlations_capped_at_5() {
     assert!(ctx.test_correlations.len() <= 5);
 }
 
+// ─── Structured changes in prompt ─────────────────────────────────────────────
+
+#[test]
+fn structured_changes_shown_in_prompt() {
+    use commitbee::domain::diff::{ChangeDetail, SymbolDiff};
+
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+pub fn validate(input: &str, strict: bool) -> Result<()> { Ok(()) }",
+        1,
+        0,
+    )]);
+    let diffs = vec![SymbolDiff {
+        name: "validate".into(),
+        file: "src/lib.rs".into(),
+        line: 1,
+        parent_scope: Some("Validator".into()),
+        changes: vec![
+            ChangeDetail::ParamAdded("strict: bool".into()),
+            ChangeDetail::ReturnTypeChanged {
+                old: "bool".into(),
+                new: "Result<()>".into(),
+            },
+        ],
+    }];
+    let ctx = ContextBuilder::build(&changes, &[], &diffs, &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("STRUCTURED CHANGES:"),
+        "prompt should contain structured changes section"
+    );
+    assert!(
+        prompt.contains("Validator::validate()"),
+        "should show parent scope"
+    );
+    assert!(
+        prompt.contains("+param strict: bool"),
+        "should show added param"
+    );
+    assert!(
+        prompt.contains("return bool"),
+        "should show return type change"
+    );
+}
+
+#[test]
+fn empty_structured_changes_not_shown() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+code\n",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        !prompt.contains("STRUCTURED CHANGES:"),
+        "empty structured changes should not appear"
+    );
+}
+
 #[test]
 fn python_comment_only_change_classified_as_docs() {
     let changes = make_staged_changes(vec![make_file_change(

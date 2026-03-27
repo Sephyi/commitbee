@@ -44,8 +44,7 @@ pub struct PromptContext {
     /// e.g., "src/services/context.rs <-> tests/context.rs (test file)"
     pub test_correlations: Vec<String>,
     /// Structured semantic changes for modified symbols (from AstDiffer).
-    /// Used by the prompt formatter in T1-4 to show semantic diffs to the LLM.
-    #[allow(dead_code)]
+    /// Formatted as a `STRUCTURED CHANGES:` section in the prompt.
     pub structured_changes: Vec<SymbolDiff>,
 }
 
@@ -67,6 +66,17 @@ impl PromptContext {
                     .collect::<Vec<_>>()
                     .join("\n")
             )
+        };
+
+        let structured_section = if self.structured_changes.is_empty() {
+            String::new()
+        } else {
+            let lines: Vec<String> = self
+                .structured_changes
+                .iter()
+                .map(|d| d.format_oneline())
+                .collect();
+            format!("\nSTRUCTURED CHANGES:\n{}\n", lines.join("\n"))
         };
 
         let imports_section = if self.import_changes.is_empty() {
@@ -160,7 +170,7 @@ impl PromptContext {
 SUMMARY: {summary}
 FILES: {files}
 SUGGESTED TYPE: {commit_type}{scope}
-{group_rationale}{evidence}{primary_change}{symbols}{connections}{imports}{related}
+{group_rationale}{evidence}{primary_change}{symbols}{structured}{connections}{imports}{related}
 DIFF:
 {diff}
 {constraints}{breaking}{metadata_breaking}{locale}{focus}{history}
@@ -179,6 +189,7 @@ Respond with ONLY this JSON:
                 .unwrap_or_default(),
             evidence = evidence_section,
             symbols = symbols_section,
+            structured = structured_section,
             connections = connections_section,
             imports = imports_section,
             related = related_section,
