@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 use super::CommitType;
+use super::diff::SymbolDiff;
 
 #[derive(Debug)]
 pub struct PromptContext {
@@ -42,6 +43,10 @@ pub struct PromptContext {
     /// Source-to-test file correlations detected from staged changes.
     /// e.g., "src/services/context.rs <-> tests/context.rs (test file)"
     pub test_correlations: Vec<String>,
+    /// Structured semantic changes for modified symbols (from AstDiffer).
+    /// Used by the prompt formatter in T1-4 to show semantic diffs to the LLM.
+    #[allow(dead_code)]
+    pub structured_changes: Vec<SymbolDiff>,
 }
 
 impl PromptContext {

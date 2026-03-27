@@ -5,6 +5,7 @@
 use std::collections::HashSet;
 
 use crate::config::Config;
+use crate::domain::diff::SymbolDiff;
 use crate::domain::{
     ChangeStatus, CodeSymbol, CommitType, FileCategory, PromptContext, SpanChangeKind,
     StagedChanges, SymbolKind,
@@ -38,6 +39,7 @@ impl ContextBuilder {
     pub fn build(
         changes: &StagedChanges,
         symbols: &[CodeSymbol],
+        diffs: &[SymbolDiff],
         config: &Config,
     ) -> PromptContext {
         // Build components with budget management
@@ -231,6 +233,7 @@ impl ContextBuilder {
             connections: Self::detect_connections(changes, symbols),
             import_changes: Self::detect_import_changes(changes),
             test_correlations: Self::detect_test_correlation(changes),
+            structured_changes: diffs.to_vec(),
         }
     }
 

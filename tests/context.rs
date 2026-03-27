@@ -47,7 +47,7 @@ fn infer_type_all_docs() {
         make_file_change("README.md", ChangeStatus::Modified, "", 5, 2),
         make_file_change("CHANGELOG.md", ChangeStatus::Modified, "", 3, 1),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Docs,
@@ -61,7 +61,7 @@ fn infer_type_all_tests() {
         make_file_change("tests/unit.rs", ChangeStatus::Modified, "", 10, 0),
         make_file_change("tests/integration.rs", ChangeStatus::Added, "", 20, 0),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Test,
@@ -78,7 +78,7 @@ fn infer_type_all_config() {
         3,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Chore,
@@ -95,7 +95,7 @@ fn infer_type_all_build() {
         5,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Build,
@@ -119,7 +119,7 @@ fn infer_type_new_public_symbols_is_feat() {
         true,
         true,
     )];
-    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    let ctx = ContextBuilder::build(&changes, &symbols, &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Feat,
@@ -135,7 +135,7 @@ fn infer_type_majority_new_files_is_feat() {
         make_file_change("src/services/bar.rs", ChangeStatus::Added, "", 30, 0),
         make_file_change("src/lib.rs", ChangeStatus::Modified, "", 5, 2),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Feat,
@@ -153,7 +153,7 @@ fn infer_type_small_balanced_change_is_style() {
         1,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Style,
@@ -171,7 +171,7 @@ fn infer_type_small_unbalanced_change_is_refactor() {
         1,
         10,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Refactor,
@@ -187,7 +187,7 @@ fn infer_scope_single_module() {
         make_file_change("src/services/context.rs", ChangeStatus::Modified, "", 5, 2),
         make_file_change("src/services/git.rs", ChangeStatus::Modified, "", 3, 1),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_scope,
         Some("services".to_string()),
@@ -201,7 +201,7 @@ fn infer_scope_none_for_mixed_modules() {
         make_file_change("src/services/context.rs", ChangeStatus::Modified, "", 5, 2),
         make_file_change("src/domain/change.rs", ChangeStatus::Modified, "", 3, 1),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.suggested_scope.is_none(),
         "files from different modules should yield no scope, got {:?}",
@@ -236,7 +236,7 @@ fn prompt_includes_symbols_when_present() {
             false,
         ),
     ];
-    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    let ctx = ContextBuilder::build(&changes, &symbols, &[], &default_config());
     let prompt = ctx.to_prompt();
 
     assert!(
@@ -262,7 +262,7 @@ fn prompt_omits_symbols_when_empty() {
         1,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     let prompt = ctx.to_prompt();
 
     assert!(
@@ -289,7 +289,7 @@ fn prompt_respects_budget() {
     let mut config = default_config();
     config.max_context_chars = 5_000;
 
-    let ctx = ContextBuilder::build(&changes, &[], &config);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &config);
     let prompt = ctx.to_prompt();
 
     assert!(
@@ -390,7 +390,7 @@ fn infer_type_more_deletions_is_refactor() {
         10,
         50,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Refactor,
@@ -408,7 +408,7 @@ fn infer_type_default_fallback_is_refactor() {
         30,
         30,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Refactor,
@@ -445,7 +445,7 @@ fn symbols_budget_truncation() {
     // Very small budget to force truncation
     config.max_context_chars = 500;
 
-    let ctx = ContextBuilder::build(&changes, &symbols, &config);
+    let ctx = ContextBuilder::build(&changes, &symbols, &[], &config);
     let prompt = ctx.to_prompt();
 
     assert!(
@@ -464,7 +464,7 @@ fn skip_content_lock_files() {
         50,
     )]);
 
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.truncated_diff.contains("lock file - content skipped"),
         "lock file diff should contain skip message, got: {}",
@@ -483,7 +483,7 @@ fn scope_from_packages_prefix() {
         5,
         2,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(
         ctx.suggested_scope,
         Some("foo".to_string()),
@@ -516,7 +516,7 @@ fn evidence_mechanical_transform_balanced_no_symbols() {
         5,
         5,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.is_mechanical,
         "balanced small change with no symbols should be mechanical"
@@ -539,7 +539,7 @@ fn evidence_not_mechanical_with_symbols() {
         true,
         true,
     )];
-    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    let ctx = ContextBuilder::build(&changes, &symbols, &[], &default_config());
     assert!(
         !ctx.is_mechanical,
         "change with new symbols should not be mechanical"
@@ -555,7 +555,7 @@ fn evidence_not_mechanical_large_change() {
         50,
         50,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         !ctx.is_mechanical,
         "large change (100 lines total) should not be mechanical"
@@ -571,7 +571,7 @@ fn evidence_bug_evidence_from_fix_comment() {
         2,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.has_bug_evidence,
         "diff with '// fix' comment should have bug evidence"
@@ -587,7 +587,7 @@ fn evidence_no_bug_evidence_for_refactor() {
         1,
         3,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         !ctx.has_bug_evidence,
         "refactor without fix/bug comments should not have bug evidence"
@@ -600,7 +600,7 @@ fn evidence_dependency_only() {
         make_file_change("Cargo.toml", ChangeStatus::Modified, "", 3, 1),
         make_file_change(".github/workflows/ci.yml", ChangeStatus::Modified, "", 2, 1),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.is_dependency_only,
         "all config/build files should be dependency_only"
@@ -613,7 +613,7 @@ fn evidence_not_dependency_only_with_source() {
         make_file_change("Cargo.toml", ChangeStatus::Modified, "", 3, 1),
         make_file_change("src/lib.rs", ChangeStatus::Modified, "", 5, 2),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         !ctx.is_dependency_only,
         "mix of config and source should not be dependency_only"
@@ -639,7 +639,7 @@ fn evidence_public_api_removed_count() {
             false,
         ),
     ];
-    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    let ctx = ContextBuilder::build(&changes, &symbols, &[], &default_config());
     assert_eq!(
         ctx.public_api_removed_count, 2,
         "should count 2 removed public symbols"
@@ -655,7 +655,7 @@ fn prompt_contains_evidence_section() {
         1,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     let prompt = ctx.to_prompt();
     assert!(
         prompt.contains("EVIDENCE:"),
@@ -680,7 +680,7 @@ fn prompt_contains_constraints_when_no_bug_evidence() {
         1,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     let prompt = ctx.to_prompt();
     assert!(
         prompt.contains("CONSTRAINTS (must follow):"),
@@ -762,7 +762,7 @@ fn prompt_includes_subject_budget() {
         1,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     let prompt = ctx.to_prompt();
     // Should contain "under XX chars" for subject budget
     assert!(
@@ -787,7 +787,7 @@ fn prompt_breaking_constraint_includes_description_guidance() {
         true,
         false,
     )];
-    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    let ctx = ContextBuilder::build(&changes, &symbols, &[], &default_config());
     let prompt = ctx.to_prompt();
     assert!(
         prompt.contains("describe what was removed"),
@@ -804,7 +804,7 @@ fn prompt_evidence_uses_natural_language() {
         1,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     let prompt = ctx.to_prompt();
     // Should NOT contain snake_case internal identifiers
     assert!(
@@ -892,7 +892,7 @@ fn modified_symbol_whitespace_only_detected() {
     )]);
     let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
     let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert!(
         !ctx.symbols_modified.contains("foo"),
         "whitespace-only modified symbol should not appear in symbols_modified: {}",
@@ -911,7 +911,7 @@ fn modified_symbol_semantic_change_shown() {
     )]);
     let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
     let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert!(
         ctx.symbols_modified.contains("foo"),
         "semantic modified symbol should appear in symbols_modified: {}",
@@ -935,7 +935,7 @@ fn all_symbols_whitespace_only_suggests_style() {
     )]);
     let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
     let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Style,
@@ -961,7 +961,7 @@ fn whitespace_detection_works_with_shifted_lines() {
     let mut sym_new = make_symbol("process", SymbolKind::Function, "src/lib.rs", true, true);
     sym_new.line = 5;
     sym_new.end_line = 7;
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     // Should detect as whitespace-only despite line shift
     assert!(
         !ctx.symbols_modified.contains("process"),
@@ -986,7 +986,7 @@ fn locale_instruction_appears_in_prompt_when_set() {
     let mut config = default_config();
     config.locale = Some("de".to_string());
 
-    let ctx = ContextBuilder::build(&changes, &[], &config);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &config);
     let prompt = ctx.to_prompt();
 
     assert!(
@@ -1014,7 +1014,7 @@ fn no_locale_instruction_when_none() {
     )]);
     let config = default_config();
 
-    let ctx = ContextBuilder::build(&changes, &[], &config);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &config);
     let prompt = ctx.to_prompt();
 
     assert!(
@@ -1072,7 +1072,7 @@ fn diff_truncation_multiple_files() {
     let mut config = default_config();
     config.max_context_chars = 3_000;
 
-    let ctx = ContextBuilder::build(&changes, &[], &config);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &config);
     assert!(
         ctx.truncated_diff.contains("files not shown due to budget")
             || ctx.truncated_diff.contains("budget exceeded")
@@ -1117,7 +1117,7 @@ fn prompt_shows_connections_between_modified_symbols() {
             false,
         ),
     ];
-    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    let ctx = ContextBuilder::build(&changes, &symbols, &[], &default_config());
     assert!(
         !ctx.connections.is_empty(),
         "should detect that validator.rs calls modified symbol parse()"
@@ -1140,7 +1140,7 @@ fn prompt_shows_signature_diff_for_modified_symbols() {
     let mut sym_new = make_symbol("validate", SymbolKind::Function, "src/lib.rs", true, true);
     sym_new.signature =
         Some("pub fn validate(input: &str, strict: bool) -> Result<()>".to_string());
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert!(
         ctx.symbols_modified.contains('\u{2192}') || ctx.symbols_modified.contains("->"),
         "modified symbols should show signature transition: {}",
@@ -1159,7 +1159,7 @@ fn prompt_shows_signatures_when_available() {
     )]);
     let mut sym = make_symbol("connect", SymbolKind::Function, "src/lib.rs", true, true);
     sym.signature = Some("pub fn connect(host: &str) -> Result<()>".to_string());
-    let ctx = ContextBuilder::build(&changes, &[sym], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym], &[], &default_config());
     let prompt = ctx.to_prompt();
     assert!(
         prompt.contains("pub fn connect(host: &str) -> Result<()>"),
@@ -1180,7 +1180,7 @@ fn primary_change_prefers_new_public_api() {
         0,
     )]);
     let sym = make_symbol("new_api", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym], &[], &default_config());
     assert!(
         ctx.primary_change.as_ref().unwrap().contains("new_api"),
         "should mention new public API: {:?}",
@@ -1198,7 +1198,7 @@ fn primary_change_falls_back_to_removed_public() {
         1,
     )]);
     let sym = make_symbol("old_api", SymbolKind::Function, "src/lib.rs", true, false);
-    let ctx = ContextBuilder::build(&changes, &[sym], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym], &[], &default_config());
     assert!(
         ctx.primary_change.as_ref().unwrap().contains("old_api"),
         "should mention removed public API: {:?}",
@@ -1212,7 +1212,7 @@ fn primary_change_falls_back_to_largest_file() {
         make_file_change("src/a.rs", ChangeStatus::Modified, "+x", 1, 0),
         make_file_change("src/b.rs", ChangeStatus::Modified, "+large change", 50, 10),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.primary_change.as_ref().unwrap().contains("b"),
         "should mention largest file: {:?}",
@@ -1231,7 +1231,7 @@ fn metadata_breaking_detects_msrv_change() {
         1,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         !ctx.metadata_breaking_signals.is_empty(),
         "should detect MSRV change"
@@ -1247,7 +1247,7 @@ fn metadata_breaking_detects_pub_use_removal() {
         0,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.metadata_breaking_signals
             .iter()
@@ -1268,7 +1268,7 @@ fn bug_evidence_detects_hash_fix() {
         1,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(ctx.has_bug_evidence, "should detect '# fix' pattern");
 }
 
@@ -1281,7 +1281,7 @@ fn bug_evidence_detects_c_style_fix() {
         1,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(ctx.has_bug_evidence, "should detect '/* fix' pattern");
 }
 
@@ -1294,7 +1294,7 @@ fn bug_evidence_detects_bug_keyword() {
         1,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(ctx.has_bug_evidence, "should detect '// bug' pattern");
 }
 
@@ -1307,7 +1307,7 @@ fn bug_evidence_detects_fixme() {
         1,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(ctx.has_bug_evidence, "should detect 'fixme' pattern");
 }
 
@@ -1320,7 +1320,7 @@ fn bug_evidence_detects_hotfix() {
         1,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(ctx.has_bug_evidence, "should detect 'hotfix' pattern");
 }
 
@@ -1360,7 +1360,7 @@ fn connection_content_mentions_symbol_name() {
             false,
         ),
     ];
-    let ctx = ContextBuilder::build(&changes, &symbols, &default_config());
+    let ctx = ContextBuilder::build(&changes, &symbols, &[], &default_config());
     assert!(
         ctx.connections.iter().any(|c| c.contains("parse")),
         "connection should mention symbol name 'parse': {:?}",
@@ -1379,7 +1379,7 @@ fn format_files_shows_deleted_marker() {
         0,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.file_breakdown.contains("[-]"),
         "deleted file should show [-] marker: {}",
@@ -1394,7 +1394,7 @@ fn format_files_shows_renamed_marker() {
         "src/new_name.rs",
         95,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(
         ctx.file_breakdown.contains("[R]"),
         "renamed file should show [R] marker: {}",
@@ -1425,7 +1425,7 @@ fn whitespace_detection_returns_none_when_span_has_no_changes() {
     let mut sym_new = make_symbol("distant", SymbolKind::Function, "src/lib.rs", true, true);
     sym_new.line = 50;
     sym_new.end_line = 60;
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     // Symbol is outside the hunk — classify_span_change returns None (no changes in span).
     // The symbol still appears as "modified" (name+kind+file match) but with no
     // whitespace classification. This is expected: it won't be filtered as whitespace-only.
@@ -1448,7 +1448,7 @@ fn detect_rust_import_changes() {
         1,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(ctx.import_changes.len(), 2);
     assert!(ctx.import_changes[0].contains("added"));
     assert!(ctx.import_changes[0].contains("use crate::domain::DiffHunk"));
@@ -1464,7 +1464,7 @@ fn detect_python_import_changes() {
         2,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(ctx.import_changes.len(), 2);
 }
 
@@ -1477,7 +1477,7 @@ fn detect_cpp_include_changes() {
         1,
         1,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(ctx.import_changes.len(), 2);
     assert!(ctx.import_changes[0].contains("#include <vector>"));
 }
@@ -1494,7 +1494,7 @@ fn import_changes_capped_at_10() {
         15,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(ctx.import_changes.len(), 10);
 }
 
@@ -1507,7 +1507,7 @@ fn import_changes_shown_in_prompt() {
         1,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     let prompt = ctx.to_prompt();
     assert!(
         prompt.contains("IMPORTS CHANGED:"),
@@ -1527,7 +1527,7 @@ fn prompt_hard_limit_includes_char_budget() {
         1,
         0,
     )]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     let prompt = ctx.to_prompt();
     assert!(
         prompt.contains("HARD LIMIT"),
@@ -1554,7 +1554,7 @@ fn mostly_test_additions_suggests_test_type() {
         ),
         make_file_change("src/lib.rs", ChangeStatus::Modified, "+code\n", 10, 0),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(ctx.suggested_type, CommitType::Test);
 }
 
@@ -1565,7 +1565,7 @@ fn balanced_test_and_source_does_not_suggest_test() {
         make_file_change("tests/foo.rs", ChangeStatus::Modified, "+test\n", 50, 0),
         make_file_change("src/lib.rs", ChangeStatus::Modified, "+code\n", 50, 0),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_ne!(ctx.suggested_type, CommitType::Test);
 }
 
@@ -1583,7 +1583,7 @@ fn doc_only_change_classified_as_docs() {
     )]);
     let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
     let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Docs,
@@ -1603,7 +1603,7 @@ fn mixed_doc_and_code_change_not_docs_type() {
     )]);
     let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
     let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert_ne!(
         ctx.suggested_type,
         CommitType::Docs,
@@ -1624,7 +1624,7 @@ fn doc_only_modified_symbol_shows_docs_suffix() {
     )]);
     let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
     let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert!(
         ctx.symbols_modified.contains("[docs only]"),
         "doc-only modified symbol should show [docs only] suffix: {}",
@@ -1643,7 +1643,7 @@ fn mixed_doc_code_modified_symbol_shows_mixed_suffix() {
     )]);
     let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
     let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert!(
         ctx.symbols_modified.contains("[docs + code]"),
         "mixed doc+code modified symbol should show [docs + code] suffix: {}",
@@ -1662,7 +1662,7 @@ fn semantic_only_change_has_no_suffix() {
     )]);
     let sym_old = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, false);
     let sym_new = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert!(
         !ctx.symbols_modified.contains("[docs"),
         "purely semantic change should have no doc suffix: {}",
@@ -1684,7 +1684,7 @@ fn detect_test_file_correlation() {
         ),
         make_file_change("tests/context.rs", ChangeStatus::Modified, "+test\n", 1, 0),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert_eq!(ctx.test_correlations.len(), 1);
     assert!(ctx.test_correlations[0].contains("context"));
 }
@@ -1701,7 +1701,7 @@ fn no_correlation_without_matching_test() {
         ),
         make_file_change("tests/other.rs", ChangeStatus::Modified, "+test\n", 1, 0),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(ctx.test_correlations.is_empty());
 }
 
@@ -1717,7 +1717,7 @@ fn test_correlation_shown_in_prompt() {
         ),
         make_file_change("tests/context.rs", ChangeStatus::Modified, "+test\n", 1, 0),
     ]);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     let prompt = ctx.to_prompt();
     assert!(prompt.contains("RELATED FILES:"));
 }
@@ -1742,7 +1742,7 @@ fn test_correlations_capped_at_5() {
         ));
     }
     let changes = make_staged_changes(files);
-    let ctx = ContextBuilder::build(&changes, &[], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
     assert!(ctx.test_correlations.len() <= 5);
 }
 
@@ -1757,7 +1757,7 @@ fn python_comment_only_change_classified_as_docs() {
     )]);
     let sym_old = make_symbol("process", SymbolKind::Function, "app/main.py", true, false);
     let sym_new = make_symbol("process", SymbolKind::Function, "app/main.py", true, true);
-    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &default_config());
+    let ctx = ContextBuilder::build(&changes, &[sym_old, sym_new], &[], &default_config());
     assert_eq!(
         ctx.suggested_type,
         CommitType::Docs,

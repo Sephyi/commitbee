@@ -412,7 +412,7 @@ impl EvalRunner {
         let symbols = self.load_symbols(fixture_dir);
 
         // Run context builder with injected symbols
-        let context = ContextBuilder::build(&changes, &symbols, &config);
+        let context = ContextBuilder::build(&changes, &symbols, &[], &config);
 
         // Check type inference
         let actual_type = context.suggested_type.as_str().to_string();

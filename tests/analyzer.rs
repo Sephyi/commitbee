@@ -263,7 +263,7 @@ fn extract_symbols_rust_function() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     assert!(
         !symbols.is_empty(),
@@ -292,7 +292,7 @@ fn extract_symbols_rust_struct() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     assert!(
         !symbols.is_empty(),
@@ -333,7 +333,7 @@ fn extract_symbols_no_grammar() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     assert!(
         symbols.is_empty(),
@@ -367,7 +367,7 @@ fn extract_symbols_binary_skipped() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     assert!(
         symbols.is_empty(),
@@ -454,7 +454,7 @@ fn extract_symbols_typescript_function() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let func = symbols
         .iter()
@@ -478,7 +478,7 @@ fn extract_symbols_typescript_class_and_method() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let cls = symbols
         .iter()
@@ -505,7 +505,7 @@ fn extract_symbols_python_function_and_class() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let func = symbols
         .iter()
@@ -536,7 +536,7 @@ fn extract_symbols_python_private_function() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let func = symbols
         .iter()
@@ -560,7 +560,7 @@ fn extract_symbols_go_function() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let func = symbols
         .iter()
@@ -585,7 +585,7 @@ fn extract_symbols_go_unexported_function() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let func = symbols
         .iter()
@@ -609,7 +609,7 @@ fn extract_symbols_javascript_class() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let cls = symbols
         .iter()
@@ -636,7 +636,7 @@ fn extract_symbols_rust_private_function() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let func = symbols
         .iter()
@@ -661,7 +661,7 @@ fn extract_symbols_rust_enum() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let enm = symbols
         .iter()
@@ -683,7 +683,7 @@ fn extract_symbols_rust_trait() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let trt = symbols
         .iter()
@@ -705,7 +705,7 @@ fn extract_symbols_rust_impl() {
     let head_map = HashMap::new();
 
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
     let imp = symbols
         .iter()

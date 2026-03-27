@@ -178,7 +178,8 @@ impl App {
         let (staged_map, head_map) = git.fetch_file_contents(&file_paths).await;
 
         // Parse symbols in parallel across CPU cores (rayon)
-        let symbols = analyzer.extract_symbols(&changes.files, &staged_map, &head_map);
+        let (symbols, symbol_diffs) =
+            analyzer.extract_symbols(&changes.files, &staged_map, &head_map);
 
         debug!(count = symbols.len(), "symbols extracted");
 
@@ -201,7 +202,9 @@ impl App {
                         .interact()?;
 
                     if split_confirm {
-                        return self.run_split_flow(&git, groups, &changes, &symbols).await;
+                        return self
+                            .run_split_flow(&git, groups, &changes, &symbols, &symbol_diffs)
+                            .await;
                     }
                     progress.info("Proceeding with single commit");
                 }
@@ -232,7 +235,7 @@ impl App {
         };
 
         // Step 4: Build context
-        let mut context = ContextBuilder::build(&changes, &symbols, &self.config);
+        let mut context = ContextBuilder::build(&changes, &symbols, &symbol_diffs, &self.config);
         context.history_context = history_prompt;
         debug!(prompt_chars = context.to_prompt().len(), "context built");
 
@@ -556,6 +559,7 @@ impl App {
         groups: Vec<crate::services::splitter::CommitGroup>,
         changes: &StagedChanges,
         symbols: &[CodeSymbol],
+        symbol_diffs: &[crate::domain::diff::SymbolDiff],
     ) -> Result<()> {
         // Safety: check for files with both staged and unstaged changes
         let overlap = git.has_unstaged_overlap().await?;
@@ -608,7 +612,13 @@ impl App {
                 .cloned()
                 .collect();
 
-            let mut context = ContextBuilder::build(&sub_changes, &sub_symbols, &self.config);
+            let sub_diffs: Vec<_> = symbol_diffs
+                .iter()
+                .filter(|d| sub_changes.files.iter().any(|f| f.path == d.file))
+                .cloned()
+                .collect();
+            let mut context =
+                ContextBuilder::build(&sub_changes, &sub_symbols, &sub_diffs, &self.config);
             context.group_rationale = Some(Self::infer_group_rationale(
                 &sub_changes,
                 &group.commit_type,

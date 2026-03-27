@@ -10,8 +10,10 @@ use rayon::prelude::*;
 use regex::Regex;
 use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
+use crate::domain::diff::SymbolDiff;
 use crate::domain::{CodeSymbol, FileChange, SymbolKind};
 use crate::error::Result;
+use crate::services::differ::AstDiffer;
 
 // ─── Embedded query patterns ────────────────────────────────────────────────
 
@@ -142,11 +144,11 @@ impl AnalyzerService {
         changes: &[FileChange],
         staged_content: &HashMap<PathBuf, String>,
         head_content: &HashMap<PathBuf, String>,
-    ) -> Vec<CodeSymbol> {
-        changes
+    ) -> (Vec<CodeSymbol>, Vec<SymbolDiff>) {
+        let pairs: Vec<(Vec<CodeSymbol>, Vec<SymbolDiff>)> = changes
             .par_iter()
             .filter(|change| !change.is_binary)
-            .flat_map(|change| {
+            .map(|change| {
                 let ext = change
                     .path
                     .extension()
@@ -224,7 +226,15 @@ impl AnalyzerService {
                     })
                     .unwrap_or_default()
             })
-            .collect()
+            .collect();
+
+        let mut all_symbols = Vec::new();
+        let mut all_diffs = Vec::new();
+        for (syms, diffs) in pairs {
+            all_symbols.extend(syms);
+            all_diffs.extend(diffs);
+        }
+        (all_symbols, all_diffs)
     }
 
     fn extract_for_file(
@@ -233,17 +243,18 @@ impl AnalyzerService {
         hunks: &[DiffHunk],
         staged_content: &HashMap<PathBuf, String>,
         head_content: &HashMap<PathBuf, String>,
-    ) -> Vec<CodeSymbol> {
+    ) -> (Vec<CodeSymbol>, Vec<SymbolDiff>) {
         let mut parser = Parser::new();
         if parser.set_language(&config.language).is_err() {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         }
 
         let Ok(query) = Query::new(&config.language, config.query_source) else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
 
-        let mut symbols = Vec::new();
+        let mut staged_symbols = Vec::new();
+        let mut head_symbols = Vec::new();
 
         // Parse staged (new) file content
         if let Some(content) = staged_content.get(&change.path) {
@@ -256,7 +267,7 @@ impl AnalyzerService {
                 hunks,
                 true,
             );
-            symbols.extend(changed);
+            staged_symbols = changed;
         }
 
         // Parse HEAD (old) file content
@@ -270,10 +281,92 @@ impl AnalyzerService {
                 hunks,
                 false,
             );
-            symbols.extend(changed);
+            head_symbols = changed;
         }
 
-        symbols
+        // Run AstDiffer on modified symbols (F-002: must run while Trees are alive)
+        let mut diffs = Vec::new();
+        if let (Some(staged_src), Some(head_src)) = (
+            staged_content.get(&change.path),
+            head_content.get(&change.path),
+        ) {
+            let mut diff_parser = Parser::new();
+            if diff_parser.set_language(&config.language).is_ok()
+                && let (Some(staged_tree), Some(head_tree)) = (
+                    diff_parser.parse(staged_src.as_str(), None),
+                    diff_parser.parse(head_src.as_str(), None),
+                )
+            {
+                for staged_sym in &staged_symbols {
+                    if let Some(head_sym) = head_symbols
+                        .iter()
+                        .find(|h| h.kind == staged_sym.kind && h.name == staged_sym.name)
+                        && let (Some(new_node), Some(old_node)) = (
+                            Self::find_node_at_line(&staged_tree, staged_sym.line),
+                            Self::find_node_at_line(&head_tree, head_sym.line),
+                        )
+                    {
+                        let is_function =
+                            matches!(staged_sym.kind, SymbolKind::Function | SymbolKind::Method);
+                        let changes = if is_function {
+                            AstDiffer::diff_function(old_node, head_src, new_node, staged_src)
+                        } else {
+                            AstDiffer::diff_struct(old_node, head_src, new_node, staged_src)
+                        };
+                        if !changes.is_empty() {
+                            diffs.push(SymbolDiff {
+                                name: staged_sym.name.clone(),
+                                file: staged_sym.file.clone(),
+                                line: staged_sym.line,
+                                parent_scope: staged_sym.parent_scope.clone(),
+                                changes,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut all_symbols = staged_symbols;
+        all_symbols.extend(head_symbols);
+        (all_symbols, diffs)
+    }
+
+    /// Find a definition node (function/struct/etc) at the given 1-based line number.
+    /// Recurses into container nodes (impl blocks, class bodies) to find methods.
+    fn find_node_at_line(tree: &tree_sitter::Tree, line: usize) -> Option<tree_sitter::Node<'_>> {
+        let root = tree.root_node();
+        let target_row = line.saturating_sub(1); // tree-sitter uses 0-based rows
+        Self::find_node_at_row(root, target_row)
+    }
+
+    fn find_node_at_row(
+        parent: tree_sitter::Node<'_>,
+        target_row: usize,
+    ) -> Option<tree_sitter::Node<'_>> {
+        for i in 0..parent.child_count() {
+            #[allow(clippy::cast_possible_truncation)]
+            if let Some(child) = parent.child(i as u32)
+                && child.start_position().row <= target_row
+                && child.end_position().row >= target_row
+            {
+                // If this is a container (impl, class, etc.), recurse into it
+                if matches!(
+                    child.kind(),
+                    "impl_item"
+                        | "class_declaration"
+                        | "class_definition"
+                        | "declaration_list"
+                        | "class_body"
+                        | "interface_body"
+                ) && let Some(inner) = Self::find_node_at_row(child, target_row)
+                {
+                    return Some(inner);
+                }
+                return Some(child);
+            }
+        }
+        None
     }
 
     fn extract_changed_symbols_with_query(

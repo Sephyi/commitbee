@@ -116,7 +116,9 @@ fn extract_symbols_from_source(source: &str, ext: &str) -> Vec<commitbee::domain
     let staged_map = HashMap::from([(PathBuf::from(&path), source.to_string())]);
     let head_map = HashMap::new();
     let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-    analyzer.extract_symbols(&[change], &staged_map, &head_map)
+    analyzer
+        .extract_symbols(&[change], &staged_map, &head_map)
+        .0
 }
 
 // ─── Parent scope extraction ─────────────────────────────────────────────────
@@ -298,7 +300,7 @@ mod java {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let class = symbols
             .iter()
@@ -341,7 +343,7 @@ mod java {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let iface = symbols
             .iter()
@@ -369,7 +371,7 @@ mod java {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let e = symbols
             .iter()
@@ -399,7 +401,7 @@ mod c_lang {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let func = symbols
             .iter()
@@ -426,7 +428,7 @@ mod c_lang {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let strct = symbols
             .iter()
@@ -455,7 +457,7 @@ enum Status {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         // .h files should be recognized as C
         assert!(
@@ -485,7 +487,7 @@ typedef struct {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let has_type = symbols.iter().any(|s| s.kind == SymbolKind::Type);
         assert!(has_type, "expected at least one Type symbol from typedef");
@@ -516,7 +518,7 @@ int main() {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let class = symbols
             .iter()
@@ -544,7 +546,7 @@ int main() {
             let head_map = HashMap::new();
 
             let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-            let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+            let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
             assert!(
                 !symbols.is_empty(),
@@ -566,7 +568,7 @@ int main() {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let strct = symbols
             .iter()
@@ -601,7 +603,7 @@ end
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let class = symbols
             .iter()
@@ -632,7 +634,7 @@ end
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let module = symbols
             .iter()
@@ -668,7 +670,7 @@ mod csharp {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let class = symbols
             .iter()
@@ -711,7 +713,7 @@ mod csharp {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let iface = symbols
             .iter()
@@ -738,7 +740,7 @@ mod csharp {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let strct = symbols
             .iter()
@@ -772,7 +774,7 @@ mod rust_signature {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let func = symbols
             .iter()
@@ -817,7 +819,7 @@ mod rust_signature {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let method = symbols
             .iter()
@@ -857,7 +859,7 @@ mod typescript_signature {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let func = symbols
             .iter()
@@ -896,7 +898,7 @@ mod python_signature {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let func = symbols
             .iter()
@@ -937,7 +939,7 @@ mod go_signature {
         let head_map = HashMap::new();
 
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let func = symbols
             .iter()
@@ -980,7 +982,7 @@ mod java_signature {
         let staged_map = HashMap::from([(PathBuf::from("src/Handler.java"), source.to_string())]);
         let head_map = HashMap::new();
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let method = symbols.iter().find(|s| s.name == "process");
         assert!(
@@ -1011,7 +1013,7 @@ mod c_signature {
         let staged_map = HashMap::from([(PathBuf::from("src/math.c"), source.to_string())]);
         let head_map = HashMap::new();
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let func = symbols.iter().find(|s| s.name == "calculate");
         assert!(
@@ -1042,7 +1044,7 @@ mod cpp_signature {
         let staged_map = HashMap::from([(PathBuf::from("src/parser.cpp"), source.to_string())]);
         let head_map = HashMap::new();
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let cls = symbols.iter().find(|s| s.name == "Parser");
         assert!(cls.is_some(), "expected symbol 'Parser', got: {symbols:?}");
@@ -1070,7 +1072,7 @@ mod ruby_signature {
         let staged_map = HashMap::from([(PathBuf::from("src/greeter.rb"), source.to_string())]);
         let head_map = HashMap::new();
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let cls = symbols.iter().find(|s| s.name == "Greeter");
         assert!(cls.is_some(), "expected symbol 'Greeter', got: {symbols:?}");
@@ -1098,7 +1100,7 @@ mod csharp_signature {
         let staged_map = HashMap::from([(PathBuf::from("src/Service.cs"), source.to_string())]);
         let head_map = HashMap::new();
         let analyzer = AnalyzerService::new().expect("AnalyzerService::new()");
-        let symbols = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+        let (symbols, _) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
 
         let cls = symbols.iter().find(|s| s.name == "Service");
         assert!(cls.is_some(), "expected symbol 'Service', got: {symbols:?}");
