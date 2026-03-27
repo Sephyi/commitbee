@@ -5,6 +5,38 @@
 use super::CommitType;
 use super::diff::SymbolDiff;
 
+/// A detected change intent pattern from diff analysis.
+#[derive(Debug, Clone)]
+pub struct ChangeIntent {
+    pub kind: IntentKind,
+    pub confidence: f32,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum IntentKind {
+    ErrorHandlingAdded,
+    #[allow(dead_code)]
+    FunctionExtracted,
+    TestAdded,
+    LoggingAdded,
+    DependencyUpdate,
+    PerformanceOptimization,
+}
+
+impl IntentKind {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ErrorHandlingAdded => "error handling added",
+            Self::FunctionExtracted => "function extracted",
+            Self::TestAdded => "test added",
+            Self::LoggingAdded => "logging added",
+            Self::DependencyUpdate => "dependency update",
+            Self::PerformanceOptimization => "performance optimization",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PromptContext {
     pub change_summary: String,
@@ -46,6 +78,10 @@ pub struct PromptContext {
     /// Structured semantic changes for modified symbols (from AstDiffer).
     /// Formatted as a `STRUCTURED CHANGES:` section in the prompt.
     pub structured_changes: Vec<SymbolDiff>,
+    /// Change intent patterns detected from diff content.
+    pub intents: Vec<ChangeIntent>,
+    /// Whether any modified symbol added `unsafe` (Rust)
+    pub has_unsafe_addition: bool,
 }
 
 impl PromptContext {
@@ -55,6 +91,23 @@ impl PromptContext {
         let breaking_warning = self.format_breaking_warning();
         let evidence_section = self.format_evidence_section();
         let constraints_section = self.format_constraints_section();
+        let intent_section = if self.intents.is_empty() {
+            String::new()
+        } else {
+            let lines: Vec<String> = self
+                .intents
+                .iter()
+                .map(|i| {
+                    format!(
+                        "  {} (confidence: {:.1}, evidence: {})",
+                        i.kind.as_str(),
+                        i.confidence,
+                        i.evidence
+                    )
+                })
+                .collect();
+            format!("\nINTENT:\n{}\n", lines.join("\n"))
+        };
         let connections_section = if self.connections.is_empty() {
             String::new()
         } else {
@@ -170,7 +223,7 @@ impl PromptContext {
 SUMMARY: {summary}
 FILES: {files}
 SUGGESTED TYPE: {commit_type}{scope}
-{group_rationale}{evidence}{primary_change}{symbols}{structured}{connections}{imports}{related}
+{group_rationale}{evidence}{intent}{primary_change}{symbols}{structured}{connections}{imports}{related}
 DIFF:
 {diff}
 {constraints}{breaking}{metadata_breaking}{locale}{focus}{history}
@@ -188,6 +241,7 @@ Respond with ONLY this JSON:
                 .map(|s| format!("\nSCOPE: {}", s))
                 .unwrap_or_default(),
             evidence = evidence_section,
+            intent = intent_section,
             symbols = symbols_section,
             structured = structured_section,
             connections = connections_section,
@@ -311,6 +365,9 @@ Respond with ONLY this JSON:
                 "- Metadata breaking changes detected (version requirements raised, features removed, etc.): \
                  set breaking_change to describe the compatibility impact.",
             );
+        }
+        if self.has_unsafe_addition {
+            rules.push("- Unsafe code added: mention the safety justification in the commit body.");
         }
 
         if rules.is_empty() {

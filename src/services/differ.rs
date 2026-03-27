@@ -52,6 +52,42 @@ impl AstDiffer {
             changes.push(ChangeDetail::AsyncChanged(new_async));
         }
 
+        // Compare unsafe (Rust)
+        let old_unsafe = Self::has_keyword(old_node, "unsafe");
+        let new_unsafe = Self::has_keyword(new_node, "unsafe");
+        if !old_unsafe && new_unsafe {
+            changes.push(ChangeDetail::UnsafeAdded);
+        } else if old_unsafe && !new_unsafe {
+            changes.push(ChangeDetail::UnsafeRemoved);
+        }
+
+        // Compare derive attributes (Rust)
+        let old_derives = Self::extract_derives(old_node, old_source);
+        let new_derives = Self::extract_derives(new_node, new_source);
+        let added: Vec<String> = new_derives
+            .iter()
+            .filter(|d| !old_derives.contains(d))
+            .cloned()
+            .collect();
+        if !added.is_empty() {
+            changes.push(ChangeDetail::DeriveAdded(added));
+        }
+        let removed: Vec<String> = old_derives
+            .iter()
+            .filter(|d| !new_derives.contains(d))
+            .cloned()
+            .collect();
+        if !removed.is_empty() {
+            changes.push(ChangeDetail::DeriveRemoved(removed));
+        }
+
+        // Compare mutability (Rust)
+        let old_has_mut = Self::has_mut_params(old_node, old_source);
+        let new_has_mut = Self::has_mut_params(new_node, new_source);
+        if old_has_mut != new_has_mut {
+            changes.push(ChangeDetail::MutabilityChanged);
+        }
+
         // Compare body using whitespace-stripped comparison (F-015)
         let old_body = Self::extract_body_text(old_node, old_source);
         let new_body = Self::extract_body_text(new_node, new_source);
@@ -219,6 +255,74 @@ impl AstDiffer {
                 node.child(i as u32)
             })
             .any(|c| c.kind() == "async")
+    }
+
+    /// Check if a node or its `function_modifiers` child contains a keyword.
+    ///
+    /// In tree-sitter Rust, `unsafe fn` produces a `function_modifiers` child
+    /// containing the `unsafe` token, rather than a bare `unsafe` child.
+    fn has_keyword(node: tree_sitter::Node, keyword: &str) -> bool {
+        (0..node.child_count())
+            .filter_map(|i| {
+                #[allow(clippy::cast_possible_truncation)]
+                node.child(i as u32)
+            })
+            .any(|c| {
+                if c.kind() == keyword {
+                    return true;
+                }
+                // Check inside modifier wrapper nodes (e.g., function_modifiers)
+                if c.kind().ends_with("_modifiers") || c.kind() == "modifiers" {
+                    return (0..c.child_count())
+                        .filter_map(|j| {
+                            #[allow(clippy::cast_possible_truncation)]
+                            c.child(j as u32)
+                        })
+                        .any(|gc| gc.kind() == keyword);
+                }
+                false
+            })
+    }
+
+    /// Extract derive trait names from `#[derive(...)]` attributes on a node.
+    fn extract_derives(node: tree_sitter::Node, source: &str) -> Vec<String> {
+        let mut derives = Vec::new();
+        for i in 0..node.child_count() {
+            #[allow(clippy::cast_possible_truncation)]
+            let Some(child) = node.child(i as u32) else {
+                continue;
+            };
+            if !matches!(child.kind(), "attribute_item" | "attribute") {
+                continue;
+            }
+            let Ok(raw) = child.utf8_text(source.as_bytes()) else {
+                continue;
+            };
+            let text = raw.trim();
+            if let Some(start) = text.find("derive(") {
+                let inner = &text[start + 7..];
+                if let Some(end) = inner.find(')') {
+                    for item in inner[..end].split(',') {
+                        let trimmed = item.trim();
+                        if !trimmed.is_empty() {
+                            derives.push(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        derives
+    }
+
+    fn has_mut_params(node: tree_sitter::Node, source: &str) -> bool {
+        node.child_by_field_name("parameters")
+            .map(|params| {
+                params
+                    .utf8_text(source.as_bytes())
+                    .map(|text| text.contains("mut "))
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false)
     }
 
     fn extract_body_text(node: tree_sitter::Node, source: &str) -> Option<String> {
@@ -435,6 +539,69 @@ mod tests {
         assert!(
             changes.is_empty(),
             "Phase 1: diff_struct should return empty"
+        );
+    }
+
+    #[test]
+    fn detect_unsafe_added() {
+        let old_src = "fn process() {\n    do_thing();\n}\n";
+        let new_src = "unsafe fn process() {\n    do_thing();\n}\n";
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let old_tree = parser.parse(old_src, None).unwrap();
+        let new_tree = parser.parse(new_src, None).unwrap();
+        let changes = AstDiffer::diff_function(
+            first_function(&old_tree),
+            old_src,
+            first_function(&new_tree),
+            new_src,
+        );
+        assert!(
+            changes
+                .iter()
+                .any(|c| matches!(c, ChangeDetail::UnsafeAdded)),
+            "should detect unsafe added: {changes:?}"
+        );
+    }
+
+    #[test]
+    fn detect_mutability_change() {
+        let old_src = "fn process(items: Vec<i32>) {\n    items.len();\n}\n";
+        let new_src = "fn process(mut items: Vec<i32>) {\n    items.push(1);\n}\n";
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let old_tree = parser.parse(old_src, None).unwrap();
+        let new_tree = parser.parse(new_src, None).unwrap();
+        let changes = AstDiffer::diff_function(
+            first_function(&old_tree),
+            old_src,
+            first_function(&new_tree),
+            new_src,
+        );
+        assert!(
+            changes
+                .iter()
+                .any(|c| matches!(c, ChangeDetail::MutabilityChanged)),
+            "should detect mutability change: {changes:?}"
+        );
+    }
+
+    #[test]
+    fn format_short_marker_variants() {
+        assert_eq!(ChangeDetail::UnsafeAdded.format_short(), "+unsafe");
+        assert_eq!(ChangeDetail::UnsafeRemoved.format_short(), "-unsafe");
+        assert_eq!(
+            ChangeDetail::DeriveAdded(vec!["Debug".into(), "Clone".into()]).format_short(),
+            "+derive(Debug, Clone)"
+        );
+        assert_eq!(ChangeDetail::ExportAdded.format_short(), "+export");
+        assert_eq!(
+            ChangeDetail::MutabilityChanged.format_short(),
+            "mutability changed"
         );
     }
 }

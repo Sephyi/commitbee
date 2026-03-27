@@ -53,6 +53,26 @@ pub enum ChangeDetail {
         old_type: String,
         new_type: String,
     },
+    /// Unsafe block/function added (Rust)
+    UnsafeAdded,
+    /// Unsafe block/function removed (Rust)
+    UnsafeRemoved,
+    /// Derive macro added: e.g., ["Debug", "Clone"]
+    DeriveAdded(Vec<String>),
+    /// Derive macro removed
+    DeriveRemoved(Vec<String>),
+    /// Decorator added: e.g., "@staticmethod" (Python), "@Override" (Java)
+    DecoratorAdded(String),
+    /// Decorator removed
+    DecoratorRemoved(String),
+    /// Export added (JS/TS `export`)
+    ExportAdded,
+    /// Export removed
+    ExportRemoved,
+    /// Mutability changed on parameter (Rust `mut`)
+    MutabilityChanged,
+    /// Generic constraint/where clause changed
+    GenericConstraintChanged,
 }
 
 #[allow(dead_code)]
@@ -114,6 +134,16 @@ impl ChangeDetail {
             } => {
                 format!("field {name} {old_type} \u{2192} {new_type}")
             }
+            Self::UnsafeAdded => "+unsafe".into(),
+            Self::UnsafeRemoved => "-unsafe".into(),
+            Self::DeriveAdded(derives) => format!("+derive({})", derives.join(", ")),
+            Self::DeriveRemoved(derives) => format!("-derive({})", derives.join(", ")),
+            Self::DecoratorAdded(d) => format!("+{d}"),
+            Self::DecoratorRemoved(d) => format!("-{d}"),
+            Self::ExportAdded => "+export".into(),
+            Self::ExportRemoved => "-export".into(),
+            Self::MutabilityChanged => "mutability changed".into(),
+            Self::GenericConstraintChanged => "generic constraints changed".into(),
         }
     }
 }

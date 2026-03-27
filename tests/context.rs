@@ -7,7 +7,9 @@ mod helpers;
 use std::path::PathBuf;
 
 use commitbee::config::Config;
-use commitbee::domain::{ChangeStatus, CodeSymbol, CommitType, FileCategory, SymbolKind};
+use commitbee::domain::{
+    ChangeStatus, CodeSymbol, CommitType, FileCategory, IntentKind, SymbolKind,
+};
 use commitbee::services::context::ContextBuilder;
 use helpers::{make_file_change, make_renamed_file, make_staged_changes};
 
@@ -1865,5 +1867,195 @@ fn symbol_budget_reduced_when_structural_diffs_present() {
         "structural diffs should free budget for raw diff: with={} without={}",
         ctx_with.truncated_diff.len(),
         ctx_without.truncated_diff.len()
+    );
+}
+
+// ─── Unsafe addition constraint ───────────────────────────────────────────────
+
+#[test]
+fn unsafe_addition_triggers_constraint() {
+    use commitbee::domain::diff::{ChangeDetail, SymbolDiff};
+
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+unsafe fn process() {}\n",
+        1,
+        0,
+    )]);
+    let diffs = vec![SymbolDiff {
+        name: "process".into(),
+        file: "src/lib.rs".into(),
+        line: 1,
+        parent_scope: None,
+        changes: vec![ChangeDetail::UnsafeAdded],
+    }];
+    let ctx = ContextBuilder::build(&changes, &[], &diffs, &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("Unsafe code added"),
+        "should contain unsafe constraint: {}",
+        prompt
+    );
+}
+
+// ─── Change intent detection ──────────────────────────────────────────────────
+
+#[test]
+fn detect_error_handling_intent() {
+    let diff = "+    let result = validate(input)?;\n\
+                +    let data = parse(raw).map_err(|e| Error::Parse(e))?;\n\
+                +    if let Err(e) = process() {\n\
+                +        return Err(e);\n\
+                +    }\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        diff,
+        4,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    assert!(
+        !ctx.intents.is_empty(),
+        "should detect error handling intent"
+    );
+    assert_eq!(ctx.intents[0].kind, IntentKind::ErrorHandlingAdded);
+}
+
+#[test]
+fn detect_test_added_intent() {
+    let diff = "+#[test]\n\
+                +fn test_validation() {\n\
+                +    assert_eq!(validate(\"ok\"), true);\n\
+                +    assert!(check());\n\
+                +}\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "tests/validation.rs",
+        ChangeStatus::Added,
+        diff,
+        5,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    assert!(
+        ctx.intents.iter().any(|i| i.kind == IntentKind::TestAdded),
+        "should detect test intent: {:?}",
+        ctx.intents
+    );
+}
+
+#[test]
+fn detect_dependency_update_intent() {
+    let diff = "+tokio = \"1.40\"\n\
+                -tokio = \"1.38\"\n\
+                +serde = { version = \"1.0.210\" }\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "Cargo.toml",
+        ChangeStatus::Modified,
+        diff,
+        2,
+        1,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    assert!(
+        ctx.intents
+            .iter()
+            .any(|i| i.kind == IntentKind::DependencyUpdate),
+        "should detect dependency update: {:?}",
+        ctx.intents
+    );
+}
+
+#[test]
+fn intent_shown_in_prompt() {
+    let diff = "+    let result = validate(input)?;\n\
+                +    let data = parse(raw).map_err(|e| Error::Parse(e))?;\n\
+                +    if let Err(e) = process() {\n\
+                +        return Err(e);\n\
+                +    }\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        diff,
+        4,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    let prompt = ctx.to_prompt();
+    assert!(
+        prompt.contains("INTENT:"),
+        "prompt should show intent section"
+    );
+}
+
+#[test]
+fn no_intent_for_small_changes() {
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        "+let x = 1;\n",
+        1,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    assert!(
+        ctx.intents.is_empty(),
+        "small change should not trigger intent"
+    );
+}
+
+#[test]
+fn detect_logging_intent() {
+    let diff = "+    debug!(\"entering function\");\n\
+                +    info!(\"processing {} items\", count);\n\
+                +    warn!(\"deprecated API called\");\n\
+                +    error!(\"failed to connect\");\n";
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        diff,
+        4,
+        0,
+    )]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    assert!(
+        ctx.intents
+            .iter()
+            .any(|i| i.kind == IntentKind::LoggingAdded),
+        "should detect logging intent: {:?}",
+        ctx.intents
+    );
+}
+
+#[test]
+fn intents_capped_at_three() {
+    // Build a diff that triggers error handling, test, and logging patterns plus dep update
+    let diff = "+    let result = validate(input)?;\n\
+                +    let data = parse(raw).map_err(|e| Error::Parse(e))?;\n\
+                +    if let Err(e) = process() {\n\
+                +#[test]\n\
+                +fn test_foo() {\n\
+                +    assert!(true);\n\
+                +    assert_eq!(1, 1);\n\
+                +    debug!(\"test\");\n\
+                +    info!(\"test\");\n\
+                +    warn!(\"test\");\n\
+                +    error!(\"test\");\n";
+    let changes = make_staged_changes(vec![
+        make_file_change("src/lib.rs", ChangeStatus::Modified, diff, 11, 0),
+        make_file_change(
+            "Cargo.toml",
+            ChangeStatus::Modified,
+            "+tokio = { version = \"1.40\" }\n",
+            1,
+            0,
+        ),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    assert!(
+        ctx.intents.len() <= 3,
+        "intents should be capped at 3, got {}",
+        ctx.intents.len()
     );
 }

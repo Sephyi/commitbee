@@ -5,10 +5,10 @@
 use std::collections::HashSet;
 
 use crate::config::Config;
-use crate::domain::diff::SymbolDiff;
+use crate::domain::diff::{ChangeDetail, SymbolDiff};
 use crate::domain::{
-    ChangeStatus, CodeSymbol, CommitType, FileCategory, PromptContext, SpanChangeKind,
-    StagedChanges, SymbolKind,
+    ChangeIntent, ChangeStatus, CodeSymbol, CommitType, FileCategory, IntentKind, PromptContext,
+    SpanChangeKind, StagedChanges, SymbolKind,
 };
 
 const SYSTEM_PROMPT_RESERVE: usize = 2_000;
@@ -145,6 +145,9 @@ impl ContextBuilder {
             .cloned()
             .collect();
 
+        // Detect change intents from diff patterns
+        let intents = Self::detect_intents(changes);
+
         // Infer commit type AFTER classification so it can see whitespace-only data
         let all_modified_ws = !modified_symbols.is_empty()
             && modified_symbols
@@ -160,6 +163,8 @@ impl ContextBuilder {
             all_modified_ws,
             all_modified_docs,
         );
+        // Intent-based type refinement (conservative — only for hard-to-detect patterns)
+        let commit_type = Self::refine_type_with_intents(commit_type, &intents);
         let scope = if config.format.include_scope {
             Self::infer_scope(changes)
         } else {
@@ -213,6 +218,11 @@ impl ContextBuilder {
             .count();
         let has_new_public_api = symbols_deduped.iter().any(|s| s.is_added && s.is_public);
         let is_dependency_only = Self::detect_dependency_only(changes);
+        let has_unsafe_addition = diffs.iter().any(|d| {
+            d.changes
+                .iter()
+                .any(|c| matches!(c, ChangeDetail::UnsafeAdded))
+        });
 
         PromptContext {
             change_summary,
@@ -239,6 +249,8 @@ impl ContextBuilder {
             import_changes: Self::detect_import_changes(changes),
             test_correlations: Self::detect_test_correlation(changes),
             structured_changes: diffs.to_vec(),
+            intents,
+            has_unsafe_addition,
         }
     }
 
@@ -1035,6 +1047,145 @@ impl ContextBuilder {
         }
         correlations.truncate(5);
         correlations
+    }
+
+    /// Detect change intent patterns from diff content.
+    ///
+    /// Scans added lines for common patterns (error handling, tests, logging,
+    /// dependency updates) and emits intents with confidence scores based on
+    /// frequency relative to total added lines. Capped at 3 intents.
+    fn detect_intents(changes: &StagedChanges) -> Vec<ChangeIntent> {
+        let mut intents = Vec::new();
+
+        let mut error_handling_count: usize = 0;
+        let mut test_count: usize = 0;
+        let mut logging_count: usize = 0;
+        let mut dep_update = false;
+        let mut total_added: usize = 0;
+
+        for file in &changes.files {
+            let filename = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            for line in file.diff.lines() {
+                if !line.starts_with('+') || line.starts_with("+++") {
+                    continue;
+                }
+                total_added += 1;
+                let content = &line[1..];
+                let trimmed = content.trim();
+
+                // Error handling patterns
+                if trimmed.contains("Result<")
+                    || trimmed.contains("Result::")
+                    || trimmed.ends_with('?')
+                    || trimmed.contains("Err(")
+                    || trimmed.contains(".expect(")
+                    || trimmed.contains("try {")
+                    || trimmed.contains("catch ")
+                    || trimmed.contains(".unwrap_or(")
+                    || trimmed.contains(".map_err(")
+                {
+                    error_handling_count += 1;
+                }
+
+                // Test patterns
+                if trimmed.contains("#[test]")
+                    || trimmed.contains("#[tokio::test]")
+                    || trimmed.starts_with("fn test_")
+                    || trimmed.starts_with("async fn test_")
+                    || trimmed.contains("assert!")
+                    || trimmed.contains("assert_eq!")
+                {
+                    test_count += 1;
+                }
+
+                // Logging patterns
+                if trimmed.contains("tracing::")
+                    || trimmed.contains("log::")
+                    || trimmed.contains("debug!(")
+                    || trimmed.contains("info!(")
+                    || trimmed.contains("warn!(")
+                    || trimmed.contains("error!(")
+                    || trimmed.contains("console.log")
+                    || trimmed.contains("println!(")
+                    || trimmed.contains("eprintln!(")
+                {
+                    logging_count += 1;
+                }
+            }
+
+            // Dependency update detection
+            if matches!(
+                filename,
+                "Cargo.toml" | "package.json" | "pyproject.toml" | "go.mod"
+            ) {
+                let has_version_change = file.diff.lines().any(|l| {
+                    l.starts_with('+')
+                        && !l.starts_with("+++")
+                        && (l.contains("version") || l.contains("\"^") || l.contains("\"~"))
+                });
+                if has_version_change {
+                    dep_update = true;
+                }
+            }
+        }
+
+        // Emit intents with confidence based on frequency
+        if total_added > 0 {
+            if error_handling_count > 2 {
+                let confidence = (error_handling_count as f32 / total_added as f32).min(1.0);
+                intents.push(ChangeIntent {
+                    kind: IntentKind::ErrorHandlingAdded,
+                    confidence,
+                    evidence: format!(
+                        "{error_handling_count} error handling patterns in added lines"
+                    ),
+                });
+            }
+
+            if test_count > 2 {
+                let confidence = (test_count as f32 / total_added as f32).min(1.0);
+                intents.push(ChangeIntent {
+                    kind: IntentKind::TestAdded,
+                    confidence,
+                    evidence: format!("{test_count} test patterns in added lines"),
+                });
+            }
+
+            if logging_count > 2 {
+                let confidence = (logging_count as f32 / total_added as f32).min(1.0);
+                intents.push(ChangeIntent {
+                    kind: IntentKind::LoggingAdded,
+                    confidence,
+                    evidence: format!("{logging_count} logging statements added"),
+                });
+            }
+        }
+
+        if dep_update {
+            intents.push(ChangeIntent {
+                kind: IntentKind::DependencyUpdate,
+                confidence: 0.9,
+                evidence: "version changes in dependency manifest".into(),
+            });
+        }
+
+        intents.truncate(3); // Cap to avoid prompt bloat
+        intents
+    }
+
+    /// Refine the inferred commit type based on high-confidence intent signals.
+    ///
+    /// Conservative: only overrides for patterns that are hard to detect from
+    /// file categories or symbols alone (e.g., performance optimization).
+    /// Other intents inform the LLM via the prompt, not override the heuristic.
+    fn refine_type_with_intents(base_type: CommitType, intents: &[ChangeIntent]) -> CommitType {
+        for intent in intents {
+            if intent.confidence >= 0.5 && intent.kind == IntentKind::PerformanceOptimization {
+                return CommitType::Perf;
+            }
+        }
+        base_type
     }
 
     fn is_import_line(line: &str) -> bool {
