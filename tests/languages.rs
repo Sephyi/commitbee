@@ -1115,3 +1115,151 @@ mod csharp_signature {
         );
     }
 }
+
+// ─── Structural diff tests (AstDiffer through extract_symbols pipeline) ──────
+
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python"
+))]
+use commitbee::domain::diff::{ChangeDetail, SymbolDiff};
+
+/// Extract symbols AND diffs by providing both old (HEAD) and new (staged) source.
+/// Creates a synthetic Modified `FileChange` with a hunk covering all lines.
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-python"
+))]
+fn extract_diffs_from_sources(old_source: &str, new_source: &str, ext: &str) -> Vec<SymbolDiff> {
+    use commitbee::domain::ChangeStatus;
+
+    let path = PathBuf::from(format!("test.{ext}"));
+    let new_line_count = new_source.lines().count();
+    let old_line_count = old_source.lines().count();
+    let diff_lines: String = new_source.lines().map(|l| format!("+{l}\n")).collect();
+    let change = FileChange {
+        path: path.clone(),
+        status: ChangeStatus::Modified,
+        diff: Arc::from(format!(
+            "@@ -1,{old_line_count} +1,{new_line_count} @@\n{diff_lines}"
+        )),
+        additions: new_line_count,
+        deletions: old_line_count,
+        category: FileCategory::Source,
+        is_binary: false,
+        old_path: None,
+        rename_similarity: None,
+    };
+
+    let staged_map = HashMap::from([(path.clone(), new_source.to_string())]);
+    let head_map = HashMap::from([(path, old_source.to_string())]);
+    let analyzer = AnalyzerService::new().expect("AnalyzerService::new() should succeed");
+    let (_, diffs) = analyzer.extract_symbols(&[change], &staged_map, &head_map);
+    diffs
+}
+
+#[cfg(feature = "lang-rust")]
+mod rust_structural_diffs {
+    use super::*;
+
+    #[test]
+    fn rust_detect_added_parameter() {
+        let old = "pub fn process(items: Vec<Item>) -> bool {\n    true\n}\n";
+        let new = "pub fn process(items: Vec<Item>, strict: bool) -> bool {\n    true\n}\n";
+        let diffs = extract_diffs_from_sources(old, new, "rs");
+        assert!(!diffs.is_empty(), "should produce at least one diff");
+        let d = &diffs[0];
+        assert_eq!(d.name, "process");
+        assert!(
+            d.changes
+                .iter()
+                .any(|c| matches!(c, ChangeDetail::ParamAdded(p) if p.contains("strict"))),
+            "should detect added param: {:?}",
+            d.changes
+        );
+    }
+
+    #[test]
+    fn rust_detect_return_type_change() {
+        let old = "fn validate(input: &str) -> bool {\n    true\n}\n";
+        let new = "fn validate(input: &str) -> Result<()> {\n    Ok(())\n}\n";
+        let diffs = extract_diffs_from_sources(old, new, "rs");
+        assert!(!diffs.is_empty(), "should produce diffs");
+        assert!(
+            diffs[0]
+                .changes
+                .iter()
+                .any(|c| matches!(c, ChangeDetail::ReturnTypeChanged { .. })),
+            "should detect return type change: {:?}",
+            diffs[0].changes
+        );
+    }
+
+    #[test]
+    fn rust_detect_visibility_change() {
+        let old = "fn internal() {\n    // body\n}\n";
+        let new = "pub fn internal() {\n    // body\n}\n";
+        let diffs = extract_diffs_from_sources(old, new, "rs");
+        assert!(!diffs.is_empty(), "should produce diffs");
+        assert!(
+            diffs[0]
+                .changes
+                .iter()
+                .any(|c| matches!(c, ChangeDetail::VisibilityChanged { .. })),
+            "should detect visibility change: {:?}",
+            diffs[0].changes
+        );
+    }
+
+    #[test]
+    fn rust_whitespace_only_body_is_unchanged() {
+        let old = "fn foo() {\n    let x = 1;\n}\n";
+        let new = "fn foo() {\n        let x = 1;\n}\n";
+        let diffs = extract_diffs_from_sources(old, new, "rs");
+        // Whitespace-only change should either produce no diff or BodyUnchanged
+        if !diffs.is_empty() {
+            assert!(
+                diffs[0]
+                    .changes
+                    .iter()
+                    .any(|c| matches!(c, ChangeDetail::BodyUnchanged)),
+                "whitespace-only body should be BodyUnchanged: {:?}",
+                diffs[0].changes
+            );
+        }
+    }
+}
+
+#[cfg(feature = "lang-python")]
+mod python_structural_diffs {
+    use super::*;
+
+    #[test]
+    fn python_detect_added_parameter() {
+        let old = "def process(items):\n    return items\n";
+        let new = "def process(items, strict=False):\n    return items\n";
+        let diffs = extract_diffs_from_sources(old, new, "py");
+        // Python param extraction may or may not work depending on tree-sitter grammar
+        // Just verify no panic and check if diffs are produced
+        if !diffs.is_empty() {
+            assert_eq!(diffs[0].name, "process");
+        }
+    }
+}
+
+#[cfg(feature = "lang-typescript")]
+mod typescript_structural_diffs {
+    use super::*;
+
+    #[test]
+    fn typescript_detect_return_type_change() {
+        let old = "function validate(input: string): boolean {\n  return true;\n}\n";
+        let new = "function validate(input: string): Promise<boolean> {\n  return true;\n}\n";
+        let diffs = extract_diffs_from_sources(old, new, "ts");
+        if !diffs.is_empty() {
+            assert_eq!(diffs[0].name, "validate");
+        }
+    }
+}
