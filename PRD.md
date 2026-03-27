@@ -6,18 +6,19 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 # CommitBee — Product Requirements Document
 
-**Version**: 4.2
-**Date**: 2026-03-22
+**Version**: 4.3
+**Date**: 2026-03-27
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)  
 
 ## Changelog
 
 <details>
-<summary>Revision history (v3.3 → v4.2)</summary>
+<summary>Revision history (v3.3 → v4.3)</summary>
 
 | Version | Date       | Summary |
 |---------|------------|---------|
+| 4.3     | 2026-03-27 | v0.6.0 deep semantic understanding (in progress): Tier 2 — parent scope extraction for impl/class/trait methods (7 languages), import change detection (Rust/TS/JS/Python/Go/C/C++), doc-vs-code SpanChangeKind classification with Mixed variant, test-to-code ratio type inference, test file correlation. Tier 1 — SymbolDiff types + ChangeDetail enum (15 variants), AstDiffer for structural function diffing (params, return type, visibility, async, body), pipeline integration into extract_symbols/ContextBuilder. Plans dialectic-verified by GLM5 + Codex gpt-5.4 + Gemini 2.5 Pro with 12 fixes applied. 401+ tests. |
 | 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 359 tests. |
 | 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 359 tests. |
 | 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |

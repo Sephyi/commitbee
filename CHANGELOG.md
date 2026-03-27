@@ -8,7 +8,22 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 All notable changes to CommitBee are documented here.
 
-## `v0.5.0` — Beyond the Diff (current)
+## `v0.6.0` — Deep Understanding (current, in progress)
+
+### Semantic Analysis
+
+- **Parent scope extraction** — Methods inside `impl`, `class`, or `trait` blocks now show their parent in the prompt: `CommitValidator > pub fn validate(...)`. Walks the AST tree through intermediate nodes (declaration_list, class_body). Verified across 7 languages (Rust, Python, TypeScript, Java, Go, Ruby, C#).
+- **Import change detection** — New `IMPORTS CHANGED:` prompt section shows added/removed import statements. Supports Rust `use`, JS/TS `import`, Python `from`/`import`, Node `require()`, and C/C++ `#include`. Capped at 10 entries.
+- **Doc-vs-code distinction** — `SpanChangeKind` enum classifies modified symbols as WhitespaceOnly, DocsOnly, Mixed, or Semantic. Doc-only changes suggest `docs` type. Modified symbols show `[docs only]` or `[docs + code]` suffix in the prompt.
+- **Test file correlation** — New `RELATED FILES:` prompt section shows when source files and their matching test files are both staged. Stem-based matching, capped at 5 entries.
+- **Structural AST diffs** — `AstDiffer` compares old and new tree-sitter nodes for modified symbols, producing structured `SymbolDiff` descriptions (parameter added, return type changed, visibility changed, async toggled, body modified). Shown as `STRUCTURED CHANGES:` section in the prompt.
+- **Whitespace-aware body comparison** — Body diff uses character-stream stripping so reformatting doesn't produce false `BodyModified` results.
+
+### Type Inference
+
+- **Test-to-code ratio** — When >80% of additions are in test files, suggests `test` type even with source files present. Uses cross-multiplication to avoid integer truncation.
+
+## `v0.5.0` — Beyond the Diff
 
 ### Semantic Analysis
 
