@@ -29,6 +29,7 @@ Rules:
 - Never copy labels, field names, or evidence tags from the prompt into your output.
 - If public APIs are both added and removed, this is an API replacement (refactor), not a new feature.
 - When SYMBOLS CHANGED shows full signatures, reference the actual parameter/type names in your subject rather than generic descriptions.
+- When STRUCTURED CHANGES shows parameter/return/visibility changes, use those specifics in the subject (e.g., "add timeout parameter to connect function"). STRUCTURED CHANGES is the most reliable source for what changed in function signatures — prefer it over reading raw diff lines.
 - When CONNECTIONS shows that a caller and callee both changed, consider mentioning the relationship in the body.
 
 Symbol markers: [+] added, [-] removed, [~] modified (signature changed).

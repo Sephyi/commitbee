@@ -51,8 +51,13 @@ impl ContextBuilder {
         let used = SYSTEM_PROMPT_RESERVE + change_summary.len() + file_breakdown.len();
         let remaining = max_context.saturating_sub(used);
 
-        // Symbols get 30% when signatures are present (richer content), 20% otherwise
-        let symbol_pct = if symbols.iter().any(|s| s.signature.is_some()) {
+        // When structural diffs are available, symbols need less budget (diffs carry the detail).
+        // When only signatures are available, symbols still get 30%.
+        // Base case without signatures: 20%.
+        let has_structural_diffs = !diffs.is_empty();
+        let symbol_pct = if has_structural_diffs {
+            20
+        } else if symbols.iter().any(|s| s.signature.is_some()) {
             30
         } else {
             20

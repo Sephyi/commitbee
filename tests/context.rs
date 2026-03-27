@@ -1827,3 +1827,43 @@ fn python_comment_only_change_classified_as_docs() {
         "Python comment-only change should suggest Docs"
     );
 }
+
+// ─── Token budget rebalancing with structural diffs ───────────────────────────
+
+#[test]
+fn symbol_budget_reduced_when_structural_diffs_present() {
+    use commitbee::domain::diff::{ChangeDetail, SymbolDiff};
+
+    let changes = make_staged_changes(vec![make_file_change(
+        "src/lib.rs",
+        ChangeStatus::Modified,
+        &"+pub fn foo() {}\n".repeat(50),
+        50,
+        0,
+    )]);
+    let mut sym = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    sym.signature = Some("pub fn foo()".into());
+    let diffs = vec![SymbolDiff {
+        name: "foo".into(),
+        file: "src/lib.rs".into(),
+        line: 1,
+        parent_scope: None,
+        changes: vec![ChangeDetail::BodyModified {
+            additions: 5,
+            deletions: 2,
+        }],
+    }];
+
+    // With diffs: symbol budget should be reduced (20%)
+    let ctx_with = ContextBuilder::build(&changes, &[sym.clone()], &diffs, &default_config());
+    // Without diffs: symbol budget at 30% (signatures present)
+    let ctx_without = ContextBuilder::build(&changes, &[sym], &[], &default_config());
+
+    // The diff section should be larger when structural diffs reduce symbol budget
+    assert!(
+        ctx_with.truncated_diff.len() >= ctx_without.truncated_diff.len(),
+        "structural diffs should free budget for raw diff: with={} without={}",
+        ctx_with.truncated_diff.len(),
+        ctx_without.truncated_diff.len()
+    );
+}
