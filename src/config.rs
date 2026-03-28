@@ -309,7 +309,11 @@ impl Config {
             }
         }
 
-        // Provider-specific API key fallback
+        // CLI overrides (highest priority — must run before API key resolution
+        // so that --provider is applied before keyring/env var lookup)
+        config.apply_cli(cli)?;
+
+        // Provider-specific API key fallback (after CLI overrides set the provider)
         if config.api_key.is_none() {
             config.api_key = match config.provider {
                 Provider::OpenAI => std::env::var("OPENAI_API_KEY").ok(),
@@ -322,16 +326,14 @@ impl Config {
         #[cfg(feature = "secure-storage")]
         if config.api_key.is_none() && config.provider != Provider::Ollama {
             let provider_name = config.provider.to_string();
-            if let Ok(entry) = keyring::Entry::new("commitbee", &provider_name) {
-                if let Ok(key) = entry.get_password() {
-                    config.api_key = Some(key);
-                }
+            if let Ok(entry) = keyring::Entry::new("commitbee", &provider_name)
+                && let Ok(key) = entry.get_password()
+            {
+                config.api_key = Some(key);
             }
         }
 
-        // CLI overrides (highest priority)
-        config.apply_cli(cli)?;
-        config.validate()?;
+        config.validate(&cli.command)?;
         Ok(config)
     }
 
@@ -372,12 +374,26 @@ impl Config {
         Ok(())
     }
 
-    fn validate(&self) -> Result<()> {
-        if self.provider != Provider::Ollama && self.api_key.is_none() {
+    /// Check if the API key is required for the current command.
+    /// Subcommands that don't invoke the LLM don't need a key.
+    fn requires_api_key(command: &Option<crate::cli::Commands>) -> bool {
+        match command {
+            None => true, // Default command (generate commit) needs a key
+            Some(cmd) => matches!(cmd, crate::cli::Commands::Doctor),
+            // Init, Config, Completions, Hook, SetKey, GetKey, Eval — don't need a key
+        }
+    }
+
+    fn validate(&self, command: &Option<crate::cli::Commands>) -> Result<()> {
+        if Self::requires_api_key(command)
+            && self.provider != Provider::Ollama
+            && self.api_key.is_none()
+        {
             return Err(Error::Config(format!(
-                "{} requires an API key. Set COMMITBEE_API_KEY or {}_API_KEY",
+                "{} requires an API key. Set COMMITBEE_API_KEY, {}_API_KEY, or store securely with: commitbee config set-key {}",
                 self.provider,
-                format!("{:?}", self.provider).to_uppercase()
+                format!("{:?}", self.provider).to_uppercase(),
+                format!("{:?}", self.provider).to_lowercase()
             )));
         }
 
