@@ -6,19 +6,20 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 # CommitBee — Product Requirements Document
 
-**Version**: 4.3  
-**Date**: 2026-03-27  
+**Version**: 4.4
+**Date**: 2026-03-28  
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)  
 
 ## Changelog
 
 <details>
-<summary>Revision history (v3.3 → v4.3)</summary>
+<summary>Revision history (v3.3 → v4.4)</summary>
 
 | Version | Date       | Summary |
 |---------|------------|---------|
-| 4.3     | 2026-03-27 | v0.6.0-rc.1 deep semantic understanding: parent scope, import detection, doc-vs-code classification, structural AST diffs (AstDiffer + SymbolDiff), STRUCTURED CHANGES prompt section, token budget rebalance, T3 semantic markers (FR-071), change intent detection (FR-072). 424 tests. |
+| 4.4     | 2026-03-27 | Added future requirements from audit: FR-073 (move detection), FR-074 (AST-based splitting), FR-075 (configurable categorization), TR-008 (LLM quality testing), PE-007 (token-accurate budgets). |
+| 4.3     | 2026-03-27 | v0.6.0-rc.1 deep semantic understanding: parent scope, import detection, doc-vs-code, structural AST diffs, semantic markers (FR-071), change intent (FR-072). 424 tests. |
 | 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 359 tests. |
 | 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 359 tests. |
 | 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |
@@ -549,6 +550,18 @@ Automatic semantic version bumps based on commit types. Natural extension of con
 
 Run commitbee in CI to validate or rewrite commit messages. Key differentiator for team adoption.
 
+#### FR-073: Function Move Detection
+
+Detect when a function is moved between files or within a file with zero semantic changes, using AST structural fingerprinting (hash tree topology ignoring identifiers). Classify as `refactor` rather than add+delete. Significantly improves commit type accuracy for common refactoring patterns.
+
+#### FR-074: AST-Based Dependency Analysis for Splitting
+
+Replace hardcoded path heuristics (`GENERIC_DIRS`, `KNOWN_PAIRS`) in the commit splitter with actual code dependency analysis derived from AST imports and call patterns. Produces higher-quality split groups based on real code relationships rather than file proximity.
+
+#### FR-075: Configurable File Categorization
+
+Allow users to define custom file category patterns in config (e.g., `[categorization] build_patterns = ["Tiltfile", "*.bazel"]`, `source_extensions = ["rs", "ts", "custom_lang"]`). Currently all patterns are hardcoded in `FileCategory::from_path()`. Enables support for proprietary build systems and custom file types.
+
 ## 5. Security Requirements
 
 ### SR-001: Secret Scanning
@@ -777,6 +790,10 @@ proptest! {
 
 5 `cargo-fuzz` targets. See §4.3.
 
+### TR-008: LLM Output Quality Testing
+
+End-to-end commit message quality validation. Two modes: (1) wiremock-based deterministic testing with canned LLM responses through the full pipeline (sanitizer + validator), (2) optional live Ollama regression testing with majority-vote scoring and baseline comparison. Extends the eval harness (TR-006) from pre-LLM pipeline testing to actual output quality assurance.
+
 ## 9. Distribution Requirements
 
 ### DR-001: cargo install
@@ -850,6 +867,10 @@ Binary files never included as diff content. Listed in file list with change sta
 ### PE-006: JSON Parse Failure Recovery
 
 Invalid JSON → retry once with repair prompt. Second failure → heuristic extraction (type from file categories, first coherent sentence as description). Never retry more than once.
+
+### PE-007: Token-Accurate Budget Management
+
+Replace character-based budget estimation (~4:1 char-to-token ratio approximation) with actual BPE/tiktoken token counting for accurate LLM context window utilization. Maximizes prompt quality by filling available tokens precisely rather than under/over-estimating. Consider lightweight Rust BPE implementation or pre-computed token tables per model family.
 
 ## 11. Roadmap Summary
 
