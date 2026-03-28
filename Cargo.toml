@@ -83,26 +83,22 @@ indicatif = "0.18"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Secure storage (optional)
-keyring = { version = "3", optional = true }
-
 # Utilities
 regex = "1.12"
 globset = "0.4"
 
+# Secure storage (optional, platform-native keychain backends)
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", optional = true, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", optional = true, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", optional = true, features = ["linux-native"] }
+
 [features]
-default = [
-  "lang-rust",
-  "lang-typescript",
-  "lang-javascript",
-  "lang-python",
-  "lang-go",
-  "lang-java",
-  "lang-c",
-  "lang-cpp",
-  "lang-ruby",
-  "lang-csharp",
-]
+default = ["secure-storage", "all-languages"]
 secure-storage = ["keyring"]
 eval = []
 lang-rust = ["tree-sitter-rust"]
