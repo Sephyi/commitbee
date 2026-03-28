@@ -131,6 +131,7 @@ all-languages = [
 lto = true
 strip = true
 codegen-units = 1
+overflow-checks = true
 
 [dev-dependencies]
 tempfile = "3.26"
