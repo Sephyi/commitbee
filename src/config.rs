@@ -318,9 +318,9 @@ impl Config {
         if config.api_key.is_none() {
             config.api_key = match config.provider {
                 Provider::OpenAI => std::env::var("OPENAI_API_KEY").ok().map(SecretString::from),
-                Provider::Anthropic => {
-                    std::env::var("ANTHROPIC_API_KEY").ok().map(SecretString::from)
-                }
+                Provider::Anthropic => std::env::var("ANTHROPIC_API_KEY")
+                    .ok()
+                    .map(SecretString::from),
                 Provider::Ollama => None,
             };
         }

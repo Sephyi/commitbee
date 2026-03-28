@@ -90,7 +90,10 @@ impl OpenAiProvider {
         let response = self
             .client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key.expose_secret()))
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.api_key.expose_secret()),
+            )
             .send()
             .await
             .map_err(|e| Error::Provider {
@@ -120,7 +123,10 @@ impl OpenAiProvider {
         let response = self
             .client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key.expose_secret()))
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.api_key.expose_secret()),
+            )
             .json(&ChatRequest {
                 model: self.model.clone(),
                 messages: vec![
