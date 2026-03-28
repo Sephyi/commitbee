@@ -35,6 +35,11 @@ All notable changes to CommitBee are documented here.
 - **Token budget rebalance** — Symbol budget reduced from 30% to 20% when structural diffs are available, freeing space for the raw diff. SYSTEM_PROMPT updated to guide the LLM to prefer STRUCTURED CHANGES for signature details.
 - **Unsafe constraint rule** — When `unsafe` is added to a function, a CONSTRAINTS rule instructs the LLM to mention safety justification in the commit body.
 
+### Fixes
+
+- **API key validation ordering** — `set-key`, `get-key`, `init`, `config`, `completions`, and `hook` commands no longer require an API key to be present. CLI `--provider` flag now applies before keyring lookup.
+- **Platform-native keyring backends** — keyring v3 now uses macOS Keychain (`apple-native`), Windows Credential Manager (`windows-native`), and Linux Secret Service (`linux-native`) instead of a mock file-based backend.
+
 ### Testing
 
 - **424 tests** total (up from 367 at v0.5.0).

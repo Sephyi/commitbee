@@ -6,18 +6,20 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 # CommitBee — Product Requirements Document
 
-**Version**: 4.4
-**Date**: 2026-03-28  
+**Version**: 5.1
+**Date**: 2026-03-28
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)  
 
 ## Changelog
 
 <details>
-<summary>Revision history (v3.3 → v4.4)</summary>
+<summary>Revision history (v3.3 → v5.1)</summary>
 
 | Version | Date       | Summary |
-|---------|------------|---------|
+| ------- | ---------- | ------- |
+| 5.1     | 2026-03-28 | fix: keyring platform-native backends, API key validation ordering for set-key command. Updated FR-019 and SR-002. |
+| 5.0     | 2026-03-28 | PRD structural overhaul: removed stale §3.1 Resolved Issues (all v0.2.0), removed Dependency Status table, removed dead ORCommit references. Updated §2 competitive landscape for 2026 (added IDE-native competitors: GitHub Copilot Desktop, Cursor, Windsurf; updated star counts; refreshed feature matrix). Updated §3 codebase structure (added diff.rs, differ.rs, progress.rs). Updated PE-001/PE-002 with v0.6.0 prompt sections (STRUCTURED CHANGES, IMPORTS, RELATED FILES, INTENT). Updated PR-005 with adaptive budget. Added v0.6.0 feature section §4.6 (FR-064–FR-072). Renumbered Future to §4.7. |
 | 4.4     | 2026-03-27 | Added future requirements from audit: FR-073 (move detection), FR-074 (AST-based splitting), FR-075 (configurable categorization), TR-008 (LLM quality testing), PE-007 (token-accurate budgets). |
 | 4.3     | 2026-03-27 | v0.6.0-rc.1 deep semantic understanding: parent scope, import detection, doc-vs-code, structural AST diffs, semantic markers (FR-071), change intent (FR-072). 424 tests. |
 | 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 359 tests. |
@@ -57,7 +59,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 ### Compatibility Policy
 
 | Release | Scope | Breaking Changes |
-|---------|-------|------------------|
+| ------- | ----- | ---------------- |
 | v0.2.0  | Stability + polish + providers (Phase 1) | None — config format preserved, no breaking CLI changes |
 | v0.3.0  | Differentiation core (splitter enhancements, validation, heuristics) | None |
 | v0.3.1  | Patch — default model → `qwen3.5:4b`, subject length validation, `think` config | None |
@@ -69,27 +71,26 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 
 ### 2.1 Market Position
 
-| Category             | Key Players                                    | CommitBee Advantage                                             |
-|----------------------|------------------------------------------------|-----------------------------------------------------------------|
-| AI commit generators | opencommit (7.2K★), aicommits (8K★), aicommit2 | **Only tool with tree-sitter semantic analysis**                |
-| Rust commit tools    | rusty-commit, cocogitto, convco                | Semantic analysis + AI generation (cocogitto/convco have no AI) |
-| IDE-integrated       | GitHub Copilot, JetBrains AI                   | CLI-first, provider-agnostic, privacy-respecting                |
+| Category | Key Players | CommitBee Advantage |
+| --- | --- | --- |
+| AI commit generators | opencommit (7.2K stars), aicommits (8.7K stars), aicommit2 | **Only tool with tree-sitter semantic analysis + commit splitting** |
+| Rust commit tools | cocogitto (1K stars), convco, rusty-commit | Semantic analysis + AI generation (cocogitto has no AI, convco has no AI) |
+| IDE-integrated | GitHub Copilot Desktop, Cursor, Windsurf | CLI-first, provider-agnostic, privacy-respecting, deeper analysis |
 
 ### 2.2 Unique Differentiators (No Competitor Has These)
 
-1. **Tree-sitter semantic analysis** — Every competitor sends raw diffs to LLMs
-2. **Commit splitting** — Detects multi-concern staged changes and splits into separate well-typed commits automatically
-3. **Built-in secret scanning** — Only ORCommit[^1] also has this (via external Gitleaks)
-4. **Token budget management** with adaptive truncation — Most competitors blindly send full diffs
-5. **Streaming output** with cancellation — Most wait for complete response
-6. **Prompt debug mode** (`--show-prompt`) — Transparency no one else offers
-
-[^1]: ORCommit (<https://github.com/reacherhq/orcommit>) — a Rust-based commit message generator with Gitleaks integration and interactive regeneration with feedback.
+1. **Tree-sitter semantic analysis** with structural AST diffs — every competitor sends raw diffs to LLMs
+2. **Commit splitting** with semantic grouping — detects multi-concern changes, groups by code relationships
+3. **Built-in secret scanning** — 25 patterns, no external tool dependency
+4. **Evidence-based validation** — validates LLM output against computed evidence, retries on constraint violations
+5. **Token budget management** with adaptive truncation and structured changes prioritization
+6. **Streaming output** with cancellation — most competitors wait for complete response
+7. **Prompt debug mode** (`--show-prompt`) — full transparency, no competitor offers this
 
 ### 2.3 Feature Status vs. Market Expectations
 
 | Feature                                            | Market Expectation            | Status          |
-|----------------------------------------------------|-------------------------------|-----------------|
+| -------------------------------------------------- | ----------------------------- | --------------- |
 | Cloud LLM providers (OpenAI, Anthropic)            | Universal                     | ✅ v0.2.0       |
 | Git hook integration                               | Universal                     | ✅ v0.2.0       |
 | Shell completions                                  | Expected for CLI tools        | ✅ v0.2.0       |
@@ -100,98 +101,71 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 
 ## 3. Architecture
 
-### 3.1 Resolved Issues
-
-The following critical issues from earlier versions have been resolved:
-
-| Issue | Resolution | Version |
-|-------|-----------|---------|
-| Symbols extracted but never included in LLM prompt | Included in prompt with fallback ladder | v0.2.0 |
-| `App::generate_commit()` untestable monolith | Decomposed into testable methods | v0.2.0 |
-| No dependency injection | Trait abstractions for GitService, LlmProvider | v0.2.0 |
-| Synchronous `std::process::Command` in async runtime | `tokio::process::Command` (FR-020) | v0.2.0 |
-| N+1 git process spawns | Single diff + concurrent `JoinSet` (FR-021) | v0.2.0 |
-| UTF-8 panic in sanitizer | `str::chars()` safe truncation (FR-001) | v0.2.0 |
-
-### 3.2 Open Architecture Concerns
-
-#### Symbol Extraction Fallback Ladder
+### 3.1 Symbol Extraction Fallback Ladder
 
 When building the LLM prompt, symbol context uses a tiered approach:
 
-1. **AST mapping** — Tree-sitter parses both HEAD and staged versions, maps diff hunks to symbol spans (best quality)
+1. **AST mapping** — Tree-sitter parses both HEAD and staged versions, maps diff hunks to symbol spans, extracts full signatures, runs structural AST diffs (best quality)
 2. **Hunk heuristic** — If tree-sitter grammar unavailable, extract nearest function/class from hunk header (`@@ ... @@ fn name`)
 3. **File summary** — If hunk heuristic fails, include file-level summary (path, change status, line counts)
 4. **Raw diff** — Final fallback, plain diff with no semantic annotation
 
 Each tier produces progressively less useful context but ensures the pipeline never blocks on a parse failure.
 
-#### Dependency Status
-
-| Dependency | Status | Notes |
-|------------|--------|-------|
-| `anyhow` | ✅ Removed | Never imported |
-| `once_cell` | ✅ Replaced | `std::sync::LazyLock` (stable since Rust 1.80) |
-| `async-trait` | ✅ Replaced | Native async traits (edition 2024) |
-| `futures` | ✅ Replaced | `tokio-stream` `StreamExt` |
-| `miette` | ✅ Added | Rich diagnostic errors |
-| `figment` | ✅ Added | Hierarchical config |
-| `tracing` + `tracing-subscriber` | ✅ Added | Structured logging |
-| `clap_complete` | ✅ Added | Shell completions |
-| `keyring` | ✅ Added | Secure API key storage |
-| `insta` | ✅ Added (dev) | Snapshot testing |
-| `indicatif` | ✅ Active | Progress indicators |
-
-### 3.3 Target Architecture
+### 3.2 Codebase Structure
 
 ```
 commitbee
 ├── src/
-│   ├── main.rs              # Entry point (uses lib, not mod declarations)
+│   ├── main.rs              # Entry point
 │   ├── lib.rs               # #![forbid(unsafe_code)] + public API
 │   ├── cli.rs               # clap derive with ValueEnum, subcommands
 │   ├── config.rs            # figment-based hierarchical config
 │   ├── error.rs             # miette diagnostics + thiserror
-│   ├── app.rs               # Orchestrator (decomposed into small methods)
+│   ├── app.rs               # Orchestrator
 │   ├── domain/
-│   │   ├── change.rs        # FileChange, StagedChanges
-│   │   ├── symbol.rs        # CodeSymbol, SymbolKind, SymbolChangeType
-│   │   ├── context.rs       # PromptContext (includes symbols in prompt)
-│   │   └── commit.rs        # CommitType (single source of truth for types)
-│   ├── queries/             # Tree-sitter .scm query files per language
+│   │   ├── change.rs        # FileChange, StagedChanges, FileCategory
+│   │   ├── symbol.rs        # CodeSymbol, SymbolKind, SpanChangeKind
+│   │   ├── context.rs       # PromptContext, ChangeIntent, IntentKind
+│   │   ├── diff.rs          # SymbolDiff, ChangeDetail (25 variants)
+│   │   └── commit.rs        # CommitType (single source of truth)
+│   ├── queries/             # Tree-sitter .scm query files (10 languages)
 │   └── services/
-│       ├── git.rs           # GitService trait + impl (async, single-diff)
-│       ├── analyzer.rs      # AnalyzerService (parallel parsing via rayon)
-│       ├── context.rs       # ContextBuilder (fixed budget math, fallback ladder)
-│       ├── safety.rs        # Secret scanning (24 patterns, pluggable engine)
-│       ├── sanitizer.rs     # CommitSanitizer (UTF-8 safe) + CommitValidator (7 rules)
+│       ├── git.rs           # GitService (gix discovery + git CLI)
+│       ├── analyzer.rs      # AnalyzerService (parallel via rayon, returns symbols + diffs)
+│       ├── differ.rs        # AstDiffer (structural function/method comparison)
+│       ├── context.rs       # ContextBuilder (adaptive budget, type inference, intent detection)
+│       ├── safety.rs        # Secret scanning (25 patterns, pluggable engine)
+│       ├── sanitizer.rs     # CommitSanitizer + CommitValidator (7 rules)
 │       ├── splitter.rs      # CommitSplitter (Jaccard + fingerprinting)
+│       ├── progress.rs      # Progress indicators (indicatif, TTY-aware)
 │       ├── template.rs      # TemplateService (custom prompt templates)
-│       ├── history.rs       # HistoryService (commit style learning, experimental)
+│       ├── history.rs       # HistoryService (commit style learning)
 │       └── llm/
-│           ├── mod.rs       # LlmProvider trait (native async, enum dispatch)
-│           ├── ollama.rs    # Ollama (timeout, error differentiation)
-│           ├── openai.rs    # OpenAI-compatible (OpenAI, Groq, Together, LM Studio, vLLM)
-│           └── anthropic.rs # Anthropic Claude
+│           ├── mod.rs       # LlmProvider trait + shared SYSTEM_PROMPT
+│           ├── ollama.rs    # Ollama (NDJSON streaming)
+│           ├── openai.rs    # OpenAI-compatible (SSE streaming)
+│           └── anthropic.rs # Anthropic Claude (SSE streaming)
 ├── tests/
 │   ├── snapshots/           # insta snapshot files
 │   ├── fixtures/            # Eval fixtures (36 scenarios), diff samples
 │   ├── helpers.rs           # Shared test helpers (make_file_change, make_staged_changes)
-│   ├── context.rs           # ContextBuilder, type inference, evidence, signatures, connections
+│   ├── context.rs           # ContextBuilder, type inference, evidence, intents, imports, correlations
 │   ├── sanitizer.rs         # CommitSanitizer + CommitValidator (unit + snapshot + proptest)
 │   ├── splitter.rs          # CommitSplitter grouping and merge logic
-│   ├── languages.rs         # Feature-gated per-language symbol + signature extraction
+│   ├── analyzer.rs          # AnalyzerService symbol extraction
+│   ├── languages.rs         # Per-language symbol, signature, parent scope, structural diff tests
 │   ├── safety.rs            # Secret scanning patterns + conflict detection
 │   ├── integration.rs       # LLM provider round-trips with wiremock
 │   ├── history.rs           # HistoryService with tempfile git repos
 │   ├── template.rs          # TemplateService custom/default templates
 │   ├── commit_type.rs       # CommitType parsing and ALL sync
 │   └── eval.rs              # Eval harness fixture validation (feature-gated)
-├── fuzz/                    # cargo-fuzz targets (sanitizer, safety, diff parser, signature, classify_span)
+├── fuzz/                    # 5 cargo-fuzz targets
 └── completions/             # Generated shell completions
 ```
 
-### 3.4 Trait Design for Testability
+### 3.3 Trait Design for Testability
 
 ```rust
 // Services defined as traits for mockability
@@ -298,7 +272,7 @@ Configurable timeout (default 300s), connection/model error differentiation with
 Priority: CLI args > env vars > project config (`.commitbee.toml`) > user config > defaults.
 
 | Platform | User Config Path |
-|----------|-----------------|
+| -------- | --------------- |
 | macOS    | `~/Library/Application Support/commitbee/config.toml` |
 | Linux    | `~/.config/commitbee/config.toml` (XDG) |
 | Windows  | `%APPDATA%\commitbee\config.toml` |
@@ -311,7 +285,7 @@ Fallback: `~/.config/commitbee/config.toml` on all platforms for backward compat
 
 #### FR-019: Secure API Key Storage ✅
 
-System keychain via `keyring` (feature-gated). `commitbee config set-key/get-key <provider>`. Env var fallback. Never stores keys in plaintext config.
+System keychain via `keyring` with platform-native backends (`apple-native` on macOS, `windows-native` on Windows, `linux-native` on Linux). Feature-gated. `commitbee config set-key/get-key <provider>`. Env var fallback. Never stores keys in plaintext config. Commands that don't need the LLM (`set-key`, `get-key`, `init`, `config`, `completions`, `hook`) skip API key validation.
 
 #### FR-020: Async Git Operations ✅
 
@@ -418,7 +392,7 @@ Evidence-based LLM output validation with multi-pass corrective retry (up to 3 a
 25 built-in `SecretPattern` structs across 13 categories:
 
 | Category | Patterns |
-|----------|----------|
+| -------- | -------- |
 | Cloud | AWS access/secret, GCP service account/API key, Azure storage |
 | AI/ML | OpenAI (`sk-proj-`), Anthropic, HuggingFace |
 | Source Control | GitHub PAT/fine-grained/OAuth, GitLab |
@@ -536,7 +510,7 @@ Query multiple LLMs simultaneously, let user pick best result. Leverages multi-p
 
 #### FR-053: Interactive Regeneration with Feedback
 
-User can say "make it shorter" / "focus on the API change" after seeing a generated message. Turns one-shot generation into a conversation. Inspired by ORCommit[^1].
+User can say "make it shorter" / "focus on the API change" after seeing a generated message. Turns one-shot generation into a conversation.
 
 #### FR-054: Monorepo Support
 
@@ -574,10 +548,12 @@ Allow users to define custom file category patterns in config (e.g., `[categoriz
 
 ### SR-002: API Key Management
 
-- System keychain via `keyring` (macOS Keychain, Linux Secret Service, Windows Credential Manager)
+- System keychain via `keyring` with platform-native backends: `apple-native` (macOS Keychain), `linux-native` (Linux Secret Service), `windows-native` (Windows Credential Manager)
 - Environment variable fallback
 - Never stores keys in plaintext config
 - Warns if config file permissions are world-readable
+- CLI `--provider` flag applies before keyring/env var lookup
+- Commands that don't need the LLM (`set-key`, `get-key`, `init`, `config`, `completions`, `hook`) skip API key validation
 
 ### SR-003: Command Execution Safety
 
@@ -619,7 +595,8 @@ Streaming output. Configurable timeout (default 300s). Ctrl+C cancellation with 
 ### PR-005: Memory
 
 - Token budget: characters (no tokenizer dependency), `max_context_chars` configurable (default 24K)
-- Truncation priority (highest preserved first): symbols > file list > diff hunks
+- Adaptive budget split: 20% symbols when structural diffs available, 30% with signatures only, 20% base
+- Truncation priority (highest preserved first): structured changes > symbols > file list > diff hunks
 - Parse trees dropped after symbol extraction
 - Streaming buffer bounded: `MAX_RESPONSE_BYTES` = 1 MB (all providers)
 
@@ -705,7 +682,7 @@ commitbee eval                         # Run evaluation harness (dev, feature-ga
 ### UX-006: Output Format Contracts
 
 | Flag | stdout | stderr | Behavior |
-|------|--------|--------|----------|
+| ---- | ------ | ------ | -------- |
 | `--dry-run` | Commit message (single line) | Spinners, diagnostics | Exit 0 |
 | `--generate N` (TTY) | Selected message | N numbered options + `dialoguer` prompt | `--yes` selects first |
 | `--generate N` (non-TTY) | All N messages, blank-line separated | Diagnostics | — |
@@ -719,7 +696,7 @@ commitbee eval                         # Run evaluation harness (dev, feature-ga
 ### TR-001: Unit Tests
 
 | Module | Technique | Coverage Target |
-|--------|-----------|-----------------|
+| ------ | --------- | --------------- |
 | `CommitSanitizer` | Snapshot (insta) + proptest | All code paths + never-panic guarantee |
 | `DiffHunk::parse_from_diff` | Snapshot | Standard diffs, renames, binary, empty |
 | `safety::scan_for_secrets` | Unit + proptest | Each pattern + false positive tests |
@@ -743,7 +720,7 @@ Stored in `tests/fixtures/golden/` — before/after file pairs with expected dif
 ### TR-002: Integration Tests
 
 | Scenario | Setup | Mock |
-|----------|-------|------|
+| -------- | ----- | ---- |
 | Normal commit flow | tempfile git repo | wiremock Ollama |
 | Empty staging area | tempfile git repo | None |
 | Binary files mixed with text | tempfile git repo | wiremock Ollama |
@@ -822,6 +799,20 @@ codegen-units = 1
 opt-level = "z"  # or "s" — benchmark both
 ```
 
+### DR-006: Feature Flags
+
+Default features: `secure-storage` (system keychain via `keyring`) and `all-languages` (10 tree-sitter grammars). Build without optional features to reduce binary size or avoid platform-specific dependencies:
+
+```bash
+# Without secure storage (no keyring dependency)
+cargo install commitbee --no-default-features --features all-languages
+
+# Minimal (no keyring, specific languages only)
+cargo install commitbee --no-default-features --features lang-rust,lang-python
+```
+
+`secure-storage` uses platform-native keychain backends automatically: macOS Keychain, Windows Credential Manager, Linux Secret Service.
+
 ## 10. Prompt Engineering Requirements
 
 ### PE-001: System Prompt
@@ -833,17 +824,22 @@ opt-level = "z"  # or "s" — benchmark both
 - Anti-hallucination rules: "Never copy labels, field names, or evidence tags from the prompt"
 - API replacement rule: added + removed public APIs → `refactor`
 - Breaking change guidance: only when existing users/dependents must change code, config, or scripts
+- **Structured changes guidance**: prefer STRUCTURED CHANGES for signature-level details over raw diff lines
 - Single shared `SYSTEM_PROMPT` constant in `llm/mod.rs`; type list synced with `CommitType::ALL` via compile-time test
 
 ### PE-002: User Prompt
 
 - File list with change status, semantic symbols, truncated diff
-- Symbols with tri-state: "Added", "Removed", "Modified (signature changed)"
+- Symbols with tri-state: "Added", "Removed", "Modified (signature changed)" with parent scope prefix
 - Suggested type/scope from heuristics (hints, not requirements)
+- **STRUCTURED CHANGES**: Per-symbol semantic diffs (parameter added, return type changed, visibility, async, body modification)
+- **IMPORTS CHANGED**: Added/removed import statements across 6 language syntaxes
+- **RELATED FILES**: Source-to-test file correlations
+- **INTENT**: Detected change patterns (error handling, test, logging, dependency update) with confidence scores
 - **Evidence flags**: Natural language labels (not snake_case) to prevent model copying
 - **Subject budget**: Exact remaining characters after `type(scope): ` prefix
 - **PRIMARY_CHANGE**: Anchors subject to most significant change (new public API > removed > largest file)
-- **CONSTRAINTS**: Dynamic rules from evidence (e.g., "No bug-fix comments — do not use type fix")
+- **CONSTRAINTS**: Dynamic rules from evidence (e.g., "No bug-fix comments — do not use type fix", "Unsafe code added — mention safety justification")
 - **PUBLIC API REMOVED** warning with listed symbols
 - **Metadata breaking signals** (MSRV, engines.node, requires-python)
 - **GROUP_REASON** per split group
@@ -875,7 +871,7 @@ Replace character-based budget estimation (~4:1 char-to-token ratio approximatio
 ## 11. Roadmap Summary
 
 | Phase | Version | Status | Focus |
-|-------|---------|--------|-------|
+| ----- | ------- | ------ | ----- |
 | 1 | v0.2.0 | ✅ Shipped | Stability, correctness, providers, developer experience |
 | 2 | v0.3.x | ✅ Shipped | Differentiation — heuristics, validation, spec compliance |
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
@@ -887,7 +883,7 @@ Replace character-based budget estimation (~4:1 char-to-token ratio approximatio
 ## 12. Success Metrics
 
 | Metric | Target | Measurement |
-|--------|--------|-------------|
+| ------ | ------ | ----------- |
 | Runtime panics | 0 | proptest + fuzzing, no `unwrap()` on user-facing paths |
 | Test coverage | > 80% on services/ | `cargo tarpaulin` |
 | CI green rate | > 99% | GitHub Actions dashboard |
@@ -909,23 +905,25 @@ Replace character-based budget estimation (~4:1 char-to-token ratio approximatio
 
 ## Appendix A: Competitive Feature Matrix
 
-| Feature | commitbee | opencommit | aicommits | aicommit2 | rusty-commit | cocogitto |
-|---------|-----------|------------|-----------|-----------|--------------|-----------|
+| Feature | commitbee | opencommit | aicommits | aicommit2 | cocogitto | GitHub Copilot Desktop |
+| --- | --- | --- | --- | --- | --- | --- |
 | **Tree-sitter AST** | ✅ | — | — | — | — | — |
 | **Commit splitting** | ✅ | — | — | — | — | — |
 | **Secret scanning** | ✅ | — | — | — | — | — |
-| **Token budget** | ✅ | — | — | — | — | N/A |
-| **Streaming** | ✅ | — | — | — | — | N/A |
-| **Local LLM** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
-| **OpenAI** | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
-| **Anthropic** | ✅ | ✅ | — | ✅ | ✅ | N/A |
-| **Git hooks** | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| **Token budget** | ✅ | — | — | — | N/A | — |
+| **Streaming** | ✅ | — | — | — | N/A | ✅ |
+| **Local LLM** | ✅ | ✅ | ✅ | ✅ | N/A | — |
+| **OpenAI** | ✅ | ✅ | ✅ | ✅ | N/A | N/A |
+| **Anthropic** | ✅ | ✅ | — | ✅ | N/A | N/A |
+| **Git hooks** | ✅ | ✅ | ✅ | — | ✅ | — |
 | **Multi-generate** | ✅ | ✅ | ✅ | — | — | — |
-| **Shell completions** | ✅ | — | — | — | — | ✅ |
-| **MCP server** | Planned | — | — | — | ✅ | — |
-| **Changelog** | Future | — | — | — | — | ✅ |
-| **Version bumping** | Future | — | — | — | — | ✅ |
-| **Monorepo** | Future | — | — | — | — | ✅ |
+| **Shell completions** | ✅ | — | — | — | ✅ | N/A |
+| **MCP server** | Planned | — | — | — | — | N/A |
+| **Changelog** | Future | — | — | — | ✅ | — |
+| **Version bumping** | Future | — | — | — | ✅ | — |
+| **Monorepo** | Future | — | — | — | ✅ | — |
+| **IDE integration** | — | — | — | — | — | ✅ |
+| **Code review** | — | — | — | ✅ | — | ✅ |
 
 ## Appendix B: Research Sources
 

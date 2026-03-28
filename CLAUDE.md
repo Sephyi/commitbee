@@ -17,7 +17,7 @@ cargo build --release
 
 ## Architecture
 
-**Pipeline:** git diff → tree-sitter parse → symbol extraction → context building (budget, evidence, connections) → LLM prompt → sanitize → validate+retry → commit
+**Pipeline:** git diff → tree-sitter parse → symbol extraction + structural diffing → context building (budget, evidence, connections, imports, intents) → LLM prompt → sanitize → validate+retry → commit
 
 - **Hybrid Git**: gix for repo discovery, git CLI for diffs (documented choice)
 - **Tree-sitter**: Full file parsing with hunk mapping (not just +/- lines)
@@ -39,6 +39,11 @@ cargo build --release
 10. **Signature extraction** - Two-strategy: `child_by_field_name("body")` primary, `BODY_NODE_KINDS` fallback, first-line final fallback. 200-char cap with `floor_char_boundary`. No `.scm` query changes needed.
 11. **Semantic change classification** - Modified symbols classified via character-stream comparison (not bag-of-lines). `build()` restructured: classify → infer_commit_type → format.
 12. **Cross-file connections** - `detect_connections` scans added diff lines for `sym_name(` patterns. Min 4-char name filter, capped at 5, sort+dedup.
+13. **Parent scope extraction** - `extract_parent_scope` walks up AST through intermediate nodes (declaration_list, class_body) to find impl/class/trait. 7 languages.
+14. **Structural AST diffs** - `AstDiffer` compares old/new tree-sitter nodes for modified symbols. Returns owned `SymbolDiff` (no Node lifetime leaks). Runs inside `extract_for_file()` while both Trees alive.
+15. **Change intent detection** - `detect_intents` scans diff lines for error handling, test, logging, dependency patterns. Threshold >2 matches. Conservative type refinement (only overrides for `perf`).
+16. **Doc-vs-code classification** - `SpanChangeKind` enum (WhitespaceOnly, DocsOnly, Mixed, Semantic). Doc-only symbols suggest `docs` type. `is_doc_comment()` uses line-prefix heuristic.
+17. **Adaptive token budget** - Symbol budget 20% with structural diffs, 30% with signatures only, 20% base.
 
 ## Commands
 
@@ -61,87 +66,6 @@ commitbee completions bash   # Generate shell completions
 commitbee hook install       # Install prepare-commit-msg hook
 commitbee hook uninstall     # Remove prepare-commit-msg hook
 commitbee hook status        # Check if hook is installed
-```
-
-## Config
-
-Location: platform-dependent (use `commitbee init` to create, `commitbee doctor` to show path)
-
-```toml
-provider = "ollama"
-model = "qwen3.5:4b"
-ollama_host = "http://localhost:11434"
-max_diff_lines = 500
-max_file_lines = 100
-max_context_chars = 24000
-temperature = 0.3
-num_predict = 256
-timeout_secs = 300
-think = false
-rename_threshold = 70
-learn_from_history = false
-history_sample_size = 50
-# locale = "de"
-# exclude_patterns = ["*.lock", "**/*.generated.*"]
-# system_prompt_path = "/path/to/system.txt"
-# template_path = "/path/to/template.txt"
-
-[format]
-include_body = true
-include_scope = true
-lowercase_subject = true
-
-[safety]
-# custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]
-# disabled_secret_patterns = ["Generic Secret (unquoted)"]
-```
-
-## Environment Variables
-
-- `COMMITBEE_PROVIDER` - ollama, openai, anthropic
-- `COMMITBEE_MODEL` - Model name
-- `COMMITBEE_OLLAMA_HOST` - Ollama server URL
-- `COMMITBEE_API_KEY` - API key for cloud providers
-
-## Supported Languages (tree-sitter)
-
-Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, Ruby, C#
-
-All 10 languages are individually feature-gated (`lang-rust`, `lang-typescript`, `lang-javascript`, `lang-python`, `lang-go`, `lang-java`, `lang-c`, `lang-cpp`, `lang-ruby`, `lang-csharp`) and enabled by default. Build with `--no-default-features --features lang-rust,lang-go` to include only specific languages.
-
-## File Structure
-
-```bash
-src/
-├── main.rs              # Entry point
-├── lib.rs               # Library exports
-├── app.rs               # Application orchestrator
-├── cli.rs               # CLI arguments (clap)
-├── config.rs            # Configuration (figment layered)
-├── error.rs             # Error types (thiserror + miette)
-├── queries/             # Tree-sitter .scm patterns (10 languages)
-├── domain/
-│   ├── mod.rs
-│   ├── change.rs        # FileChange, StagedChanges, ChangeStatus
-│   ├── symbol.rs        # CodeSymbol, SymbolKind, SymbolChangeType
-│   ├── context.rs       # PromptContext (includes connections, evidence flags)
-│   └── commit.rs        # CommitType
-└── services/
-    ├── mod.rs
-    ├── git.rs           # GitService (gix + git CLI, concurrent content fetching)
-    ├── analyzer.rs      # AnalyzerService (tree-sitter queries, parallel via rayon)
-    ├── context.rs       # ContextBuilder (token budget)
-    ├── history.rs       # HistoryService (commit style learning)
-    ├── safety.rs        # Secret scanning (24 patterns), conflict detection
-    ├── sanitizer.rs     # CommitSanitizer (JSON + plain text, BREAKING CHANGE footer)
-    ├── splitter.rs      # CommitSplitter (multi-commit detection)
-    ├── template.rs      # TemplateService (custom prompt templates)
-    ├── progress.rs      # Progress indicators (indicatif spinners, TTY-aware)
-    └── llm/
-        ├── mod.rs       # LlmProvider trait + enum dispatch + shared SYSTEM_PROMPT
-        ├── ollama.rs    # OllamaProvider (streaming NDJSON)
-        ├── openai.rs    # OpenAiProvider (SSE streaming)
-        └── anthropic.rs # AnthropicProvider (SSE streaming)
 ```
 
 ## References
@@ -192,7 +116,7 @@ src/
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (359 tests)
+cargo test                    # All tests (424 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -301,6 +225,9 @@ Common mistake: calling a new safeguard/check `fix` — if there was no bug, it'
 - Parallel subagents touching the same file will conflict — only parallelize when files don't overlap
 - `SymbolKey` uses `(kind, name, file)` — do NOT add `line` (lines shift between HEAD/staged, breaks modified-symbol matching)
 - `classify_span_change` uses new-file line range — old-file lines may differ when code shifts; known limitation (deferred #9)
+- `extract_symbols()` returns `(Vec<CodeSymbol>, Vec<SymbolDiff>)` — all callers must destructure or use `.0`
+- `ChangeDetail` has 25 variants (15 structural + 10 semantic markers) — keep `format_short()` in sync when adding new ones
+- `infer_commit_type` takes `all_modified_docs_only: bool` parameter — must be computed in `build()` before calling
 
 ### Known Issues
 
@@ -333,4 +260,12 @@ A tracked list of review findings, design decisions, and improvement ideas that 
 
 ### Documentation Sync
 
-Keep test counts in sync across README.md, DOCS.md, PRD.md, CLAUDE.md (currently 339).
+Test counts and version references must stay in sync across multiple files. After adding/removing tests or bumping version:
+
+- **README.md** — test count in features list + testing section + changelog current version
+- **DOCS.md** — test count in description + testing section
+- **PRD.md** — test count in §2.3 (feature status table), §8 (testing header), §11 (roadmap table), §12 (success metrics). Also: PRD version header, changelog entry, and compatibility policy table on version bumps.
+- **CHANGELOG.md** — test count in current version's testing section
+- **CLAUDE.md** — test count in Running Tests section
+
+Use `cargo test --all-targets 2>&1 | grep "^test result" | awk '{sum += $4} END {print sum}'` to get the actual count. Don't guess from memory — counts drift easily.
