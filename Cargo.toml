@@ -128,8 +128,8 @@ all-languages = [
 ]
 
 [profile.release]
-lto = true
-strip = true
+lto = "fat"
+strip = "symbols"
 codegen-units = 1
 overflow-checks = true
 

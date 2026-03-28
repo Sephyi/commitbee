@@ -356,16 +356,19 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 ### Secure Key Storage
 
-If built with the `secure-storage` feature, CommitBee can store API keys in your OS keychain using platform-native backends (macOS Keychain, Windows Credential Manager, Linux Secret Service):
+API keys are stored as `secrecy::SecretString` — memory is zeroed on drop and keys show as `[REDACTED]` in debug output. Keys are only exposed at the HTTP header insertion point.
+
+The `secure-storage` feature (enabled by default) stores keys in your OS keychain using platform-native backends (macOS Keychain, Windows Credential Manager, Linux Secret Service):
 
 ```bash
-cargo install commitbee --features secure-storage
 commitbee config set-key openai      # Prompts for key, stores in keychain
 commitbee config set-key anthropic   # Same for Anthropic
 commitbee config get-key openai      # Check if key exists
 ```
 
 Key lookup order: CLI `--provider` flag → config file → environment variable → keychain. The `set-key` and `get-key` commands do not require an API key to already be configured.
+
+To build without keychain support: `cargo install commitbee --no-default-features --features all-languages`
 
 ## ✂️ Commit Splitting
 

@@ -198,6 +198,7 @@ When adding or modifying LLM providers (`src/services/llm/`), every provider mus
 5. **Zero-allocation streaming** — parse from `&line_buffer[..newline_pos]` slices, then `drain(..=newline_pos)` instead of allocating new Strings per line
 6. **Shared system prompt** — use `super::SYSTEM_PROMPT`, never duplicate prompt text
 7. **CancellationToken** — check in `tokio::select!` loop alongside stream chunks
+8. **SecretString for API keys** — store as `secrecy::SecretString`, expose only via `.expose_secret()` at HTTP header insertion. Never log, Debug, or Display the raw key.
 
 ### Commit Type Conventions
 

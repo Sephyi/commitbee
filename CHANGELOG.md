@@ -39,6 +39,8 @@ All notable changes to CommitBee are documented here.
 
 - **API key validation ordering** — `set-key`, `get-key`, `init`, `config`, `completions`, and `hook` commands no longer require an API key to be present. CLI `--provider` flag now applies before keyring lookup.
 - **Platform-native keyring backends** — keyring v3 now uses macOS Keychain (`apple-native`), Windows Credential Manager (`windows-native`), and Linux Secret Service (`linux-native`) instead of a mock file-based backend.
+- **SecretString for API keys** — API keys stored as `secrecy::SecretString` in Config and provider structs. Memory zeroed on drop, never exposed except at HTTP header insertion.
+- **Overflow checks in release builds** — `overflow-checks = true` added to release profile for ANSSI-FR compliance.
 
 ### Testing
 

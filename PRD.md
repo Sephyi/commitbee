@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 # CommitBee — Product Requirements Document
 
-**Version**: 5.1
+**Version**: 5.2
 **Date**: 2026-03-28
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + [Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6)  
@@ -14,10 +14,11 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 ## Changelog
 
 <details>
-<summary>Revision history (v3.3 → v5.1)</summary>
+<summary>Revision history (v3.3 → v5.2)</summary>
 
 | Version | Date       | Summary |
 | ------- | ---------- | ------- |
+| 5.2     | 2026-03-28 | Security hardening: `secrecy::SecretString` for API keys (F-004), overflow-checks in release profile (F-001). Updated SR-002, DR-005, DR-006. |
 | 5.1     | 2026-03-28 | fix: keyring platform-native backends, API key validation ordering for set-key command. Updated FR-019 and SR-002. |
 | 5.0     | 2026-03-28 | PRD structural overhaul: removed stale §3.1 Resolved Issues (all v0.2.0), removed Dependency Status table, removed dead ORCommit references. Updated §2 competitive landscape for 2026 (added IDE-native competitors: GitHub Copilot Desktop, Cursor, Windsurf; updated star counts; refreshed feature matrix). Updated §3 codebase structure (added diff.rs, differ.rs, progress.rs). Updated PE-001/PE-002 with v0.6.0 prompt sections (STRUCTURED CHANGES, IMPORTS, RELATED FILES, INTENT). Updated PR-005 with adaptive budget. Added v0.6.0 feature section §4.6 (FR-064–FR-072). Renumbered Future to §4.7. |
 | 4.4     | 2026-03-27 | Added future requirements from audit: FR-073 (move detection), FR-074 (AST-based splitting), FR-075 (configurable categorization), TR-008 (LLM quality testing), PE-007 (token-accurate budgets). |
@@ -548,6 +549,7 @@ Allow users to define custom file category patterns in config (e.g., `[categoriz
 
 ### SR-002: API Key Management
 
+- **In-memory protection**: API keys stored as `secrecy::SecretString` in Config and provider structs — memory zeroed on drop, `[REDACTED]` in Debug output, only exposed at HTTP header insertion via `.expose_secret()`
 - System keychain via `keyring` with platform-native backends: `apple-native` (macOS Keychain), `linux-native` (Linux Secret Service), `windows-native` (Windows Credential Manager)
 - Environment variable fallback
 - Never stores keys in plaintext config
@@ -795,8 +797,9 @@ bash, zsh, fish, powershell via `clap_complete`. Documented installation per she
 [profile.release]
 lto = true
 strip = true
-codegen-units = 1
 opt-level = "z"  # or "s" — benchmark both
+codegen-units = 1
+overflow-checks = true  # ANSSI-FR compliance
 ```
 
 ### DR-006: Feature Flags
