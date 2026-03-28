@@ -5,6 +5,7 @@
 use directories::ProjectDirs;
 use figment::Figment;
 use figment::providers::{Env, Format, Serialized, Toml};
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -74,8 +75,8 @@ pub struct Config {
     #[serde(default = "default_ollama_host")]
     pub ollama_host: String,
 
-    #[serde(default)]
-    pub api_key: Option<String>,
+    #[serde(default, skip_serializing)]
+    pub api_key: Option<SecretString>,
 
     #[serde(default = "default_max_diff_lines")]
     pub max_diff_lines: usize,
@@ -316,8 +317,10 @@ impl Config {
         // Provider-specific API key fallback (after CLI overrides set the provider)
         if config.api_key.is_none() {
             config.api_key = match config.provider {
-                Provider::OpenAI => std::env::var("OPENAI_API_KEY").ok(),
-                Provider::Anthropic => std::env::var("ANTHROPIC_API_KEY").ok(),
+                Provider::OpenAI => std::env::var("OPENAI_API_KEY").ok().map(SecretString::from),
+                Provider::Anthropic => {
+                    std::env::var("ANTHROPIC_API_KEY").ok().map(SecretString::from)
+                }
                 Provider::Ollama => None,
             };
         }
@@ -329,7 +332,7 @@ impl Config {
             if let Ok(entry) = keyring::Entry::new("commitbee", &provider_name)
                 && let Ok(key) = entry.get_password()
             {
-                config.api_key = Some(key);
+                config.api_key = Some(SecretString::from(key));
             }
         }
 

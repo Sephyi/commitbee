@@ -10,6 +10,8 @@ use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
+use secrecy::{ExposeSecret, SecretString};
+
 use crate::config::Config;
 use crate::error::{Error, Result};
 
@@ -22,7 +24,7 @@ pub struct AnthropicProvider {
     client: Client,
     base_url: String,
     model: String,
-    api_key: String,
+    api_key: SecretString,
     temperature: f32,
     max_tokens: u32,
 }
@@ -83,7 +85,7 @@ impl AnthropicProvider {
     pub async fn verify_connection(&self) -> Result<()> {
         // Anthropic doesn't have a lightweight endpoint for verification,
         // so we just validate that the key looks plausible
-        if self.api_key.is_empty() {
+        if self.api_key.expose_secret().is_empty() {
             return Err(Error::Provider {
                 provider: "anthropic".into(),
                 message: "API key not configured".into(),
@@ -104,7 +106,7 @@ impl AnthropicProvider {
         let response = self
             .client
             .post(&url)
-            .header("x-api-key", &self.api_key)
+            .header("x-api-key", self.api_key.expose_secret())
             .header("anthropic-version", API_VERSION)
             .header("content-type", "application/json")
             .json(&MessagesRequest {

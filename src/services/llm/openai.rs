@@ -10,6 +10,8 @@ use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
+use secrecy::{ExposeSecret, SecretString};
+
 use crate::config::Config;
 use crate::error::{Error, Result};
 
@@ -21,7 +23,7 @@ pub struct OpenAiProvider {
     client: Client,
     base_url: String,
     model: String,
-    api_key: String,
+    api_key: SecretString,
     temperature: f32,
     max_tokens: u32,
 }
@@ -88,7 +90,7 @@ impl OpenAiProvider {
         let response = self
             .client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Authorization", format!("Bearer {}", self.api_key.expose_secret()))
             .send()
             .await
             .map_err(|e| Error::Provider {
@@ -118,7 +120,7 @@ impl OpenAiProvider {
         let response = self
             .client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Authorization", format!("Bearer {}", self.api_key.expose_secret()))
             .json(&ChatRequest {
                 model: self.model.clone(),
                 messages: vec![

@@ -83,6 +83,9 @@ indicatif = "0.18"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Secret management
+secrecy = { version = "0.10", features = ["serde"] }
+
 # Utilities
 regex = "1.12"
 globset = "0.4"
