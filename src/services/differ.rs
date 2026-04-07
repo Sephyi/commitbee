@@ -185,7 +185,12 @@ impl AstDiffer {
                     ) {
                         let name = child
                             .child_by_field_name("name")
-                            .or_else(|| child.child_by_field_name("declarations").and_then(|d| d.child(0)).and_then(|n| n.child_by_field_name("name")))
+                            .or_else(|| {
+                                child
+                                    .child_by_field_name("declarations")
+                                    .and_then(|d| d.child(0))
+                                    .and_then(|n| n.child_by_field_name("name"))
+                            })
                             .and_then(|n| n.utf8_text(source.as_bytes()).ok())
                             .unwrap_or("")
                             .to_string();

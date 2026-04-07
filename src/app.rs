@@ -1494,9 +1494,9 @@ fi
             ))
         })?;
 
-        clipboard.set_text(text).map_err(|e| {
-            Error::Config(format!("Failed to copy to clipboard: {e}"))
-        })?;
+        clipboard
+            .set_text(text)
+            .map_err(|e| Error::Config(format!("Failed to copy to clipboard: {e}")))?;
 
         Ok(())
     }
