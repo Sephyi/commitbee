@@ -136,6 +136,8 @@ Run `commitbee doctor` to see the exact path on your system.
 
 ### Full Config Reference
 
+> No longer maintained! You can always get the latest configuration by running `commitbee init`!
+
 ```toml
 # LLM provider: ollama, openai, anthropic
 provider = "ollama"
@@ -164,7 +166,7 @@ max_context_chars = 24000
 # Request timeout in seconds (1-3600)
 timeout_secs = 300
 
-# LLM temperature (0.0-2.0). Lower = more deterministic
+# LLM temperature (0.0-1.0). Lower = more deterministic
 temperature = 0.3
 
 # Maximum tokens to generate (default 256)
