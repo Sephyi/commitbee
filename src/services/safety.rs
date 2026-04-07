@@ -296,11 +296,11 @@ pub fn scan_full_diff_with_patterns(
         }
 
         // Parse hunk header: @@ -1,5 +1,6 @@
-        if let Some(caps) = HUNK_HEADER.captures(line) {
-            if let Ok(start) = caps[1].parse::<usize>() {
-                current_line = Some(start);
-                continue;
-            }
+        if let Some(caps) = HUNK_HEADER.captures(line)
+            && let Ok(start) = caps[1].parse::<usize>()
+        {
+            current_line = Some(start);
+            continue;
         }
 
         let Some(ref mut line_num) = current_line else {
