@@ -395,48 +395,67 @@ impl CommitSplitter {
             }
         }
 
-        // Find symbol pairs that indicate dependency between groups:
-        // A removed symbol in group X and an added symbol with same name in group Y
+        // Pre-index added symbols by name for fast lookup
+        let added: Vec<_> = symbols.iter().filter(|s| s.is_added).collect();
+        let mut added_by_name: HashMap<&str, Vec<&CodeSymbol>> = HashMap::new();
+        for s in &added {
+            added_by_name.entry(&s.name).or_default().push(s);
+        }
+
         let mut merge_pairs: Vec<(usize, usize)> = Vec::new();
 
-        let removed: Vec<_> = symbols.iter().filter(|s| !s.is_added).collect();
-        let added: Vec<_> = symbols.iter().filter(|s| s.is_added).collect();
-
-        for rem in &removed {
-            for add in &added {
-                if rem.name == add.name
-                    && rem.kind == add.kind
-                    && rem.file != add.file
-                    && let (Some(&g1), Some(&g2)) = (
-                        file_to_group.get(rem.file.as_path()),
-                        file_to_group.get(add.file.as_path()),
-                    )
-                    && g1 != g2
-                {
-                    merge_pairs.push((g1.min(g2), g1.max(g2)));
+        // 1. Merge when a symbol is moved: removed in one group, added in another.
+        for rem in symbols.iter().filter(|s| !s.is_added) {
+            if let Some(matches) = added_by_name.get(rem.name.as_str()) {
+                for add in matches {
+                    if rem.kind == add.kind
+                        && rem.file != add.file
+                        && let (Some(&g1), Some(&g2)) = (
+                            file_to_group.get(rem.file.as_path()),
+                            file_to_group.get(add.file.as_path()),
+                        )
+                        && g1 != g2
+                    {
+                        merge_pairs.push((g1.min(g2), g1.max(g2)));
+                    }
                 }
             }
         }
 
-        // Also merge when a file's diff adds a line that directly CALLS a new function
-        // from another group. Only matches `+` lines containing `sym_name(` — much more
-        // precise than the previous `diff.contains(sym_name)` which caused cascading merges
-        // from import statements and type references.
+        // 2. Merge when a file calls a NEW function from another group.
+        // Optimization: Scan each file's diff ONCE for call-like patterns instead of per-symbol.
         for (idx, group) in groups.iter().enumerate() {
             for file in group {
-                for sym in &added {
-                    if let Some(&sym_group) = file_to_group.get(sym.file.as_path())
-                        && sym_group != idx
-                    {
-                        // Only match added lines (`+`) that contain a function call pattern
-                        let call_pattern = format!("{}(", sym.name);
-                        let has_call = file.diff.lines().any(|line| {
-                            line.starts_with('+')
-                                && !line.starts_with("+++")
-                                && line.contains(&call_pattern)
-                        });
-                        if has_call {
-                            merge_pairs.push((idx.min(sym_group), idx.max(sym_group)));
+                let mut potential_calls = HashSet::new();
+
+                for line in file.diff.lines() {
+                    if line.starts_with('+') && !line.starts_with("+++") {
+                        // Extract words followed by '(' as potential function calls
+                        let mut current_word = String::new();
+                        for c in line[1..].chars() {
+                            if c.is_alphanumeric() || c == '_' {
+                                current_word.push(c);
+                            } else if c == '(' {
+                                if !current_word.is_empty() {
+                                    potential_calls.insert(current_word.clone());
+                                }
+                                current_word.clear();
+                            } else {
+                                current_word.clear();
+                            }
+                        }
+                    }
+                }
+
+                // Check if any potential calls match an added symbol from another group
+                for call in &potential_calls {
+                    if let Some(matches) = added_by_name.get(call.as_str()) {
+                        for sym in matches {
+                            if let Some(&sym_group) = file_to_group.get(sym.file.as_path())
+                                && sym_group != idx
+                            {
+                                merge_pairs.push((idx.min(sym_group), idx.max(sym_group)));
+                            }
                         }
                     }
                 }
