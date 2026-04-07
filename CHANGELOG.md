@@ -8,6 +8,8 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 All notable changes to CommitBee are documented here.
 
+## `v0.7.0-dev` — Unreleased
+
 ## `v0.6.0` — Semantic Intelligence
 
 ### UI/UX
