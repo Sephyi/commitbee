@@ -253,3 +253,95 @@ fn invalid_toml_returns_error() {
     let result: std::result::Result<Config, _> = toml::from_str("provider = [invalid");
     assert!(result.is_err(), "invalid TOML should return an error");
 }
+
+// ─── Generated config sync ──────────────────────────────────────────────────
+
+#[test]
+fn generated_config_round_trips_to_defaults() {
+    let generated = Config::generate_default_config();
+
+    // Strip comment-only lines and commented-out key=value lines,
+    // keep only active key=value lines (plus section headers).
+    let active_toml: String = generated
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            trimmed.is_empty()
+                || trimmed.starts_with('[')
+                || (!trimmed.starts_with('#') && trimmed.contains('='))
+        })
+        .map(|l| format!("{l}\n"))
+        .collect();
+
+    let parsed: Config = toml::from_str(&active_toml)
+        .expect("generated config with active lines should parse as valid TOML");
+
+    let default = Config::default();
+    assert_eq!(parsed.provider, default.provider);
+    assert_eq!(parsed.model, default.model);
+    assert_eq!(parsed.ollama_host, default.ollama_host);
+    assert_eq!(parsed.max_diff_lines, default.max_diff_lines);
+    assert_eq!(parsed.max_file_lines, default.max_file_lines);
+    assert_eq!(parsed.max_context_chars, default.max_context_chars);
+    assert_eq!(parsed.timeout_secs, default.timeout_secs);
+    assert!((parsed.temperature - default.temperature).abs() < f32::EPSILON);
+    assert_eq!(parsed.num_predict, default.num_predict);
+    assert_eq!(parsed.think, default.think);
+    assert_eq!(parsed.rename_threshold, default.rename_threshold);
+    assert_eq!(parsed.learn_from_history, default.learn_from_history);
+    assert_eq!(parsed.history_sample_size, default.history_sample_size);
+    assert!(parsed.format.include_body);
+    assert!(parsed.format.include_scope);
+    assert!(parsed.format.lowercase_subject);
+}
+
+#[test]
+fn generated_config_includes_all_active_fields() {
+    let generated = Config::generate_default_config();
+
+    // All uncommented (active) fields must appear
+    let active_keys = [
+        "provider",
+        "model",
+        "ollama_host",
+        "max_diff_lines",
+        "max_file_lines",
+    ];
+    for key in active_keys {
+        assert!(
+            generated.lines().any(|l| {
+                let trimmed = l.trim();
+                !trimmed.starts_with('#') && trimmed.starts_with(key)
+            }),
+            "active field '{key}' missing from generated config"
+        );
+    }
+
+    // All commented-out fields must appear (as # key = value)
+    let commented_keys = [
+        "timeout_secs",
+        "temperature",
+        "num_predict",
+        "think",
+        "max_context_chars",
+        "rename_threshold",
+        "locale",
+        "learn_from_history",
+        "history_sample_size",
+        "openai_base_url",
+        "anthropic_base_url",
+        "system_prompt_path",
+        "template_path",
+        "custom_secret_patterns",
+        "disabled_secret_patterns",
+        "exclude_patterns",
+    ];
+    for key in commented_keys {
+        assert!(
+            generated
+                .lines()
+                .any(|l| l.starts_with("# ") && l[2..].trim_start().starts_with(key)),
+            "commented field '{key}' missing from generated config"
+        );
+    }
+}

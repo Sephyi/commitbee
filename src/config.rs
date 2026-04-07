@@ -93,7 +93,7 @@ pub struct Config {
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
 
-    /// LLM temperature (0.0-2.0, default 0.3)
+    /// LLM temperature (0.0-1.0, default 0.3)
     #[serde(default = "default_temperature")]
     pub temperature: f32,
 
@@ -430,7 +430,7 @@ impl Config {
 
         if !(0.0..=2.0).contains(&self.temperature) {
             return Err(Error::Config(format!(
-                "temperature must be 0.0–2.0, got {}",
+                "temperature must be 0.0–1.0, got {}",
                 self.temperature
             )));
         }
@@ -485,81 +485,9 @@ impl Config {
         fs::create_dir_all(&dir)?;
 
         let path = dir.join("config.toml");
-        let content = r#"# CommitBee Configuration
+        let content = Self::generate_default_config();
 
-# LLM provider: ollama, openai, anthropic
-provider = "ollama"
-
-# Model name (for Ollama, use `ollama list` to see available)
-model = "qwen3.5:4b"
-
-# Ollama server URL
-ollama_host = "http://localhost:11434"
-
-# Maximum lines of diff to include in prompt
-max_diff_lines = 500
-
-# Maximum lines per file in diff
-max_file_lines = 100
-
-# Maximum tokens to generate (default 256)
-# Increase to 8192+ if using thinking models with think = true
-# num_predict = 256
-
-# Enable thinking/reasoning for Ollama models (default: false)
-# When enabled, models like qwen3 will reason before responding.
-# Requires higher num_predict (8192+) to accommodate thinking tokens.
-# think = false
-
-# Maximum context characters for LLM prompt (~4 chars per token)
-# Increase for larger models (e.g., 48000 for 16K context)
-# max_context_chars = 24000
-
-# Rename detection similarity threshold (0-100, default 70)
-# Set to 0 to disable rename detection
-# rename_threshold = 70
-
-# Language for commit message generation (ISO 639-1 code)
-# Type and scope remain in English per Conventional Commits spec.
-# locale = "de"
-
-# Custom secret patterns (additional regex patterns for secret scanning)
-# custom_secret_patterns = ["CUSTOM_KEY_[a-zA-Z0-9]{32}"]
-
-# Disable built-in secret patterns by name
-# disabled_secret_patterns = ["Generic Secret (unquoted)"]
-
-# Experimental: learn commit style from repository history (default: false)
-# Analyzes recent commits to learn scope naming, type patterns, and
-# subject phrasing conventions for the repository.
-# learn_from_history = false
-
-# Number of recent commits to sample for style learning (default: 50)
-# history_sample_size = 50
-
-# Exclude files matching glob patterns from analysis and diff context
-# Excluded files are listed in output but not sent to the LLM.
-# exclude_patterns = ["*.lock", "**/*.generated.*"]
-
-# Custom system prompt file (overrides built-in prompt)
-# system_prompt_path = "/path/to/system_prompt.txt"
-
-# Custom user prompt template file (supports {{diff}}, {{symbols}}, {{files}} variables)
-# template_path = "/path/to/template.txt"
-
-# Commit message format options
-[format]
-# Include body/description in commit message
-include_body = true
-
-# Include scope in commit type, e.g., feat(scope): subject
-include_scope = true
-
-# Enforce lowercase first character of subject (conventional commits best practice)
-lowercase_subject = true
-"#;
-
-        fs::write(&path, content)?;
+        fs::write(&path, &content)?;
 
         // Set secure permissions (0600)
         #[cfg(unix)]
@@ -571,5 +499,229 @@ lowercase_subject = true
         }
 
         Ok(path)
+    }
+
+    /// Generate the default config TOML string with descriptive comments.
+    ///
+    /// Values are pulled from `Config::default()` so the template never
+    /// drifts from the struct defaults. Comments are maintained alongside
+    /// field descriptors in a single list.
+    pub fn generate_default_config() -> String {
+        let default = Config::default();
+        let table: toml::Table = {
+            let s = toml::to_string(&default).expect("Config serializes to TOML");
+            toml::from_str(&s).expect("round-trips as TOML table")
+        };
+
+        /// Whether to show the field commented-out (advanced/optional settings)
+        /// or active (core settings the user should see immediately).
+        #[derive(Clone, Copy)]
+        enum Show {
+            Active,
+            CommentedOut,
+        }
+
+        struct Field {
+            key: &'static str,
+            comment: &'static str,
+            show: Show,
+            /// Override value for Option/Vec fields that serialize to nothing
+            example: Option<&'static str>,
+        }
+
+        let fields: &[Field] = &[
+            Field {
+                key: "provider",
+                comment: "LLM provider: ollama, openai, anthropic",
+                show: Show::Active,
+                example: None,
+            },
+            Field {
+                key: "model",
+                comment: "Model name (for Ollama, use `ollama list` to see available)",
+                show: Show::Active,
+                example: None,
+            },
+            Field {
+                key: "ollama_host",
+                comment: "Ollama server URL",
+                show: Show::Active,
+                example: None,
+            },
+            Field {
+                key: "max_diff_lines",
+                comment: "Maximum lines of diff to include in prompt",
+                show: Show::Active,
+                example: None,
+            },
+            Field {
+                key: "max_file_lines",
+                comment: "Maximum lines per file in diff",
+                show: Show::Active,
+                example: None,
+            },
+            Field {
+                key: "num_predict",
+                comment: "Maximum tokens to generate\n\
+                          Increase to 8192+ if using thinking models with think = true",
+                show: Show::CommentedOut,
+                example: None,
+            },
+            Field {
+                key: "think",
+                comment: "Enable thinking/reasoning for Ollama models\n\
+                          When enabled, models like qwen3 will reason before responding.\n\
+                          Requires higher num_predict (8192+) to accommodate thinking tokens.",
+                show: Show::CommentedOut,
+                example: None,
+            },
+            Field {
+                key: "max_context_chars",
+                comment: "Maximum context characters for LLM prompt (~4 chars per token)\n\
+                          Increase for larger models (e.g., 48000 for 16K context)",
+                show: Show::CommentedOut,
+                example: None,
+            },
+            Field {
+                key: "timeout_secs",
+                comment: "Request timeout in seconds",
+                show: Show::CommentedOut,
+                example: None,
+            },
+            Field {
+                key: "temperature",
+                comment: "LLM temperature (0.0-1.0, default 0.3)",
+                show: Show::CommentedOut,
+                example: None,
+            },
+            Field {
+                key: "rename_threshold",
+                comment: "Rename detection similarity threshold (0-100)\n\
+                          Set to 0 to disable rename detection",
+                show: Show::CommentedOut,
+                example: None,
+            },
+            Field {
+                key: "locale",
+                comment: "Language for commit message generation (ISO 639-1 code)\n\
+                          Type and scope remain in English per Conventional Commits spec.",
+                show: Show::CommentedOut,
+                example: Some("\"de\""),
+            },
+            Field {
+                key: "custom_secret_patterns",
+                comment: "Custom secret patterns (additional regex patterns for secret scanning)",
+                show: Show::CommentedOut,
+                example: Some("[\"CUSTOM_KEY_[a-zA-Z0-9]{32}\"]"),
+            },
+            Field {
+                key: "disabled_secret_patterns",
+                comment: "Disable built-in secret patterns by name",
+                show: Show::CommentedOut,
+                example: Some("[\"Generic Secret (unquoted)\"]"),
+            },
+            Field {
+                key: "learn_from_history",
+                comment: "Experimental: learn commit style from repository history\n\
+                          Analyzes recent commits to learn scope naming, type patterns, and\n\
+                          subject phrasing conventions for the repository.",
+                show: Show::CommentedOut,
+                example: None,
+            },
+            Field {
+                key: "history_sample_size",
+                comment: "Number of recent commits to sample for style learning",
+                show: Show::CommentedOut,
+                example: None,
+            },
+            Field {
+                key: "exclude_patterns",
+                comment: "Exclude files matching glob patterns from analysis and diff context\n\
+                          Excluded files are listed in output but not sent to the LLM.",
+                show: Show::CommentedOut,
+                example: Some("[\"*.lock\", \"**/*.generated.*\"]"),
+            },
+            Field {
+                key: "openai_base_url",
+                comment: "Base URL for OpenAI-compatible APIs",
+                show: Show::CommentedOut,
+                example: Some("\"https://api.openai.com/v1\""),
+            },
+            Field {
+                key: "anthropic_base_url",
+                comment: "Base URL for Anthropic API",
+                show: Show::CommentedOut,
+                example: Some("\"https://api.anthropic.com/v1\""),
+            },
+            Field {
+                key: "system_prompt_path",
+                comment: "Custom system prompt file (overrides built-in prompt)",
+                show: Show::CommentedOut,
+                example: Some("\"/path/to/system_prompt.txt\""),
+            },
+            Field {
+                key: "template_path",
+                comment: "Custom user prompt template file\n\
+                          Supports {{diff}}, {{symbols}}, {{files}} variables",
+                show: Show::CommentedOut,
+                example: Some("\"/path/to/template.txt\""),
+            },
+        ];
+
+        let format_fields: &[(&str, &str)] = &[
+            ("include_body", "Include body/description in commit message"),
+            (
+                "include_scope",
+                "Include scope in commit type, e.g., feat(scope): subject",
+            ),
+            (
+                "lowercase_subject",
+                "Enforce lowercase first character of subject (conventional commits best practice)",
+            ),
+        ];
+
+        let mut out = String::from("# CommitBee Configuration\n");
+
+        for field in fields {
+            out.push('\n');
+            for line in field.comment.lines() {
+                out.push_str("# ");
+                out.push_str(line);
+                out.push('\n');
+            }
+
+            // Resolve the display value: serialized default, or example for Option/Vec fields
+            let val_str = if let Some(v) = table.get(field.key) {
+                // f32 round-trips through f64 in TOML and gains precision noise;
+                // format from the struct directly for float fields
+                if v.is_float() {
+                    format!("{} = {}", field.key, default.temperature)
+                } else {
+                    format!("{} = {v}", field.key)
+                }
+            } else if let Some(ex) = field.example {
+                format!("{} = {ex}", field.key)
+            } else {
+                continue;
+            };
+
+            if matches!(field.show, Show::CommentedOut) {
+                out.push_str("# ");
+            }
+            out.push_str(&val_str);
+            out.push('\n');
+        }
+
+        // [format] section
+        out.push_str("\n# Commit message format options\n[format]\n");
+        if let Some(toml::Value::Table(fmt)) = table.get("format") {
+            for (key, comment) in format_fields {
+                if let Some(v) = fmt.get(*key) {
+                    out.push_str(&format!("# {comment}\n{key} = {v}\n"));
+                }
+            }
+        }
+
+        out
     }
 }
