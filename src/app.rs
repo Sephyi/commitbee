@@ -189,25 +189,23 @@ impl App {
         let is_interactive = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
 
         // Step 3.5: Split detection
-        if !self.cli.no_split {
-            if is_interactive && !self.cli.yes {
-                let suggestion = CommitSplitter::analyze(&changes, &symbols);
+        if !self.cli.no_split && is_interactive && !self.cli.yes {
+            let suggestion = CommitSplitter::analyze(&changes, &symbols);
 
-                if let SplitSuggestion::SuggestSplit(groups) = suggestion {
-                    Self::display_split_suggestion(&groups, &changes);
+            if let SplitSuggestion::SuggestSplit(groups) = suggestion {
+                Self::display_split_suggestion(&groups, &changes);
 
-                    let split_confirm = Confirm::new()
-                        .with_prompt("Split into separate commits?")
-                        .default(true)
-                        .interact()?;
+                let split_confirm = Confirm::new()
+                    .with_prompt("Split into separate commits?")
+                    .default(true)
+                    .interact()?;
 
-                    if split_confirm {
-                        return self
-                            .run_split_flow(&git, groups, &changes, &symbols, &symbol_diffs)
-                            .await;
-                    }
-                    progress.info("Proceeding with single commit");
+                if split_confirm {
+                    return self
+                        .run_split_flow(&git, groups, &changes, &symbols, &symbol_diffs)
+                        .await;
                 }
+                progress.info("Proceeding with single commit");
             }
         }
 
@@ -387,10 +385,9 @@ impl App {
                         if let Some(edited) = Editor::new()
                             .edit(&message)
                             .map_err(|e| Error::Dialog(e.to_string()))?
+                            && !edited.trim().is_empty()
                         {
-                            if !edited.trim().is_empty() {
-                                message = edited;
-                            }
+                            message = edited;
                         }
                     }
                     2 => {
