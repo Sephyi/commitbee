@@ -231,7 +231,7 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full version history.
 
-**Current:** `v0.6.0` *Semantic Intelligence* — Parent scope extraction, structural AST diffs, import change detection, doc-vs-code distinction, test file correlation, test-to-code ratio inference, adaptive token budgeting, semantic markers (unsafe, derive, decorator, export detection in AST diffs), and change intent detection (error handling, test, logging patterns with confidence scoring).
+**Current:** `v0.6.0` *Semantic Intelligence* — Interactive refine/edit UX, native clipboard support, full AST diffs (structs, enums, classes, interfaces, traits), parent scope extraction, import change detection, doc-vs-code distinction, test file correlation, test-to-code ratio inference, change intent detection with confidence scoring, semantic markers (unsafe/derive/decorators/exports), token-budget rebalance, and 442 total tests.
 
 ## 🤝 Contributing
 
