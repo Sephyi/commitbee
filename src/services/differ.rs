@@ -64,22 +64,7 @@ impl AstDiffer {
         // Compare derive attributes (Rust)
         let old_derives = Self::extract_derives(old_node, old_source);
         let new_derives = Self::extract_derives(new_node, new_source);
-        let added: Vec<String> = new_derives
-            .iter()
-            .filter(|d| !old_derives.contains(d))
-            .cloned()
-            .collect();
-        if !added.is_empty() {
-            changes.push(ChangeDetail::DeriveAdded(added));
-        }
-        let removed: Vec<String> = old_derives
-            .iter()
-            .filter(|d| !new_derives.contains(d))
-            .cloned()
-            .collect();
-        if !removed.is_empty() {
-            changes.push(ChangeDetail::DeriveRemoved(removed));
-        }
+        Self::diff_derives(&old_derives, &new_derives, &mut changes);
 
         // Compare mutability (Rust)
         let old_has_mut = Self::has_mut_params(old_node, old_source);
@@ -109,14 +94,187 @@ impl AstDiffer {
         changes
     }
 
-    /// Phase 2 stub (F-004) — struct/enum diffing not implemented yet.
+    /// Compare old and new versions of a struct, enum, or class definition.
     pub fn diff_struct(
-        _old_node: tree_sitter::Node,
-        _old_source: &str,
-        _new_node: tree_sitter::Node,
-        _new_source: &str,
+        old_node: tree_sitter::Node,
+        old_source: &str,
+        new_node: tree_sitter::Node,
+        new_source: &str,
     ) -> Vec<ChangeDetail> {
-        Vec::new()
+        let mut changes = Vec::new();
+
+        // Compare visibility
+        let old_vis = Self::extract_visibility(old_node, old_source);
+        let new_vis = Self::extract_visibility(new_node, new_source);
+        if old_vis != new_vis {
+            changes.push(ChangeDetail::VisibilityChanged {
+                old: old_vis,
+                new: new_vis,
+            });
+        }
+
+        // Compare derive attributes (Rust)
+        let old_derives = Self::extract_derives(old_node, old_source);
+        let new_derives = Self::extract_derives(new_node, new_source);
+        Self::diff_derives(&old_derives, &new_derives, &mut changes);
+
+        // Compare fields or variants
+        let old_fields = Self::extract_fields(old_node, old_source);
+        let new_fields = Self::extract_fields(new_node, new_source);
+        Self::diff_fields(&old_fields, &new_fields, &mut changes);
+
+        // Check for generic parameter changes
+        let old_generics = Self::extract_generics(old_node, old_source);
+        let new_generics = Self::extract_generics(new_node, new_source);
+        if old_generics != new_generics
+            && let (Some(o), Some(n)) = (old_generics, new_generics)
+        {
+            changes.push(ChangeDetail::GenericChanged { old: o, new: n });
+        }
+
+        changes
+    }
+
+    fn diff_derives(old: &[String], new: &[String], changes: &mut Vec<ChangeDetail>) {
+        let added: Vec<String> = new.iter().filter(|d| !old.contains(d)).cloned().collect();
+        if !added.is_empty() {
+            changes.push(ChangeDetail::DeriveAdded(added));
+        }
+        let removed: Vec<String> = old.iter().filter(|d| !new.contains(d)).cloned().collect();
+        if !removed.is_empty() {
+            changes.push(ChangeDetail::DeriveRemoved(removed));
+        }
+    }
+
+    fn extract_fields(node: tree_sitter::Node, source: &str) -> Vec<(String, String)> {
+        let mut fields = Vec::new();
+        // Find body-like node that contains field or variant definitions
+        let body = (0..node.child_count())
+            .filter_map(|i| {
+                #[allow(clippy::cast_possible_truncation)]
+                node.child(i as u32)
+            })
+            .find(|c| {
+                matches!(
+                    c.kind(),
+                    "field_declaration_list"
+                        | "ordered_field_declaration_list"
+                        | "enum_variant_list"
+                        | "enum_member_declaration_list"
+                        | "class_body"
+                        | "interface_body"
+                        | "enum_body"
+                )
+            });
+
+        if let Some(b) = body {
+            for i in 0..b.child_count() {
+                #[allow(clippy::cast_possible_truncation)]
+                if let Some(child) = b.child(i as u32) {
+                    // Skip symbols/punc
+                    if child.is_extra() || !child.is_named() {
+                        continue;
+                    }
+
+                    if matches!(
+                        child.kind(),
+                        "field_declaration"
+                            | "public_field_definition"
+                            | "property_declaration"
+                            | "variable_declaration"
+                    ) {
+                        let name = child
+                            .child_by_field_name("name")
+                            .or_else(|| child.child_by_field_name("declarations").and_then(|d| d.child(0)).and_then(|n| n.child_by_field_name("name")))
+                            .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+                            .unwrap_or("")
+                            .to_string();
+                        let typ = child
+                            .child_by_field_name("type")
+                            .and_then(|t| t.utf8_text(source.as_bytes()).ok())
+                            .unwrap_or("")
+                            .to_string();
+                        if !name.is_empty() {
+                            fields.push((name, typ));
+                        }
+                    } else if matches!(
+                        child.kind(),
+                        "enum_variant" | "enum_member_declaration" | "enum_constant"
+                    ) {
+                        let name = child
+                            .child_by_field_name("name")
+                            .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+                            .unwrap_or("")
+                            .to_string();
+                        if !name.is_empty() {
+                            fields.push((name, String::new()));
+                        }
+                    }
+                }
+            }
+        }
+        fields
+    }
+
+    fn diff_fields(
+        old: &[(String, String)],
+        new: &[(String, String)],
+        changes: &mut Vec<ChangeDetail>,
+    ) {
+        let old_names: HashSet<&str> = old.iter().map(|(n, _)| n.as_str()).collect();
+        let new_names: HashSet<&str> = new.iter().map(|(n, _)| n.as_str()).collect();
+
+        // Added fields/variants
+        for (name, typ) in new {
+            if !old_names.contains(name.as_str()) && !name.is_empty() {
+                let desc = if typ.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{name}: {typ}")
+                };
+                changes.push(ChangeDetail::FieldAdded(desc));
+            }
+        }
+
+        // Removed fields/variants
+        for (name, typ) in old {
+            if !new_names.contains(name.as_str()) && !name.is_empty() {
+                let desc = if typ.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{name}: {typ}")
+                };
+                changes.push(ChangeDetail::FieldRemoved(desc));
+            }
+        }
+
+        // Type changes for fields that exist in both
+        for (name, old_typ) in old {
+            if let Some((_, new_typ)) = new.iter().find(|(n, _)| n == name)
+                && old_typ != new_typ
+                && !old_typ.is_empty()
+                && !new_typ.is_empty()
+            {
+                changes.push(ChangeDetail::FieldTypeChanged {
+                    name: name.clone(),
+                    old_type: old_typ.clone(),
+                    new_type: new_typ.clone(),
+                });
+            }
+        }
+    }
+
+    fn extract_generics(node: tree_sitter::Node, source: &str) -> Option<String> {
+        // Look for type_parameters child (Rust, TS, Java)
+        (0..node.child_count())
+            .filter_map(|i| {
+                #[allow(clippy::cast_possible_truncation)]
+                node.child(i as u32)
+            })
+            .find(|c| matches!(c.kind(), "type_parameters" | "type_parameter_list"))
+            .and_then(|g| g.utf8_text(source.as_bytes()).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
     }
 
     fn bodies_semantically_equal(old_body: Option<&str>, new_body: Option<&str>) -> bool {
@@ -527,7 +685,49 @@ mod tests {
     }
 
     #[test]
-    fn diff_struct_returns_empty_phase1() {
+    fn diff_struct_detects_added_field() {
+        let old_src = "struct Config { timeout: u64 }";
+        let new_src = "struct Config { timeout: u64, retry: u32 }";
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let old_tree = parser.parse(old_src, None).unwrap();
+        let new_tree = parser.parse(new_src, None).unwrap();
+        let old_node = old_tree.root_node().child(0).unwrap();
+        let new_node = new_tree.root_node().child(0).unwrap();
+        let changes = AstDiffer::diff_struct(old_node, old_src, new_node, new_src);
+        assert!(
+            changes
+                .iter()
+                .any(|c| matches!(c, ChangeDetail::FieldAdded(f) if f.contains("retry"))),
+            "should detect added field 'retry': {changes:?}"
+        );
+    }
+
+    #[test]
+    fn diff_enum_detects_added_variant() {
+        let old_src = "enum Color { Red, Green }";
+        let new_src = "enum Color { Red, Green, Blue }";
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let old_tree = parser.parse(old_src, None).unwrap();
+        let new_tree = parser.parse(new_src, None).unwrap();
+        let old_node = old_tree.root_node().child(0).unwrap();
+        let new_node = new_tree.root_node().child(0).unwrap();
+        let changes = AstDiffer::diff_struct(old_node, old_src, new_node, new_src);
+        assert!(
+            changes
+                .iter()
+                .any(|c| matches!(c, ChangeDetail::FieldAdded(f) if f == "Blue")),
+            "should detect added variant 'Blue': {changes:?}"
+        );
+    }
+
+    #[test]
+    fn diff_struct_returns_empty_if_no_changes() {
         let src = "struct Foo { x: i32 }";
         let mut parser = tree_sitter::Parser::new();
         parser
@@ -536,10 +736,7 @@ mod tests {
         let tree = parser.parse(src, None).unwrap();
         let node = tree.root_node().child(0).unwrap();
         let changes = AstDiffer::diff_struct(node, src, node, src);
-        assert!(
-            changes.is_empty(),
-            "Phase 1: diff_struct should return empty"
-        );
+        assert!(changes.is_empty());
     }
 
     #[test]
