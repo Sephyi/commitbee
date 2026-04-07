@@ -89,6 +89,7 @@ secrecy = { version = "0.10", features = ["serde"] }
 # Utilities
 regex = "1.12"
 globset = "0.4"
+arboard = "3.4"
 
 # Secure storage (optional, platform-native keychain backends)
 [target.'cfg(target_os = "macos")'.dependencies]

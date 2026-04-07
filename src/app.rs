@@ -1374,43 +1374,17 @@ fi
 
     // ─── Clipboard Helpers ───
 
-    /// Copy text to the system clipboard using platform-specific commands.
+    /// Copy text to the system clipboard using the arboard crate.
     fn copy_to_clipboard(text: &str) -> Result<()> {
-        let (cmd, args): (&str, &[&str]) = if cfg!(target_os = "macos") {
-            ("pbcopy", &[])
-        } else if cfg!(target_os = "windows") {
-            ("clip", &[])
-        } else {
-            // Linux: try xclip first, fall back to xsel
-            ("xclip", &["-selection", "clipboard"])
-        };
+        let mut clipboard = arboard::Clipboard::new().map_err(|e| {
+            Error::Config(format!(
+                "Failed to initialize clipboard: {e}. If on Linux, ensure x11 or wayland dependencies are installed."
+            ))
+        })?;
 
-        let mut child = std::process::Command::new(cmd)
-            .args(args)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .map_err(|e| {
-                Error::Config(format!(
-                    "Failed to run clipboard command '{}': {}. Install it or use --dry-run instead.",
-                    cmd, e
-                ))
-            })?;
-
-        if let Some(ref mut stdin) = child.stdin {
-            use std::io::Write;
-            stdin.write_all(text.as_bytes())?;
-        }
-
-        let status = child.wait()?;
-        if !status.success() {
-            return Err(Error::Config(format!(
-                "Clipboard command '{}' failed with exit code {}",
-                cmd,
-                status.code().unwrap_or(-1)
-            )));
-        }
+        clipboard.set_text(text).map_err(|e| {
+            Error::Config(format!("Failed to copy to clipboard: {e}"))
+        })?;
 
         Ok(())
     }
