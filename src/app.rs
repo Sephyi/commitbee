@@ -6,7 +6,7 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use console::style;
-use dialoguer::Confirm;
+use dialoguer::{Confirm, Editor, Select};
 use globset::{Glob, GlobSetBuilder};
 use tokio::signal;
 use tokio::sync::mpsc;
@@ -186,10 +186,10 @@ impl App {
         // Finish analysis spinner before any interactive prompts
         progress.finish();
 
+        let is_interactive = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
+
         // Step 3.5: Split detection
         if !self.cli.no_split {
-            let is_interactive = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
-
             if is_interactive && !self.cli.yes {
                 let suggestion = CommitSplitter::analyze(&changes, &symbols);
 
@@ -360,13 +360,45 @@ impl App {
         }
 
         // Step 6: Select message
-        let message = if candidates.len() == 1 {
+        let mut message = if candidates.len() == 1 {
             candidates.into_iter().next().unwrap()
         } else {
             self.select_candidate(&candidates)?
         };
 
-        // Step 7: Clipboard / dry-run / confirm and commit
+        // Step 6.5: Interactive Review / Edit
+        if !self.cli.yes && is_interactive && !self.cli.dry_run && !self.cli.clipboard {
+            loop {
+                eprintln!("\n{}", style("Commit message:").bold());
+                eprintln!("{}", style(&message).green());
+                eprintln!();
+
+                let options = &["Commit", "Edit", "Cancel"];
+                let selection = Select::new()
+                    .with_prompt("What would you like to do?")
+                    .items(options)
+                    .default(0)
+                    .interact()
+                    .map_err(|e| Error::Dialog(e.to_string()))?;
+
+                match selection {
+                    0 => break, // Commit
+                    1 => {
+                        if let Some(edited) = Editor::new()
+                            .edit(&message)
+                            .map_err(|e| Error::Dialog(e.to_string()))?
+                        {
+                            if !edited.trim().is_empty() {
+                                message = edited;
+                            }
+                        }
+                    }
+                    _ => return Err(Error::Cancelled),
+                }
+            }
+        }
+
+        // Step 7: Clipboard / dry-run / commit
         if self.cli.clipboard {
             Self::copy_to_clipboard(&message)?;
             eprintln!("{} Copied to clipboard!", style("✓").green().bold());
@@ -379,31 +411,18 @@ impl App {
             return Ok(());
         }
 
-        let is_interactive = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
+        // Auto-commit if --yes is set
+        if self.cli.yes {
+            git.commit(&message).await?;
+            eprintln!("{} Committed!", style("✓").green().bold());
+            return Ok(());
+        }
 
-        if !self.cli.yes {
-            if !is_interactive {
-                eprintln!("{}", style("warning:").yellow().bold());
-                eprintln!("  Not a terminal. Use --yes to auto-confirm in scripts/hooks.");
-                println!("{}", message);
-                return Ok(());
-            }
-
-            // For single candidate (already shown via streaming), just confirm
-            if num_candidates == 1 {
-                eprintln!("\n{}", style("Generated commit message:").bold());
-                eprintln!("{}", style(&message).green());
-                eprintln!();
-            }
-
-            let confirm = Confirm::new()
-                .with_prompt("Create commit with this message?")
-                .default(true)
-                .interact()?;
-
-            if !confirm {
-                return Err(Error::Cancelled);
-            }
+        if !is_interactive {
+            eprintln!("{}", style("warning:").yellow().bold());
+            eprintln!("  Not a terminal. Use --yes to auto-confirm in scripts/hooks.");
+            println!("{}", message);
+            return Ok(());
         }
 
         git.commit(&message).await?;
