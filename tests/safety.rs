@@ -424,6 +424,32 @@ diff --git a/src/b.rs b/src/b.rs
     assert_eq!(matches[0].pattern_name, "OpenAI Key");
 }
 
+#[test]
+fn full_diff_accurate_line_numbers() {
+    let full_diff = "\
+diff --git a/src/main.rs b/src/main.rs
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -10,5 +10,6 @@
+ fn old() {}
+  context line
+-removed line
++API_KEY=abcdefghijklmnopqrstuvwxyz1234567890abcdef
++another line
+ fn new() {}
+";
+    let matches = scan_full_diff_for_secrets(full_diff);
+    assert_eq!(matches.len(), 1);
+    // Hunk starts at +10
+    // Line 10:  fn old() {} (this should be the 10th line of the file, starting the hunk)
+    // Actually, in a diff, context lines also count towards the line number in the new file.
+    // Line 10:  fn old() {}
+    // Line 11:   context line
+    // (removed line is skipped)
+    // Line 12: +API_KEY=...
+    assert_eq!(matches[0].line, Some(12));
+}
+
 // ─── New pattern detection tests ──────────────────────────────────────────────
 
 #[test]

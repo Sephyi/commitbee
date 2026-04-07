@@ -252,23 +252,28 @@ pub fn scan_full_diff_for_secrets(full_diff: &str) -> Vec<SecretMatch> {
     scan_full_diff_with_patterns(full_diff, &DEFAULT_PATTERNS)
 }
 
+static HUNK_HEADER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^@@ -\d+,?\d* \+(\d+),?\d* @@").unwrap());
+
 /// Scan the full unified diff for secrets using the given pattern set.
 ///
 /// This catches secrets that would be missed by `scan_for_secrets` when
 /// file diffs are truncated to `max_file_lines`. Parses the raw `git diff`
-/// output directly, tracking file paths from diff headers.
+/// output directly, tracking file paths from diff headers and calculating
+/// accurate source line numbers from hunk headers (`@@ -L,l +R,r @@`).
 pub fn scan_full_diff_with_patterns(
     full_diff: &str,
     patterns: &[SecretPattern],
 ) -> Vec<SecretMatch> {
     let mut found = Vec::new();
     let mut current_file = String::new();
-    let mut line_num: usize = 0;
+    let mut current_line: Option<usize> = None;
 
     for line in full_diff.lines() {
         // Track current file from diff headers
         if line.starts_with("diff --git ") {
-            line_num = 0;
+            current_file.clear();
+            current_line = None;
             continue;
         }
 
@@ -278,7 +283,7 @@ pub fn scan_full_diff_with_patterns(
         }
 
         if line == "+++ /dev/null" {
-            // Deleted file — keep current_file from --- header
+            // Deleted file — keep current_file from --- header if we have one
             continue;
         }
 
@@ -290,22 +295,41 @@ pub fn scan_full_diff_with_patterns(
             continue;
         }
 
-        line_num += 1;
+        // Parse hunk header: @@ -1,5 +1,6 @@
+        if let Some(caps) = HUNK_HEADER.captures(line) {
+            if let Ok(start) = caps[1].parse::<usize>() {
+                current_line = Some(start);
+                continue;
+            }
+        }
 
-        // Only check added lines
-        if !line.starts_with('+') || line.starts_with("+++") {
+        let Some(ref mut line_num) = current_line else {
+            continue; // Not inside a hunk
+        };
+
+        // Skip diff headers like "index ...", "old mode ...", "--- ...", etc.
+        // Also skip "No newline at end of file"
+        if line.starts_with('\\') || line.starts_with("index") || line.starts_with("old mode") {
             continue;
         }
 
-        for pat in patterns {
-            if pat.regex.is_match(line) {
-                found.push(SecretMatch {
-                    pattern_name: pat.name.to_string(),
-                    file: current_file.clone(),
-                    line: Some(line_num),
-                });
-                break;
+        // Only check added lines
+        if line.starts_with('+') && !line.starts_with("+++") {
+            let content = &line[1..];
+            for pat in patterns {
+                if pat.regex.is_match(content) {
+                    found.push(SecretMatch {
+                        pattern_name: pat.name.to_string(),
+                        file: current_file.clone(),
+                        line: Some(*line_num),
+                    });
+                    break;
+                }
             }
+            *line_num += 1;
+        } else if line.starts_with(' ') {
+            // Context line
+            *line_num += 1;
         }
     }
 
