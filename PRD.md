@@ -6,8 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 # CommitBee — Product Requirements Document
 
-**Version**: 5.4
-**Date**: 2026-04-07
+**Version**: 5.4  
+**Date**: 2026-04-07  
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + Junie (LLM Agent)
 
