@@ -231,7 +231,7 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full version history.
 
-**Current:** `v0.6.0-dev` *Deep Understanding* — Parent scope extraction, structural AST diffs, import change detection, doc-vs-code distinction, test file correlation, test-to-code ratio inference, adaptive token budgeting, semantic markers (unsafe, derive, decorator, export detection in AST diffs), and change intent detection (error handling, test, logging patterns with confidence scoring).
+**Current:** `v0.6.0` *Semantic Intelligence* — Parent scope extraction, structural AST diffs, import change detection, doc-vs-code distinction, test file correlation, test-to-code ratio inference, adaptive token budgeting, semantic markers (unsafe, derive, decorator, export detection in AST diffs), and change intent detection (error handling, test, logging patterns with confidence scoring).
 
 ## 🤝 Contributing
 

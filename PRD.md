@@ -18,13 +18,13 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 | Version | Date       | Summary |
 | ------- | ---------- | ------- |
-| 5.4     | 2026-04-07 | v0.6.0-dev: Added FR-081 (Interactive Message Refinement). Updated test count to 442. |
-| 5.3     | 2026-04-07 | v0.6.0-dev: Added FR-076 to FR-080 (Interactive editing, optimized splitter, native clipboard, secret scan accuracy, struct/enum diff completion). Updated test count to 440. |
+| 5.4     | 2026-04-07 | v0.6.0: Added FR-081 (Interactive Message Refinement). Updated test count to 442. |
+| 5.3     | 2026-04-07 | v0.6.0: Added FR-076 to FR-080 (Interactive editing, optimized splitter, native clipboard, secret scan accuracy, struct/enum diff completion). Updated test count to 440. |
 | 5.2     | 2026-03-28 | Security hardening: `secrecy::SecretString` for API keys (F-004), overflow-checks in release profile (F-001). Updated SR-002, DR-005, DR-006. |
 | 5.1     | 2026-03-28 | fix: keyring platform-native backends, API key validation ordering for set-key command. Updated FR-019 and SR-002. |
 | 5.0     | 2026-03-28 | PRD structural overhaul: removed stale §3.1 Resolved Issues (all v0.2.0), removed Dependency Status table, removed dead ORCommit references. Updated §2 competitive landscape for 2026 (added IDE-native competitors: GitHub Copilot Desktop, Cursor, Windsurf; updated star counts; refreshed feature matrix). Updated §3 codebase structure (added diff.rs, differ.rs, progress.rs). Updated PE-001/PE-002 with v0.6.0 prompt sections (STRUCTURED CHANGES, IMPORTS, RELATED FILES, INTENT). Updated PR-005 with adaptive budget. Added v0.6.0 feature section §4.6 (FR-064–FR-072). Renumbered Future to §4.7. |
 | 4.4     | 2026-03-27 | Added future requirements from audit: FR-073 (move detection), FR-074 (AST-based splitting), FR-075 (configurable categorization), TR-008 (LLM quality testing), PE-007 (token-accurate budgets). |
-| 4.3     | 2026-03-27 | v0.6.0-dev deep semantic understanding: parent scope, import detection, doc-vs-code, structural AST diffs, semantic markers (FR-071), change intent (FR-072). 424 tests. |
+| 4.3     | 2026-03-27 | v0.6.0 deep semantic understanding: parent scope, import detection, doc-vs-code, structural AST diffs, semantic markers (FR-071), change intent (FR-072). 424 tests. |
 | 4.2     | 2026-03-22 | v0.5.0 hardening: security fixes (SSRF prevention, streaming caps), prompt optimization (budget fix, evidence omission, emoji removal), eval harness (36 fixtures, per-type reporting), test coverage (15+ new tests), API hygiene (pub(crate) demotions), 5 fuzz targets. 359 tests. |
 | 4.1     | 2026-03-22 | AST context overhaul (v0.5.0): full signature extraction from tree-sitter nodes, semantic change classification (whitespace vs body vs signature), old→new signature diffs, cross-file connection detection, formatting auto-detection via symbols. 359 tests. |
 | 4.0     | 2026-03-13 | PRD normalization: aligned phases with shipped versions (v0.2.0/v0.3.x/v0.4.0), collapsed revision history, unified status markers, resolved stale critical issues, canonicalized test count to 308, removed dead cross-references. FR-031 (Exclude Files) and FR-033 (Copy to Clipboard) shipped. |
@@ -68,7 +68,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | v0.3.1  | Patch — default model → `qwen3.5:4b`, subject length validation, `think` config | None |
 | v0.4.0  | Feature completion (templates, languages, rename detection, history learning) | None |
 | v0.5.0  | AST context overhaul (signatures, semantic classification, cross-file connections) | None |
-| v0.6.0-dev | Deep semantic understanding (parent scope, imports, doc-vs-code, structural AST diffs, native clipboard, interactive edit) | None |
+| v0.6.0 | Deep semantic understanding (parent scope, imports, doc-vs-code, structural AST diffs, native clipboard, interactive edit) | None |
 
 ## 2. Competitive Landscape
 
@@ -459,7 +459,7 @@ Project-level `.commitbee.toml` can no longer override `openai_base_url`, `anthr
 
 Subject character budget accounts for `!` suffix on breaking changes. EVIDENCE section omitted when all flags are default (~200 chars saved). Symbol marker legend added to SYSTEM_PROMPT (`[+] added, [-] removed, [~] modified`). Duplicate JSON schema removed from system prompt. Emoji replaced with text labels (`WARNING:` instead of `⚠`). CONNECTIONS instruction softened for small models. Python tree-sitter queries enhanced with `decorated_definition` support.
 
-### 4.6 Shipped — v0.6.0-dev (Deep Semantic Understanding)
+### 4.6 Shipped — v0.6.0 (Deep Semantic Understanding)
 
 #### FR-064: Parent Scope Extraction ✅
 
@@ -906,7 +906,7 @@ Replace character-based budget estimation (~4:1 char-to-token ratio approximatio
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
 | 4 | v0.4.x | ✅ Shipped | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
 | 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 367 tests. |
-| 6 | v0.6.0-dev | 📋 Active | Deep semantic understanding — parent scope, import detection, doc-vs-code classification, structural AST diffs, structured changes prompt section, semantic markers, change intent detection. 442 tests. |
+| 6 | v0.6.0 | 📋 Active | Deep semantic understanding — parent scope, import detection, doc-vs-code classification, structural AST diffs, structured changes prompt section, semantic markers, change intent detection. 442 tests. |
 | 7 | v0.7.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
