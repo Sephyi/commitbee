@@ -23,7 +23,7 @@ Most tools in this space pipe raw `git diff` to an LLM and hope for the best. Co
 
 ### 🌳 It reads your code, not just your diffs
 
-CommitBee uses tree-sitter to parse both the staged and HEAD versions of every changed file — in parallel across CPU cores. It extracts 10 symbol types (functions, methods, structs, enums, traits, impls, classes, interfaces, constants, type aliases) with **full signatures** — the LLM sees `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`, not just "Function connect." Methods include their parent context (`impl Server > connect`), so the LLM knows *where* a symbol lives, not just its name. Modified symbols show old → new signature diffs, and **structural AST diffs** break down exactly what changed per symbol — parameters added, return type altered, visibility widened, or body-only edits. Cross-file relationships are detected automatically: if `validator.rs` calls `parse()` and both changed, the prompt says so. When source and test files are both staged, the prompt links them as related files. Symbols are tracked in three states: **added**, **removed**, and **modified-signature**.
+CommitBee uses tree-sitter to parse both the staged and HEAD versions of every changed file — in parallel across CPU cores. It extracts 10 symbol types (functions, methods, structs, enums, traits, impls, classes, interfaces, constants, type aliases) with **full signatures** — the LLM sees `pub fn connect(host: &str, timeout: Duration) -> Result<Connection>`, not just "Function connect." Methods include their parent context (`impl Server > connect`), so the LLM knows *where* a symbol lives, not just its name. Modified symbols show old → new signature diffs, and **structural AST diffs** (fully implemented for structs and enums) break down exactly what changed per symbol — parameters added, return type altered, visibility widened, or body-only edits. Cross-file relationships are detected automatically: if `validator.rs` calls `parse()` and both changed, the prompt says so. When source and test files are both staged, the prompt links them as related files. Symbols are tracked in three states: **added**, **removed**, and **modified-signature**.
 
 Supported languages: **Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, Ruby, C#** — all enabled by default, individually toggleable via Cargo feature flags. Files in other languages still get full diff context — just without symbol extraction.
 
@@ -89,17 +89,17 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 ### And there's more
 
 - **🏠 Local-first** — Ollama by default. Your code never leaves your machine. No API keys needed.
-- **🔒 Secret scanning** — 24 built-in patterns across 13 categories (cloud keys, AI/ML tokens, payment, database, crypto). Add custom patterns or disable built-ins via config.
+- **🔒 Secret scanning** — 24 built-in patterns across 13 categories. Full diff scanning before truncation with accurate hunk-based source line numbering. Add custom patterns or disable built-ins via config.
 - **⚡ Streaming** — Real-time token display from all 3 providers (Ollama, OpenAI, Anthropic) with Ctrl+C cancellation.
 - **📊 Token budget** — Smart truncation that prioritizes the most important files within ~6K tokens. Automatically rebalances when structural diffs are available.
-- **🎯 Multi-candidate** — Generate up to 5 messages and pick the best one interactively.
+- **🎯 Multi-candidate & editing** — Generate up to 5 messages, pick the best one, and refine it in your system editor before committing.
 - **🪝 Git hooks** — `prepare-commit-msg` hook with TTY detection for safe non-interactive fallback.
 - **🔍 Prompt debug** — `--show-prompt` shows exactly what the LLM sees. Full transparency.
 - **🩺 Doctor** — `commitbee doctor` checks config, connectivity, and model availability.
 - **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
 - **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
 - **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
-- **🧪 424 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
+- **🧪 440 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -222,7 +222,7 @@ The default provider (Ollama) runs entirely on your machine. No data leaves your
 ## 🧪 Testing
 
 ```bash
-cargo test   # 424 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
+cargo test   # 440 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
 See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
@@ -231,7 +231,7 @@ See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full version history.
 
-**Current:** `v0.6.0-rc.1` *Deep Understanding* — Parent scope extraction, structural AST diffs, import change detection, doc-vs-code distinction, test file correlation, test-to-code ratio inference, adaptive token budgeting, semantic markers (unsafe, derive, decorator, export detection in AST diffs), and change intent detection (error handling, test, logging patterns with confidence scoring).
+**Current:** `v0.6.0-dev` *Deep Understanding* — Parent scope extraction, structural AST diffs, import change detection, doc-vs-code distinction, test file correlation, test-to-code ratio inference, adaptive token budgeting, semantic markers (unsafe, derive, decorator, export detection in AST diffs), and change intent detection (error handling, test, logging patterns with confidence scoring).
 
 ## 🤝 Contributing
 

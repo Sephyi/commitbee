@@ -6,7 +6,7 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use console::style;
-use dialoguer::{Confirm, Editor, Select};
+use dialoguer::{Confirm, Editor, Input, Select};
 use globset::{Glob, GlobSetBuilder};
 use tokio::signal;
 use tokio::sync::mpsc;
@@ -373,7 +373,7 @@ impl App {
                 eprintln!("{}", style(&message).green());
                 eprintln!();
 
-                let options = &["Commit", "Edit", "Cancel"];
+                let options = &["Commit", "Edit", "Refine", "Cancel"];
                 let selection = Select::new()
                     .with_prompt("What would you like to do?")
                     .items(options)
@@ -390,6 +390,41 @@ impl App {
                         {
                             if !edited.trim().is_empty() {
                                 message = edited;
+                            }
+                        }
+                    }
+                    2 => {
+                        let feedback: String = Input::new()
+                            .with_prompt("What should be improved?")
+                            .interact_text()
+                            .map_err(|e| Error::Dialog(e.to_string()))?;
+
+                        if !feedback.trim().is_empty() {
+                            let progress = Progress::new(self.cli.verbose);
+                            progress.phase("Refining message...");
+
+                            match self
+                                .refine_message(
+                                    &provider,
+                                    &prompt,
+                                    &system_prompt,
+                                    &message,
+                                    &feedback,
+                                    &context,
+                                )
+                                .await
+                            {
+                                Ok(refined) => {
+                                    message = refined;
+                                }
+                                Err(e) => {
+                                    warn!(error = %e, "failed to refine message");
+                                    eprintln!(
+                                        "{} Failed to refine message: {}",
+                                        style("error:").red(),
+                                        e
+                                    );
+                                }
                             }
                         }
                     }
@@ -1332,6 +1367,64 @@ fi
         parts.join("\n")
     }
 
+    /// Refine a commit message based on user feedback.
+    async fn refine_message(
+        &self,
+        provider: &llm::LlmBackend,
+        original_prompt: &str,
+        system_prompt: &str,
+        current_message: &str,
+        feedback: &str,
+        context: &PromptContext,
+    ) -> Result<String> {
+        let refinement_prompt =
+            self.resolve_refinement_prompt(original_prompt, current_message, feedback)?;
+
+        let (tx, mut rx) = mpsc::channel::<String>(64);
+        let cancel = self.cancel_token.clone();
+
+        // Print streaming refinement
+        let print_handle = tokio::spawn(async move {
+            while let Some(t) = rx.recv().await {
+                eprint!("{}", t);
+            }
+        });
+
+        let raw_refined = provider
+            .generate(&refinement_prompt, system_prompt, tx, cancel)
+            .await?;
+
+        print_handle.await.ok();
+        eprintln!();
+
+        // Validate and sanitize
+        let refined_to_sanitize = self
+            .validate_and_retry(
+                &raw_refined,
+                context,
+                provider,
+                &refinement_prompt,
+                system_prompt,
+            )
+            .await
+            .unwrap_or(raw_refined);
+
+        CommitSanitizer::sanitize(&refined_to_sanitize, &self.config.format)
+    }
+
+    /// Resolve the refinement prompt.
+    fn resolve_refinement_prompt(
+        &self,
+        original_prompt: &str,
+        previous_message: &str,
+        feedback: &str,
+    ) -> Result<String> {
+        Ok(format!(
+            "{}\n\n---\nRefine the commit message based on the following user feedback:\n\"{}\"\n\nPrevious candidate was:\n\"{}\"\n\nRespond with ONLY the refined JSON object.",
+            original_prompt, feedback, previous_message
+        ))
+    }
+
     // ─── Exclude Helpers ───
 
     /// Filter staged changes by removing files matching exclude glob patterns.
@@ -1406,5 +1499,32 @@ fi
         })?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_resolve_refinement_prompt() {
+        let app = App {
+            cli: Cli::default(),
+            config: Config::default(),
+            cancel_token: CancellationToken::new(),
+        };
+
+        let original_prompt = "Original prompt";
+        let previous_message = "Previous message";
+        let feedback = "Make it shorter";
+
+        let result = app
+            .resolve_refinement_prompt(original_prompt, previous_message, feedback)
+            .unwrap();
+
+        assert!(result.contains("Original prompt"));
+        assert!(result.contains("Previous message"));
+        assert!(result.contains("Make it shorter"));
+        assert!(result.contains("Respond with ONLY the refined JSON object."));
     }
 }

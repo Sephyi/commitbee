@@ -8,10 +8,17 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 All notable changes to CommitBee are documented here.
 
-## `v0.6.0-rc.1` — Deep Understanding (release candidate)
+## `v0.6.0-dev` — Deep Understanding (release candidate)
+
+### UI/UX
+
+- **Interactive message refinement** — Added a "Refine" option to the candidate selection and confirmation menu. Users can provide feedback to the LLM (e.g., "more detail about the API change") to regenerate the message with natural language guidance.
+- **Native clipboard support** — Replaced external commands (`pbcopy`, `xclip`) with the `arboard` crate for a native, cross-platform clipboard implementation.
+- **Interactive commit editing** — Added an "Edit" option to the candidate selection and confirmation menu. Users can now refine the generated message using their system editor before committing.
 
 ### Semantic Analysis
 
+- **Full AST diffs for structs and enums** — `AstDiffer` now supports structured diffing for structs, enums, classes, interfaces, and traits. Detects added/removed fields, changed variants, and type modifications.
 - **Parent scope extraction** — Methods inside `impl`, `class`, or `trait` blocks now show their parent in the prompt: `CommitValidator > pub fn validate(...)`. Walks the AST tree through intermediate nodes (declaration_list, class_body). Verified across 7 languages (Rust, Python, TypeScript, Java, Go, Ruby, C#).
 - **Import change detection** — New `IMPORTS CHANGED:` prompt section shows added/removed import statements. Supports Rust `use`, JS/TS `import`, Python `from`/`import`, Node `require()`, and C/C++ `#include`. Capped at 10 entries.
 - **Doc-vs-code distinction** — `SpanChangeKind` enum classifies modified symbols as WhitespaceOnly, DocsOnly, Mixed, or Semantic. Doc-only changes suggest `docs` type. Modified symbols show `[docs only]` or `[docs + code]` suffix in the prompt.
@@ -30,21 +37,26 @@ All notable changes to CommitBee are documented here.
 - **Diff-based intent patterns** — Scans added lines for error handling (`Result`, `?`, `Err()`), test additions (`#[test]`, `assert!`), logging (`tracing::`, `debug!`), and dependency updates. Shown as `INTENT:` section in the prompt with confidence scores.
 - **Conservative type refinement** — High-confidence performance optimization patterns can override the base type to `perf`.
 
-### Prompt Quality
+### Security
 
-- **Token budget rebalance** — Symbol budget reduced from 30% to 20% when structural diffs are available, freeing space for the raw diff. SYSTEM_PROMPT updated to guide the LLM to prefer STRUCTURED CHANGES for signature details.
-- **Unsafe constraint rule** — When `unsafe` is added to a function, a CONSTRAINTS rule instructs the LLM to mention safety justification in the commit body.
-
-### Fixes
-
+- **Accurate secret scan line numbers** — The secret scanner now parses `@@` hunk headers to report accurate source line numbers for potential secrets, instead of absolute diff line numbers.
 - **API key validation ordering** — `set-key`, `get-key`, `init`, `config`, `completions`, and `hook` commands no longer require an API key to be present. CLI `--provider` flag now applies before keyring lookup.
 - **Platform-native keyring backends** — keyring v3 now uses macOS Keychain (`apple-native`), Windows Credential Manager (`windows-native`), and Linux Secret Service (`linux-native`) instead of a mock file-based backend.
 - **SecretString for API keys** — API keys stored as `secrecy::SecretString` in Config and provider structs. Memory zeroed on drop, never exposed except at HTTP header insertion.
 - **Overflow checks in release builds** — `overflow-checks = true` added to release profile for ANSSI-FR compliance.
 
+### Performance
+
+- **Optimized symbol dependency merging** — Improved `CommitSplitter` performance for large commits by pre-indexing symbols and optimizing diff scanning.
+
+### Prompt Quality
+
+- **Token budget rebalance** — Symbol budget reduced from 30% to 20% when structural diffs are available, freeing space for the raw diff. SYSTEM_PROMPT updated to guide the LLM to prefer STRUCTURED CHANGES for signature details.
+- **Unsafe constraint rule** — When `unsafe` is added to a function, a CONSTRAINTS rule instructs the LLM to mention safety justification in the commit body.
+
 ### Testing
 
-- **424 tests** total (up from 367 at v0.5.0).
+- **442 tests** total (up from 367 at v0.5.0).
 
 ## `v0.5.0` — Beyond the Diff
 
@@ -79,7 +91,7 @@ All notable changes to CommitBee are documented here.
 - **Evaluation harness** — 36 fixtures covering all 11 commit types, AST features, and edge cases. Per-type accuracy reporting with `EvalSummary`.
 - **15+ new unit tests** — Coverage for `detect_primary_change`, `detect_metadata_breaking`, `detect_bug_evidence` (all 7 patterns), Deleted/Renamed status, signature edge cases, connection content assertions.
 - **5 fuzz targets** — `fuzz_sanitizer`, `fuzz_safety`, `fuzz_diff_parser`, `fuzz_signature`, `fuzz_classify_span`.
-- **367 tests** total (up from 308 at v0.4.0). Current count at v0.6.0-rc.1: 410.
+- **367 tests** total (up from 308 at v0.4.0).
 
 ### API
 

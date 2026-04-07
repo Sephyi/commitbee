@@ -4,7 +4,7 @@
 
 use clap::Parser;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[command(name = "commitbee")]
 #[command(version)]
 #[command(about = "AI-powered commit message generator", long_about = None)]
