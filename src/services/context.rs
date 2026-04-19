@@ -325,18 +325,18 @@ impl ContextBuilder {
 
         // Compare non-whitespace character streams.
         // Correctly handles line wrapping while detecting actual content changes.
-        let old_text: String = removed_in_span
+        // Use streaming Iterator::eq to avoid allocating two full Strings and
+        // to short-circuit on the first differing character.
+        let old_chars = removed_in_span
             .iter()
             .flat_map(|l| l.chars())
-            .filter(|c| !c.is_whitespace())
-            .collect();
-        let new_text: String = added_in_span
+            .filter(|c| !c.is_whitespace());
+        let new_chars = added_in_span
             .iter()
             .flat_map(|l| l.chars())
-            .filter(|c| !c.is_whitespace())
-            .collect();
+            .filter(|c| !c.is_whitespace());
 
-        Some(old_text == new_text)
+        Some(old_chars.eq(new_chars))
     }
 
     /// Classify changes within a symbol span with doc-vs-code distinction.
@@ -397,18 +397,18 @@ impl ContextBuilder {
             return None;
         }
 
-        // Check whitespace-only first (same logic as classify_span_change)
-        let old_text: String = removed_in_span
+        // Check whitespace-only first (same logic as classify_span_change).
+        // Stream the filtered char iterators through Iterator::eq to avoid
+        // allocating intermediate Strings and short-circuit on inequality.
+        let old_chars = removed_in_span
             .iter()
             .flat_map(|l| l.chars())
-            .filter(|c| !c.is_whitespace())
-            .collect();
-        let new_text: String = added_in_span
+            .filter(|c| !c.is_whitespace());
+        let new_chars = added_in_span
             .iter()
             .flat_map(|l| l.chars())
-            .filter(|c| !c.is_whitespace())
-            .collect();
-        if old_text == new_text {
+            .filter(|c| !c.is_whitespace());
+        if old_chars.eq(new_chars) {
             return Some(SpanChangeKind::WhitespaceOnly);
         }
 
