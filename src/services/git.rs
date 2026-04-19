@@ -222,19 +222,41 @@ impl GitService {
 
     // ─── File Content ───
 
-    /// Fetch staged and HEAD content for multiple files concurrently.
-    /// Spawns all git-show processes in parallel instead of sequentially.
+    /// Concurrency ceiling for the `git show` subprocesses spawned by
+    /// [`Self::fetch_file_contents`]. Each staged file spawns two processes
+    /// (staged + HEAD); capping at `cores * 2` (clamped to 16..=32) keeps
+    /// parallelism high on beefy machines without causing fork/FD pressure on
+    /// large stages.
+    fn git_show_concurrency_limit() -> usize {
+        let cores = std::thread::available_parallelism()
+            .map(std::num::NonZeroUsize::get)
+            .unwrap_or(4);
+        (cores * 2).clamp(16, 32)
+    }
+
+    /// Fetch staged and HEAD content for multiple files concurrently, bounded
+    /// by a [`tokio::sync::Semaphore`] to avoid unbounded `git show` spawning
+    /// on large stages.
     pub async fn fetch_file_contents(
         &self,
         paths: &[PathBuf],
     ) -> (HashMap<PathBuf, String>, HashMap<PathBuf, String>) {
         let mut set = tokio::task::JoinSet::new();
         let work_dir: Arc<PathBuf> = Arc::new(self.work_dir.clone());
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(
+            Self::git_show_concurrency_limit(),
+        ));
 
         for path in paths {
             let work_dir = Arc::clone(&work_dir);
+            let semaphore = Arc::clone(&semaphore);
             let path = path.clone();
             set.spawn(async move {
+                // Semaphore is never closed, so acquire cannot fail.
+                let _permit = semaphore
+                    .acquire_owned()
+                    .await
+                    .expect("git-show semaphore closed unexpectedly");
                 let staged =
                     Self::fetch_git_show(&work_dir, &format!(":0:{}", path.display())).await;
                 let head =
