@@ -2,6 +2,11 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
+// Integration tests are synchronous and legitimately use `std::process::Command`
+// to build git fixtures in tempdirs; the `disallowed_methods` rule in
+// clippy.toml targets async-context misuse, which does not apply here.
+#![allow(clippy::disallowed_methods)]
+
 use commitbee::services::history::{HistoryContext, HistoryService};
 
 // ─── Subject Analysis (Pure Functions) ───────────────────────────────────────

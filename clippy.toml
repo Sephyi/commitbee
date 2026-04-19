@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Sephyi <me@sephy.io>
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
+
+# Minimal, pragmatic clippy config to catch common anti-patterns at lint time.
+#
+# Keep this file small. Each rule should have a clear justification in its
+# `reason` so reviewers understand why the flagged call was blocked.
+
+# Disallow sync `std::process::Command` — the async pipeline must not block the
+# tokio runtime. Use `tokio::process::Command` or wrap in
+# `tokio::task::spawn_blocking` at async call-sites. Synchronous contexts
+# (integration tests, CLI bootstrap before the runtime starts) may allow this
+# lint locally with `#[allow(clippy::disallowed_methods)]` and a comment.
+disallowed-methods = [
+    { path = "std::process::Command::new", reason = "prefer tokio::process::Command or spawn_blocking in async contexts" },
+]
+
+# Disallow the `dbg!` macro — leftover debug scaffolding should never ship.
+# Use `tracing::{debug,trace}` for durable diagnostics.
+disallowed-macros = [
+    { path = "std::dbg", reason = "leftover debug scaffolding; remove before committing" },
+]

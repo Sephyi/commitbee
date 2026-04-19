@@ -990,6 +990,11 @@ impl App {
         // Verify we're in a git repo first
         let _git = GitService::discover()?;
 
+        // `hook_dir` is called from a synchronous `handle_hook` path (CLI
+        // bootstrap, no tokio runtime live yet). F-002 will migrate the hook /
+        // clipboard paths off sync `Command`; until then, allow the lint here
+        // so the new clippy.toml rule doesn't block unrelated PRs.
+        #[allow(clippy::disallowed_methods)]
         let output = std::process::Command::new("git")
             .args(["rev-parse", "--git-dir"])
             .output()?;
