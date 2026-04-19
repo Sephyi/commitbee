@@ -995,21 +995,20 @@ impl ContextBuilder {
                     continue;
                 }
                 // Detect added/removed import lines
-                if (line.starts_with('+') && Self::is_import_line(&line[1..]))
-                    || (line.starts_with('-') && Self::is_import_line(&line[1..]))
-                {
-                    let action = if line.starts_with('+') {
-                        "added"
-                    } else {
-                        "removed"
-                    };
+                let (action, content) = if let Some(rest) = line.strip_prefix('+') {
+                    ("added", rest)
+                } else if let Some(rest) = line.strip_prefix('-') {
+                    ("removed", rest)
+                } else {
+                    continue;
+                };
+                if Self::is_import_line(content) {
                     let stem = file
                         .path
                         .file_stem()
                         .and_then(|s| s.to_str())
                         .unwrap_or("?");
-                    let content = line[1..].trim();
-                    imports.push(format!("{}: {} {}", stem, action, content));
+                    imports.push(format!("{}: {} {}", stem, action, content.trim()));
                 }
             }
         }
@@ -1067,11 +1066,13 @@ impl ContextBuilder {
             let filename = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             for line in file.diff.lines() {
-                if !line.starts_with('+') || line.starts_with("+++") {
+                if line.starts_with("+++") {
                     continue;
                 }
+                let Some(content) = line.strip_prefix('+') else {
+                    continue;
+                };
                 total_added += 1;
-                let content = &line[1..];
                 let trimmed = content.trim();
 
                 // Error handling patterns
@@ -1207,13 +1208,17 @@ impl ContextBuilder {
             let name = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             for line in file.diff.lines() {
-                let is_removed = line.starts_with('-') && !line.starts_with("---");
-                let is_added = line.starts_with('+') && !line.starts_with("+++");
-                let content = if is_removed || is_added {
-                    &line[1..]
+                if line.starts_with("+++") || line.starts_with("---") {
+                    continue;
+                }
+                let (is_added, content) = if let Some(rest) = line.strip_prefix('+') {
+                    (true, rest)
+                } else if let Some(rest) = line.strip_prefix('-') {
+                    (false, rest)
                 } else {
                     continue;
                 };
+                let is_removed = !is_added;
 
                 match name {
                     "Cargo.toml" => {

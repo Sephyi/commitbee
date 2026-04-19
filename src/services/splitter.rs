@@ -197,13 +197,13 @@ impl CommitSplitter {
         let mut indent_only_changes = 0usize;
         let added_lines: Vec<&str> = lines
             .iter()
-            .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
-            .map(|l| &l[1..])
+            .filter(|l| !l.starts_with("+++"))
+            .filter_map(|l| l.strip_prefix('+'))
             .collect();
         let removed_lines: Vec<&str> = lines
             .iter()
-            .filter(|l| l.starts_with('-') && !l.starts_with("---"))
-            .map(|l| &l[1..])
+            .filter(|l| !l.starts_with("---"))
+            .filter_map(|l| l.strip_prefix('-'))
             .collect();
 
         for added_line in &added_lines {
