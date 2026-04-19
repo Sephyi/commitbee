@@ -20,7 +20,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
-  RUST_TOOLCHAIN: "1.94.0"
+  RUST_TOOLCHAIN: "stable"
+  MSRV_TOOLCHAIN: "1.94"
 
 jobs:
   fmt:
@@ -76,17 +77,16 @@ jobs:
       - run: cargo test --all-targets --features eval
 
   msrv:
-    name: MSRV Check
-    needs: fmt
+    name: MSRV (${{ env.MSRV_TOOLCHAIN }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          toolchain: ${{ env.MSRV_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --all-targets
+      - run: cargo check --all-features --all-targets
 
   dependency-review:
     name: Dependency Review
