@@ -8,8 +8,10 @@ use figment::providers::{Env, Format, Serialized, Toml};
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use tracing::warn;
+use url::{Host, Url};
 
 use crate::cli::Cli;
 use crate::error::{Error, Result};
@@ -453,6 +455,8 @@ impl Config {
             )));
         }
 
+        validate_ollama_host_is_loopback(&self.ollama_host)?;
+
         // Validate cloud provider base URLs
         if let Some(ref url) = self.openai_base_url
             && !url.starts_with("http://")
@@ -723,5 +727,115 @@ impl Config {
         }
 
         out
+    }
+}
+
+/// Enforce loopback-only `ollama_host` per PRD SR-001.
+///
+/// The Ollama server is expected to run locally; allowing an arbitrary
+/// remote URL would let a malicious config redirect staged diff traffic
+/// (which can include source code and sensitive content) to an attacker
+/// host. Reject any URL whose host is not:
+///
+/// - `127.0.0.0/8` IPv4 loopback range
+/// - `::1` IPv6 loopback
+/// - the literal string `localhost`
+///
+/// Note: this does not resolve DNS — a hostname other than `localhost`
+/// is rejected even if it would resolve to `127.0.0.1`, because the
+/// resolver (and its answers) cannot be trusted at config time.
+fn validate_ollama_host_is_loopback(raw: &str) -> Result<()> {
+    let url = Url::parse(raw)
+        .map_err(|e| Error::Config(format!("ollama_host is not a valid URL: {e} (got '{raw}')")))?;
+
+    let host = url.host().ok_or_else(|| {
+        Error::Config(format!(
+            "ollama_host must include a host component, got '{raw}'"
+        ))
+    })?;
+
+    let is_loopback = match host {
+        Host::Domain(name) => name.eq_ignore_ascii_case("localhost"),
+        Host::Ipv4(addr) => IpAddr::V4(addr).is_loopback(),
+        Host::Ipv6(addr) => IpAddr::V6(addr).is_loopback(),
+    };
+
+    if !is_loopback {
+        return Err(Error::Config(format!(
+            "ollama_host must point to a loopback address (127.x.x.x, ::1, or localhost); \
+             got '{host}'"
+        )));
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loopback_accepts_localhost() {
+        assert!(validate_ollama_host_is_loopback("http://localhost:11434").is_ok());
+    }
+
+    #[test]
+    fn loopback_accepts_localhost_uppercase() {
+        // Host matching must be case-insensitive to match DNS semantics.
+        assert!(validate_ollama_host_is_loopback("http://LocalHost:11434").is_ok());
+    }
+
+    #[test]
+    fn loopback_accepts_ipv4_loopback() {
+        assert!(validate_ollama_host_is_loopback("http://127.0.0.1:11434").is_ok());
+    }
+
+    #[test]
+    fn loopback_accepts_ipv4_loopback_range() {
+        // Any 127.x.x.x address is loopback per RFC 1122.
+        assert!(validate_ollama_host_is_loopback("http://127.1.2.3:11434").is_ok());
+    }
+
+    #[test]
+    fn loopback_accepts_ipv6_loopback() {
+        assert!(validate_ollama_host_is_loopback("http://[::1]:11434").is_ok());
+    }
+
+    #[test]
+    fn loopback_accepts_https_scheme() {
+        assert!(validate_ollama_host_is_loopback("https://localhost:11434").is_ok());
+    }
+
+    #[test]
+    fn loopback_rejects_public_ipv4() {
+        let err = validate_ollama_host_is_loopback("http://8.8.8.8:11434").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("loopback"), "unexpected error: {msg}");
+        assert!(msg.contains("8.8.8.8"), "host missing from error: {msg}");
+    }
+
+    #[test]
+    fn loopback_rejects_private_rfc1918() {
+        // 192.168.x.x is not loopback even though it is a private range.
+        let err = validate_ollama_host_is_loopback("http://192.168.1.10:11434").unwrap_err();
+        assert!(err.to_string().contains("loopback"));
+    }
+
+    #[test]
+    fn loopback_rejects_public_hostname() {
+        let err = validate_ollama_host_is_loopback("http://evil.example.com:11434").unwrap_err();
+        assert!(err.to_string().contains("loopback"));
+    }
+
+    #[test]
+    fn loopback_rejects_public_ipv6() {
+        let err = validate_ollama_host_is_loopback("http://[2001:db8::1]:11434").unwrap_err();
+        assert!(err.to_string().contains("loopback"));
+    }
+
+    #[test]
+    fn loopback_rejects_malformed_url() {
+        let err = validate_ollama_host_is_loopback("http://").unwrap_err();
+        assert!(matches!(err, Error::Config(_)));
     }
 }
