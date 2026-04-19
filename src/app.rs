@@ -86,7 +86,10 @@ impl App {
         // Setup Ctrl+C handler with CancellationToken
         let cancel = self.cancel_token.clone();
         tokio::spawn(async move {
-            signal::ctrl_c().await.ok();
+            if let Err(e) = signal::ctrl_c().await {
+                warn!(error = %e, "failed to install Ctrl+C handler");
+                return;
+            }
             cancel.cancel();
         });
 
