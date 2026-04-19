@@ -1407,6 +1407,89 @@ fn format_files_shows_renamed_marker() {
         "renamed file should show similarity: {}",
         ctx.file_breakdown
     );
+    // old_path must be respected in the formatted output — the old path appears
+    // on the left of the `->` arrow so reviewers can see what was renamed from.
+    assert!(
+        ctx.file_breakdown.contains("src/old_name.rs"),
+        "renamed file should include the old path in output: {}",
+        ctx.file_breakdown
+    );
+    assert!(
+        ctx.file_breakdown.contains("->"),
+        "renamed file should show an arrow between old and new path: {}",
+        ctx.file_breakdown
+    );
+    assert!(
+        ctx.file_breakdown.contains("src/new_name.rs"),
+        "renamed file should include the new path in output: {}",
+        ctx.file_breakdown
+    );
+}
+
+#[test]
+fn format_files_mixed_statuses_show_all_markers() {
+    // One of each ChangeStatus variant in the same StagedChanges — verify every
+    // code path in `format_files` fires and produces the expected status prefix.
+    let changes = make_staged_changes(vec![
+        make_file_change("src/added.rs", ChangeStatus::Added, "+pub fn n() {}", 1, 0),
+        make_file_change(
+            "src/modified.rs",
+            ChangeStatus::Modified,
+            "-old\n+new",
+            1,
+            1,
+        ),
+        make_file_change(
+            "src/deleted.rs",
+            ChangeStatus::Deleted,
+            "-pub fn g() {}",
+            0,
+            1,
+        ),
+        make_renamed_file("src/old.rs", "src/new.rs", 90),
+    ]);
+    let ctx = ContextBuilder::build(&changes, &[], &[], &default_config());
+    assert!(
+        ctx.file_breakdown.contains("[+] src/added.rs"),
+        "added file should use [+] marker: {}",
+        ctx.file_breakdown
+    );
+    assert!(
+        ctx.file_breakdown.contains("[M] src/modified.rs"),
+        "modified file should use [M] marker: {}",
+        ctx.file_breakdown
+    );
+    assert!(
+        ctx.file_breakdown.contains("[-] src/deleted.rs"),
+        "deleted file should use [-] marker: {}",
+        ctx.file_breakdown
+    );
+    assert!(
+        ctx.file_breakdown.contains("[R] src/old.rs -> src/new.rs"),
+        "renamed file should use [R] with old -> new formatting: {}",
+        ctx.file_breakdown
+    );
+    // The change-summary count aggregates per status; verify it observed each.
+    assert!(
+        ctx.change_summary.contains("1 added"),
+        "change_summary should count added file: {}",
+        ctx.change_summary
+    );
+    assert!(
+        ctx.change_summary.contains("1 modified"),
+        "change_summary should count modified file: {}",
+        ctx.change_summary
+    );
+    assert!(
+        ctx.change_summary.contains("1 deleted"),
+        "change_summary should count deleted file: {}",
+        ctx.change_summary
+    );
+    assert!(
+        ctx.change_summary.contains("1 renamed"),
+        "change_summary should count renamed file: {}",
+        ctx.change_summary
+    );
 }
 
 // ─── Test Coverage: classify_span_change None path (#39) ──────────────────────

@@ -32,12 +32,27 @@ pub fn make_file_change(
 /// Create a renamed FileChange for testing
 #[allow(dead_code)]
 pub fn make_renamed_file(old_path: &str, new_path: &str, similarity: u8) -> FileChange {
+    make_renamed_file_with_diff(old_path, new_path, similarity, "", 0, 0)
+}
+
+/// Create a renamed FileChange with a diff body and explicit add/delete counts.
+///
+/// Useful for splitter tests that exercise diff-shape grouping on renames.
+#[allow(dead_code)]
+pub fn make_renamed_file_with_diff(
+    old_path: &str,
+    new_path: &str,
+    similarity: u8,
+    diff: &str,
+    additions: usize,
+    deletions: usize,
+) -> FileChange {
     FileChange {
         path: PathBuf::from(new_path),
         status: ChangeStatus::Renamed,
-        diff: Arc::from(""),
-        additions: 0,
-        deletions: 0,
+        diff: Arc::from(diff),
+        additions,
+        deletions,
         category: FileCategory::from_path(&PathBuf::from(new_path)),
         is_binary: false,
         old_path: Some(PathBuf::from(old_path)),
