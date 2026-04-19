@@ -6,6 +6,7 @@ mod helpers;
 
 use std::path::PathBuf;
 
+use commitbee::classify_diff_span;
 use commitbee::config::Config;
 use commitbee::domain::{
     ChangeStatus, CodeSymbol, CommitType, FileCategory, IntentKind, SymbolKind,
@@ -1436,6 +1437,57 @@ fn whitespace_detection_returns_none_when_span_has_no_changes() {
         ctx.symbols_modified.contains("distant"),
         "modified symbol outside hunk should still appear (with no ws classification): {}",
         ctx.symbols_modified
+    );
+}
+
+// Direct assertions on the `None` branch of `classify_span_change` via the
+// public `classify_diff_span` wrapper re-exported from `lib.rs`. The function
+// returns `None` exactly when no added/removed lines fall inside the requested
+// (`old_start..=old_end`) / (`new_start..=new_end`) spans — see the
+// `added_in_span.is_empty() && removed_in_span.is_empty()` guard in
+// `src/services/context.rs`. These tests pin that contract so a future
+// refactor cannot silently convert the "no changes in span" case into a
+// false-positive `Some(true)` whitespace-only classification.
+
+#[test]
+fn classify_span_change_returns_none_when_span_is_outside_hunk() {
+    // Hunk touches lines 1-3 in both old and new files, but we query a
+    // symbol span at lines 50-60. No +/- line lands inside the span, so
+    // the function must short-circuit to `None` before the whitespace
+    // comparison runs.
+    let diff = "@@ -1,3 +1,3 @@\n fn other() {\n-    old()\n+    new()\n }\n";
+    assert_eq!(
+        classify_diff_span(diff, 50, 60, 50, 60),
+        None,
+        "span entirely outside the hunk must yield None"
+    );
+}
+
+#[test]
+fn classify_span_change_returns_none_for_empty_diff() {
+    // Empty diff: the parse loop never enters a hunk, so both
+    // `added_in_span` and `removed_in_span` stay empty and the function
+    // hits the early-return `None`.
+    assert_eq!(
+        classify_diff_span("", 1, 10, 1, 10),
+        None,
+        "empty diff must yield None"
+    );
+}
+
+#[test]
+fn classify_span_change_returns_none_when_span_range_is_empty() {
+    // Span with `new_start > new_end` (and likewise for `old`) never
+    // matches any +/- line because `in_new_span`/`in_old_span` evaluate
+    // `false` for every counter value. This is a degenerate but reachable
+    // input from callers that derive span bounds from AST nodes whose
+    // `end < start` (e.g. zero-length nodes), so the `None` short-circuit
+    // must hold here too.
+    let diff = "@@ -1,3 +1,3 @@\n fn f() {\n-    old()\n+    new()\n }\n";
+    assert_eq!(
+        classify_diff_span(diff, 100, 50, 100, 50),
+        None,
+        "inverted span (start > end) must yield None"
     );
 }
 
