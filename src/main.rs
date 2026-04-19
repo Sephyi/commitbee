@@ -2,20 +2,11 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
+#![forbid(unsafe_code)]
+
 use clap::Parser;
+use commitbee::{App, Cli, error};
 use tracing_subscriber::EnvFilter;
-
-mod app;
-mod cli;
-mod config;
-mod domain;
-mod error;
-#[cfg(feature = "eval")]
-mod eval;
-mod services;
-
-use app::App;
-use cli::Cli;
 
 #[tokio::main]
 async fn main() {
