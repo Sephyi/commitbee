@@ -5,7 +5,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use commitbee::domain::{ChangeStatus, DiffStats, FileCategory, FileChange, StagedChanges};
+use commitbee::domain::{
+    ChangeStatus, CodeSymbol, DiffStats, FileCategory, FileChange, StagedChanges, SymbolKind,
+};
 
 /// Create a minimal FileChange for testing
 #[allow(dead_code)]
@@ -42,6 +44,52 @@ pub fn make_renamed_file(old_path: &str, new_path: &str, similarity: u8) -> File
         is_binary: false,
         old_path: Some(PathBuf::from(old_path)),
         rename_similarity: Some(similarity),
+    }
+}
+
+/// Create a minimal `CodeSymbol` for testing, with `line: 1, end_line: 10`.
+///
+/// For tests that need the symbol to sit at a specific line range (e.g. to
+/// exercise hunk-to-span mapping), use [`make_symbol_at`] instead.
+#[allow(dead_code)]
+pub fn make_symbol(
+    name: &str,
+    kind: SymbolKind,
+    file: &str,
+    is_public: bool,
+    is_added: bool,
+) -> CodeSymbol {
+    make_symbol_at(name, kind, file, is_public, is_added, 1, 10)
+}
+
+/// Create a minimal `CodeSymbol` at an arbitrary line range.
+///
+/// Prefer this variant when a test needs to pin the symbol to specific
+/// `line` / `end_line` positions (for example, to line up with a manually
+/// crafted diff hunk). For the common case where positions are irrelevant,
+/// [`make_symbol`] uses the defaults `line: 1, end_line: 10`.
+#[allow(dead_code)]
+pub fn make_symbol_at(
+    name: &str,
+    kind: SymbolKind,
+    file: &str,
+    is_public: bool,
+    is_added: bool,
+    line: usize,
+    end_line: usize,
+) -> CodeSymbol {
+    CodeSymbol {
+        kind,
+        name: name.to_string(),
+        file: PathBuf::from(file),
+        line,
+        end_line,
+        is_public,
+        is_added,
+        is_whitespace_only: None,
+        span_change_kind: None,
+        signature: None,
+        parent_scope: None,
     }
 }
 
