@@ -99,7 +99,7 @@ When your staged changes mix independent work (a bugfix in one module + a refact
 - **🐚 Shell completions** — bash, zsh, fish, powershell via `commitbee completions`.
 - **⚙️ 5-level config** — Defaults → project `.commitbee.toml` → user config → env vars → CLI flags.
 - **🦀 Single binary** — ~18K lines of Rust. Compiles to one static binary with LTO. No runtime dependencies.
-- **🧪 440 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
+- **🧪 441 tests** — Unit, snapshot, property (proptest for never-panic guarantees), and integration (wiremock).
 
 ## 📦 Installation
 
@@ -154,14 +154,14 @@ That's it. CommitBee works with zero configuration if Ollama is running locally.
 
 ## 📖 Documentation
 
-- **[Full Guide](DOCS.md)** — configuration, providers, splitting, validation, troubleshooting
+- **[Full Guide](https://commitbee.buzz/docs/getting-started/)** — configuration, providers, splitting, validation, troubleshooting
 - **[PRD & Roadmap](PRD.md)** — product requirements and future plans
 
 ## 🔧 Configuration
 
 Run `commitbee init` to create a config file. Works out of the box with zero config if Ollama is running locally.
 
-See [Configuration](DOCS.md#-configuration) for the full config reference, environment variables, and layering priority.
+See [Configuration](https://commitbee.buzz/docs/configuration/) for the full config reference, environment variables, and layering priority.
 
 ## 💻 Usage
 
@@ -179,6 +179,7 @@ commitbee [OPTIONS] [COMMAND]
 | `--no-split` | Disable commit split suggestions |
 | `--no-scope` | Disable scope in commit messages |
 | `--clipboard` | Copy message to clipboard instead of committing |
+| `--porcelain` | Machine-readable output: print only the commit message to stdout (for piping). Implies `--dry-run` and `--no-split`; conflicts with `--yes`, `--clipboard`, `--show-prompt`, `--verbose`, `-n/--generate`, and subcommands |
 | `--exclude <GLOB>` | Exclude files matching glob pattern (repeatable) |
 | `--allow-secrets` | Allow committing with detected secrets |
 | `--verbose` | Show symbol extraction details |
@@ -222,16 +223,18 @@ The default provider (Ollama) runs entirely on your machine. No data leaves your
 ## 🧪 Testing
 
 ```bash
-cargo test   # 440 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
+cargo test   # 441 tests — unit, snapshot (insta), property (proptest), integration (wiremock)
 ```
 
-See [Testing Strategy](DOCS.md#testing-strategy) for the full breakdown.
+See the [testing section of the docs](https://commitbee.buzz/docs/) for the full breakdown.
 
 ## 🗺️ Changelog
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full version history.
 
-**Current:** `v0.6.0` *Semantic Intelligence* — Interactive refine/edit UX, native clipboard support, full AST diffs (structs, enums, classes, interfaces, traits), parent scope extraction, import change detection, doc-vs-code distinction, test file correlation, test-to-code ratio inference, change intent detection with confidence scoring, semantic markers (unsafe/derive/decorators/exports), token-budget rebalance, and 442 total tests.
+**Current:** `v0.6.0` *Semantic Intelligence* — Interactive refine/edit UX, native clipboard support, full AST diffs (structs, enums, classes, interfaces, traits), parent scope extraction, import change detection, doc-vs-code distinction, test file correlation, test-to-code ratio inference, change intent detection with confidence scoring, semantic markers (unsafe/derive/decorators/exports), and token-budget rebalance.
+
+**In development:** `v0.7.0` — `--porcelain` machine-readable output mode for piping commit messages to other tools. 441 total tests.
 
 ## 🤝 Contributing
 

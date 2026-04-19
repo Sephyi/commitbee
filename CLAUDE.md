@@ -57,6 +57,7 @@ commitbee --show-prompt      # Debug: show the LLM prompt
 commitbee --no-split         # Disable commit split suggestions
 commitbee --no-scope         # Disable scope in commit messages
 commitbee --clipboard        # Copy message to clipboard (no commit)
+commitbee --porcelain        # Machine-readable: print only the commit message (for piping)
 commitbee --exclude "*.lock" # Exclude files matching glob pattern
 commitbee --locale de        # Generate message in German (type/scope stay English)
 commitbee init               # Create config file
@@ -116,7 +117,7 @@ commitbee hook status        # Check if hook is installed
 ### Running Tests
 
 ```bash
-cargo test                    # All tests (424 tests)
+cargo test                    # All tests (441 tests)
 cargo test --test sanitizer   # CommitSanitizer tests
 cargo test --test safety      # Safety module tests
 cargo test --test context     # ContextBuilder tests
@@ -264,7 +265,6 @@ A tracked list of review findings, design decisions, and improvement ideas that 
 Test counts and version references must stay in sync across multiple files. After adding/removing tests or bumping version:
 
 - **README.md** — test count in features list + testing section + changelog current version
-- **DOCS.md** — test count in description + testing section
 - **PRD.md** — test count in §2.3 (feature status table), §8 (testing header), §11 (roadmap table), §12 (success metrics). Also: PRD version header, changelog entry, and compatibility policy table on version bumps.
 - **CHANGELOG.md** — test count in current version's testing section
 - **CLAUDE.md** — test count in Running Tests section

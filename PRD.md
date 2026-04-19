@@ -6,8 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 # CommitBee — Product Requirements Document
 
-**Version**: 5.4  
-**Date**: 2026-04-07  
+**Version**: 5.5  
+**Date**: 2026-04-19  
 **Status**: Active  
 **Author**: [Sephyi](https://github.com/Sephyi) + Junie (LLM Agent)
 
@@ -18,6 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 | Version | Date       | Summary |
 | ------- | ---------- | ------- |
+| 5.5     | 2026-04-19 | v0.7.0-dev: Added FR-082 (Machine-Readable Output Mode / `--porcelain`). Renumbered §4.7 Future → §4.8, added new §4.7 Shipped — v0.7.0. Updated test count to 441. |
 | 5.4     | 2026-04-07 | v0.6.0: Added FR-081 (Interactive Message Refinement). Updated test count to 442. |
 | 5.3     | 2026-04-07 | v0.6.0: Added FR-076 to FR-080 (Interactive editing, optimized splitter, native clipboard, secret scan accuracy, struct/enum diff completion). Updated test count to 440. |
 | 5.2     | 2026-03-28 | Security hardening: `secrecy::SecretString` for API keys (F-004), overflow-checks in release profile (F-001). Updated SR-002, DR-005, DR-006. |
@@ -69,6 +70,7 @@ CommitBee is a Rust-native CLI tool that uses tree-sitter semantic analysis and 
 | v0.4.0  | Feature completion (templates, languages, rename detection, history learning) | None |
 | v0.5.0  | AST context overhaul (signatures, semantic classification, cross-file connections) | None |
 | v0.6.0 | Deep semantic understanding (parent scope, imports, doc-vs-code, structural AST diffs, native clipboard, interactive edit) | None |
+| v0.7.0 | Machine-readable output mode (`--porcelain`) for piping commit messages to other tools | None |
 
 ## 2. Competitive Landscape
 
@@ -521,7 +523,13 @@ Extended `AstDiffer` to support structured diffing for structs, enums, classes, 
 
 Added a "Refine" option to the candidate selection and confirmation menu. Users can provide feedback to the LLM (e.g., "more detail about the API change") to regenerate the message with natural language guidance.
 
-### 4.7 Future — v0.7.0+ (Market Leadership)
+### 4.7 Shipped — v0.7.0 (Machine-Readable Output)
+
+#### FR-082: Machine-Readable Output Mode ✅
+
+`--porcelain` flag produces a stable stdout-only output contract so the generated commit message can be piped into other tools (scripts, editors, `prepare-commit-msg` hooks, higher-level automation). Stdout contains exactly the sanitized commit message plus a single trailing `\n`; all spinners, live-streamed LLM JSON, info/warning lines, tracing output, and ANSI styling are silenced. Errors still flow to stderr (color and OSC8 hyperlinks disabled) with a non-zero exit code so downstream tools can detect failure without parsing stdout. Implies `--dry-run` and `--no-split`; rejected at argument-parse time (exit code 2) when combined with `--yes`, `--clipboard`, `--show-prompt`, `--verbose`, `-n/--generate`, or any subcommand. Secret-detection under `--allow-secrets` falls through to the non-interactive "fail closed" branch so piped-stdin pipelines cannot hang silently. Structural contract stable from v0.7.0; message content is LLM-dependent. 8 integration tests including a structural lint that walks `src/` and fails on drift in the `println!` / `print!` call-site count.
+
+### 4.8 Future — v0.8.0+ (Market Leadership)
 
 #### FR-050: MCP Server Mode
 
@@ -906,8 +914,9 @@ Replace character-based budget estimation (~4:1 char-to-token ratio approximatio
 | 3 | v0.4.0 | ✅ Shipped | Feature completion — templates, languages, rename, history, eval, fuzzing |
 | 4 | v0.4.x | ✅ Shipped | Remaining polish — exclude files (FR-031), clipboard (FR-033) |
 | 5 | v0.5.0 | ✅ Shipped | AST context overhaul — full signatures, semantic change classification, cross-file connections. 367 tests. |
-| 6 | v0.6.0 | 📋 Active | Deep semantic understanding — parent scope, import detection, doc-vs-code classification, structural AST diffs, structured changes prompt section, semantic markers, change intent detection. 442 tests. |
-| 7 | v0.7.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
+| 6 | v0.6.0 | ✅ Shipped | Deep semantic understanding — parent scope, import detection, doc-vs-code classification, structural AST diffs, structured changes prompt section, semantic markers, change intent detection. 442 tests. |
+| 7 | v0.7.0 | 📋 Active | Machine-readable output — `--porcelain` for piping commit messages into scripts, editors, hooks, and automation. 441 tests. |
+| 8 | v0.8.0+ | 📋 Planned | Market leadership — MCP server, changelog, monorepo, version bumping, GitHub Action |
 
 ## 12. Success Metrics
 
@@ -921,7 +930,7 @@ Replace character-based budget estimation (~4:1 char-to-token ratio approximatio
 | Commit message quality | > 80% "good enough" first try | Manual evaluation + `commitbee eval` |
 | Secret leak rate | 0 | Integration tests with known patterns |
 | MSRV | Rust 1.94 (edition 2024) | CI matrix (stable + 1.94) |
-| Test count | ≥ 308 | `cargo test` (current: 440) |
+| Test count | ≥ 308 | `cargo test` (current: 441) |
 
 ## 13. Non-Goals
 

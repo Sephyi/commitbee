@@ -10,6 +10,23 @@ All notable changes to CommitBee are documented here.
 
 ## `v0.7.0-dev` — Unreleased
 
+### CLI / UX
+
+- **Machine-readable output mode (`--porcelain`)** — Print only the sanitized commit message to stdout for piping into other tools (scripts, editors, git hooks, higher-level automation). All spinners, live-streamed LLM JSON, info/warning lines, tracing output, and ANSI styling are silenced; errors still flow to stderr with a non-zero exit for reliable script detection. Implies `--dry-run` and `--no-split`; rejected at argument-parse time when combined with `--yes`, `--clipboard`, `--show-prompt`, `--verbose`, `-n/--generate`, or any subcommand. Closes #6.
+
+### Safety
+
+- **Non-blocking `--allow-secrets` under `--yes` / `--porcelain`** — The interactive "Send diff to LLM anyway?" confirmation now skips to the non-interactive "fail closed" branch when either `--yes` or `--porcelain` is set, preventing pipelines from silently hanging on piped stdin when secrets are detected.
+
+### Internal
+
+- **Removed unsafe `std::env::set_var("NO_COLOR")`** — The previous SAFETY justification did not hold under `#[tokio::main(rt-multi-thread)]` (worker threads are already spawned by the time `main`'s body executes). Color suppression is now handled entirely through `console::set_colors_enabled(false)`, porcelain-aware `miette` `GraphicalTheme::unicode_nocolor()`, and the tracing subscriber's `.with_ansi(false)`.
+- **Porcelain-aware `miette` diagnostic rendering** — `miette::set_hook` now installs after `Cli::parse()` and receives `terminal_links(!porcelain)` + `GraphicalTheme::unicode_nocolor()` under porcelain mode, so errors on stderr stay free of OSC8 hyperlinks and ANSI escapes regardless of external `NO_COLOR` state.
+
+### Testing
+
+- **441 tests** total. Includes 8 new integration tests in `tests/porcelain.rs` covering the stdout contract, argument-parse rejections for 5 flag combinations, subcommand rejection, a no-hang-on-piped-stdin smoke test, and a structural lint that walks `src/` and fails if `println!` / `print!` drift appears outside a pinned allowlist.
+
 ## `v0.6.0` — Semantic Intelligence
 
 ### UI/UX
