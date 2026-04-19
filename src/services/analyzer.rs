@@ -345,6 +345,7 @@ impl AnalyzerService {
         target_row: usize,
     ) -> Option<tree_sitter::Node<'_>> {
         for i in 0..parent.child_count() {
+            // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
             #[allow(clippy::cast_possible_truncation)]
             if let Some(child) = parent.child(i as u32)
                 && child.start_position().row <= target_row
@@ -530,6 +531,7 @@ impl AnalyzerService {
     fn has_java_public_modifier(node: tree_sitter::Node) -> bool {
         let child_count = node.child_count();
         for i in 0..child_count {
+            // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
             #[allow(clippy::cast_possible_truncation)]
             if let Some(child) = node.child(i as u32)
                 && child.kind() == "modifiers"
@@ -564,6 +566,7 @@ impl AnalyzerService {
             .or_else(|| {
                 (0..node.child_count())
                     .filter_map(|i| {
+                        // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                         #[allow(clippy::cast_possible_truncation)]
                         node.child(i as u32)
                     })
@@ -633,6 +636,7 @@ impl AnalyzerService {
     fn has_csharp_public_modifier(node: tree_sitter::Node) -> bool {
         let child_count = node.child_count();
         for i in 0..child_count {
+            // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
             #[allow(clippy::cast_possible_truncation)]
             if let Some(child) = node.child(i as u32)
                 && child.kind() == "modifier"
