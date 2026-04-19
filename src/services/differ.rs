@@ -283,9 +283,13 @@ impl AstDiffer {
     }
 
     fn bodies_semantically_equal(old_body: Option<&str>, new_body: Option<&str>) -> bool {
-        let strip = |s: &str| -> String { s.chars().filter(|c| !c.is_whitespace()).collect() };
         match (old_body, new_body) {
-            (Some(o), Some(n)) => strip(o) == strip(n),
+            // Stream filtered char iterators through Iterator::eq to avoid
+            // allocating intermediate Strings and short-circuit on inequality.
+            (Some(o), Some(n)) => o
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .eq(n.chars().filter(|c| !c.is_whitespace())),
             (None, None) => true,
             _ => false,
         }
