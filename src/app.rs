@@ -38,7 +38,35 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cli: Cli) -> Result<Self> {
+    /// Create a Progress instance that respects --porcelain (fully silent) and --verbose.
+    fn make_progress(&self) -> Progress {
+        if self.cli.porcelain {
+            Progress::silent()
+        } else {
+            Progress::new(self.cli.verbose)
+        }
+    }
+}
+
+impl App {
+    pub fn new(mut cli: Cli) -> Result<Self> {
+        // --porcelain: machine-readable mode. Flag conflicts are rejected at
+        // parse time via clap; subcommands need a runtime check because clap
+        // cannot declaratively conflict a flag with all subcommands at once.
+        //
+        // Porcelain does NOT imply --yes: --yes commits for real, porcelain
+        // only generates and prints. The two are mutually exclusive (enforced
+        // via clap). --dry-run and --no-split are safe redundancies that just
+        // make the short-circuit paths in generate_commit obvious.
+        if cli.porcelain {
+            if cli.command.is_some() {
+                return Err(Error::Config(
+                    "--porcelain cannot be combined with a subcommand".into(),
+                ));
+            }
+            cli.dry_run = true;
+            cli.no_split = true;
+        }
         let config = Config::load(&cli)?;
         debug!(
             provider = %config.provider,
@@ -76,7 +104,7 @@ impl App {
         }
 
         // Step 1: Discover repo and get changes
-        let progress = Progress::new(self.cli.verbose);
+        let progress = self.make_progress();
         progress.phase("Analyzing staged changes...");
 
         let git = GitService::discover()?;
@@ -127,8 +155,13 @@ impl App {
                 });
             }
 
-            // --allow-secrets passed: always require interactive confirmation
-            if std::io::stdin().is_terminal() {
+            // --allow-secrets passed: require interactive confirmation.
+            // Skip the prompt when the user has opted out of interactivity
+            // (either via --yes or --porcelain) — otherwise a silent blocking
+            // prompt on piped stdin would hang the whole pipeline. Both
+            // alternatives fall through to the non-interactive "fail closed"
+            // branch below.
+            if !self.cli.yes && !self.cli.porcelain && std::io::stdin().is_terminal() {
                 progress.finish();
                 eprintln!("\nwarning: Potential secrets detected in staged changes.");
                 for s in &secrets {
@@ -255,7 +288,7 @@ impl App {
         let num_candidates = self.cli.generate;
 
         // Restart spinner for LLM generation phase
-        let mut progress = Progress::new(self.cli.verbose);
+        let mut progress = self.make_progress();
         progress.phase(&format!(
             "Contacting {} ({})...",
             self.config.provider, self.config.model
@@ -284,8 +317,8 @@ impl App {
 
             let (tx, mut rx) = mpsc::channel::<String>(64);
 
-            // Only stream output for single generation
-            let show_stream = num_candidates == 1;
+            // Only stream output for single generation (and never in porcelain mode — stderr must be silent)
+            let show_stream = num_candidates == 1 && !self.cli.porcelain;
             let cancel_for_printer = self.cancel_token.clone();
             let spinner = progress.take_bar();
 
@@ -321,7 +354,7 @@ impl App {
                 warn!("print task panicked: {e}");
             }
 
-            if num_candidates == 1 {
+            if num_candidates == 1 && !self.cli.porcelain {
                 eprintln!(); // Newline after streaming
             }
 
@@ -397,7 +430,7 @@ impl App {
                             .map_err(|e| Error::Dialog(e.to_string()))?;
 
                         if !feedback.trim().is_empty() {
-                            let progress = Progress::new(self.cli.verbose);
+                            let progress = self.make_progress();
                             progress.phase("Refining message...");
 
                             match self
@@ -629,7 +662,7 @@ impl App {
             return Err(Error::SplitAborted);
         }
 
-        let progress = Progress::new(self.cli.verbose);
+        let progress = self.make_progress();
         // Generate messages for each group
         progress.phase(&format!(
             "Contacting {} ({})...",

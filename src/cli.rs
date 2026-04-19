@@ -61,6 +61,20 @@ pub struct Cli {
     #[arg(short, long)]
     pub verbose: bool,
 
+    /// Machine-readable output: print only the generated commit message to stdout.
+    ///
+    /// Silences all logs, progress, styling, and prompts. Implies --dry-run
+    /// and --no-split. Never commits — piping the message to another tool is
+    /// the whole point. Conflicts with --yes (which would commit), --clipboard,
+    /// --show-prompt, --verbose, -n/--generate, and all subcommands.
+    ///
+    /// Example: git commit -m "$(commitbee --porcelain)"
+    #[arg(
+        long,
+        conflicts_with_all = ["yes", "clipboard", "show_prompt", "verbose", "generate"]
+    )]
+    pub porcelain: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

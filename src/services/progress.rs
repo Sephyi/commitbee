@@ -13,6 +13,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 /// Falls back to simple status messages when indicatif is not appropriate.
 pub(crate) struct Progress {
     bar: Option<ProgressBar>,
+    silent: bool,
 }
 
 impl Default for Progress {
@@ -27,6 +28,7 @@ impl Progress {
     pub fn new(verbose: bool) -> Self {
         let is_tty = std::io::stderr().is_terminal();
         Self {
+            silent: false,
             bar: if is_tty && !verbose {
                 let pb = ProgressBar::new_spinner();
                 pb.set_style(
@@ -43,8 +45,20 @@ impl Progress {
         }
     }
 
+    /// Create a fully silent progress indicator (no spinners, no messages).
+    /// Used for porcelain/machine-readable output modes.
+    pub fn silent() -> Self {
+        Self {
+            bar: None,
+            silent: true,
+        }
+    }
+
     /// Update the spinner message to indicate the current phase.
     pub fn phase(&self, msg: &str) {
+        if self.silent {
+            return;
+        }
         if let Some(ref bar) = self.bar {
             bar.set_message(msg.to_string());
         } else {
@@ -54,6 +68,9 @@ impl Progress {
 
     /// Print an info message below the spinner without disrupting it.
     pub fn info(&self, msg: &str) {
+        if self.silent {
+            return;
+        }
         if let Some(ref bar) = self.bar {
             bar.suspend(|| {
                 eprintln!("{} {}", style("info:").cyan(), msg);
@@ -65,6 +82,9 @@ impl Progress {
 
     /// Print a warning message below the spinner without disrupting it.
     pub fn warning(&self, msg: &str) {
+        if self.silent {
+            return;
+        }
         if let Some(ref bar) = self.bar {
             bar.suspend(|| {
                 eprintln!("{} {}", style("warning:").yellow().bold(), msg);
