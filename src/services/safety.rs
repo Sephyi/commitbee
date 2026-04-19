@@ -16,7 +16,12 @@ pub struct SecretMatch {
 }
 
 /// A named secret detection pattern with description.
+///
+/// `Regex` clones are cheap (internally reference-counted), and the
+/// string fields are `Cow<'static, str>`, so cloning a `SecretPattern`
+/// from the cached built-in set avoids recompiling the underlying regex.
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct SecretPattern {
     pub name: Cow<'static, str>,
     pub regex: Regex,
@@ -27,14 +32,24 @@ pub struct SecretPattern {
 ///
 /// Custom patterns are compiled from user-provided regex strings. Invalid regexes
 /// are silently skipped (logged at warn level in the caller).
+///
+/// The 24 built-in patterns are compiled exactly once per process (cached in
+/// `BUILTIN_PATTERNS`); each call clones the cached entries rather than
+/// recompiling regexes.
 pub fn build_patterns(custom: &[String], disabled: &[String]) -> Vec<SecretPattern> {
-    let mut patterns = builtin_patterns();
+    let builtin = builtin_patterns();
 
     // Remove disabled patterns by name (case-insensitive match)
-    if !disabled.is_empty() {
+    let mut patterns: Vec<SecretPattern> = if disabled.is_empty() {
+        builtin.to_vec()
+    } else {
         let disabled_lower: Vec<String> = disabled.iter().map(|s| s.to_lowercase()).collect();
-        patterns.retain(|p| !disabled_lower.contains(&p.name.to_lowercase()));
-    }
+        builtin
+            .iter()
+            .filter(|p| !disabled_lower.contains(&p.name.to_lowercase()))
+            .cloned()
+            .collect()
+    };
 
     // Add custom patterns
     for (i, raw) in custom.iter().enumerate() {
@@ -50,7 +65,16 @@ pub fn build_patterns(custom: &[String], disabled: &[String]) -> Vec<SecretPatte
     patterns
 }
 
-fn builtin_patterns() -> Vec<SecretPattern> {
+/// Return the cached built-in pattern set.
+///
+/// The underlying `Vec<SecretPattern>` is built once on first access via
+/// `LazyLock` and then shared for the lifetime of the process.
+fn builtin_patterns() -> &'static [SecretPattern] {
+    &BUILTIN_PATTERNS
+}
+
+/// Cached built-in secret patterns. Compiled exactly once per process.
+static BUILTIN_PATTERNS: LazyLock<Vec<SecretPattern>> = LazyLock::new(|| {
     vec![
         // ── Cloud Provider API Keys ──
         SecretPattern {
@@ -194,10 +218,7 @@ fn builtin_patterns() -> Vec<SecretPattern> {
             description: Cow::Borrowed("Unquoted password, secret, or token assignment"),
         },
     ]
-}
-
-/// Default patterns (no custom, no disabled) for use by the legacy API.
-static DEFAULT_PATTERNS: LazyLock<Vec<SecretPattern>> = LazyLock::new(builtin_patterns);
+});
 
 /// Scan per-file truncated diffs for secrets using default patterns.
 ///
@@ -206,7 +227,7 @@ static DEFAULT_PATTERNS: LazyLock<Vec<SecretPattern>> = LazyLock::new(builtin_pa
 /// for library consumers who only have `StagedChanges`.
 #[allow(dead_code)]
 pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
-    scan_for_secrets_with_patterns(changes, &DEFAULT_PATTERNS)
+    scan_for_secrets_with_patterns(changes, builtin_patterns())
 }
 
 /// Scan per-file truncated diffs for secrets using the given pattern set.
@@ -249,7 +270,7 @@ pub fn scan_for_secrets_with_patterns(
 /// Scan the full unified diff for secrets using default patterns.
 #[allow(dead_code)]
 pub fn scan_full_diff_for_secrets(full_diff: &str) -> Vec<SecretMatch> {
-    scan_full_diff_with_patterns(full_diff, &DEFAULT_PATTERNS)
+    scan_full_diff_with_patterns(full_diff, builtin_patterns())
 }
 
 static HUNK_HEADER: LazyLock<Regex> =
