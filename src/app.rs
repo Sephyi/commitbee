@@ -465,7 +465,7 @@ impl App {
 
         // Step 7: Clipboard / dry-run / commit
         if self.cli.clipboard {
-            Self::copy_to_clipboard(&message)?;
+            Self::copy_to_clipboard(message.clone()).await?;
             eprintln!("{} Copied to clipboard!", style("✓").green().bold());
             println!("{}", message);
             return Ok(());
@@ -542,7 +542,7 @@ impl App {
                 clap_complete::generate(*shell, &mut cmd, "commitbee", &mut std::io::stdout());
                 Ok(())
             }
-            Commands::Hook { action } => self.handle_hook(action),
+            Commands::Hook { action } => self.handle_hook(action).await,
             #[cfg(feature = "secure-storage")]
             Commands::SetKey { provider } => self.set_api_key(provider),
             #[cfg(feature = "secure-storage")]
@@ -978,21 +978,24 @@ impl App {
 
     // ─── Hook Commands ───
 
-    fn handle_hook(&self, action: &HookAction) -> Result<()> {
+    async fn handle_hook(&self, action: &HookAction) -> Result<()> {
         match action {
-            HookAction::Install => self.hook_install(),
-            HookAction::Uninstall => self.hook_uninstall(),
-            HookAction::Status => self.hook_status(),
+            HookAction::Install => self.hook_install().await,
+            HookAction::Uninstall => self.hook_uninstall().await,
+            HookAction::Status => self.hook_status().await,
         }
     }
 
-    fn hook_dir(&self) -> Result<PathBuf> {
+    async fn hook_dir(&self) -> Result<PathBuf> {
         // Verify we're in a git repo first
         let _git = GitService::discover()?;
 
-        let output = std::process::Command::new("git")
+        // Annotated type per CLAUDE.md gotcha: tokio::process::Command output
+        // needs explicit std::process::Output typing when used with `?`.
+        let output: std::process::Output = tokio::process::Command::new("git")
             .args(["rev-parse", "--git-dir"])
-            .output()?;
+            .output()
+            .await?;
 
         if !output.status.success() {
             return Err(Error::Git("Cannot find .git directory".into()));
@@ -1002,12 +1005,12 @@ impl App {
         Ok(PathBuf::from(git_dir).join("hooks"))
     }
 
-    fn hook_path(&self) -> Result<PathBuf> {
-        Ok(self.hook_dir()?.join("prepare-commit-msg"))
+    async fn hook_path(&self) -> Result<PathBuf> {
+        Ok(self.hook_dir().await?.join("prepare-commit-msg"))
     }
 
-    fn hook_install(&self) -> Result<()> {
-        let hooks_dir = self.hook_dir()?;
+    async fn hook_install(&self) -> Result<()> {
+        let hooks_dir = self.hook_dir().await?;
         let hook_path = hooks_dir.join("prepare-commit-msg");
         let backup_path = hooks_dir.join("prepare-commit-msg.commitbee-backup");
 
@@ -1089,8 +1092,8 @@ fi
         Ok(())
     }
 
-    fn hook_uninstall(&self) -> Result<()> {
-        let hooks_dir = self.hook_dir()?;
+    async fn hook_uninstall(&self) -> Result<()> {
+        let hooks_dir = self.hook_dir().await?;
         let hook_path = hooks_dir.join("prepare-commit-msg");
         let backup_path = hooks_dir.join("prepare-commit-msg.commitbee-backup");
 
@@ -1137,8 +1140,8 @@ fi
         Ok(())
     }
 
-    fn hook_status(&self) -> Result<()> {
-        let hook_path = self.hook_path()?;
+    async fn hook_status(&self) -> Result<()> {
+        let hook_path = self.hook_path().await?;
 
         if !hook_path.exists() {
             eprintln!(
@@ -1517,18 +1520,28 @@ fi
     // ─── Clipboard Helpers ───
 
     /// Copy text to the system clipboard using the arboard crate.
-    fn copy_to_clipboard(text: &str) -> Result<()> {
-        let mut clipboard = arboard::Clipboard::new().map_err(|e| {
-            Error::Config(format!(
-                "Failed to initialize clipboard: {e}. If on Linux, ensure x11 or wayland dependencies are installed."
-            ))
-        })?;
+    ///
+    /// `arboard` is a synchronous C-backed API, so it must not run on the
+    /// tokio reactor thread. The initialization and `set_text` call both do
+    /// blocking I/O (X11/Wayland/macOS pasteboard round-trips), so we offload
+    /// the whole operation to `spawn_blocking`. Takes `text` by value to
+    /// satisfy the `'static` bound required by `spawn_blocking`.
+    async fn copy_to_clipboard(text: String) -> Result<()> {
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let mut clipboard = arboard::Clipboard::new().map_err(|e| {
+                Error::Config(format!(
+                    "Failed to initialize clipboard: {e}. If on Linux, ensure x11 or wayland dependencies are installed."
+                ))
+            })?;
 
-        clipboard
-            .set_text(text)
-            .map_err(|e| Error::Config(format!("Failed to copy to clipboard: {e}")))?;
+            clipboard
+                .set_text(text)
+                .map_err(|e| Error::Config(format!("Failed to copy to clipboard: {e}")))?;
 
-        Ok(())
+            Ok(())
+        })
+        .await
+        .map_err(|e| Error::Config(format!("Clipboard task panicked: {e}")))?
     }
 }
 
