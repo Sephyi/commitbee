@@ -13,7 +13,18 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-commitbee = { path = "..", features = ["lang-rust"] }
+commitbee = { path = "..", default-features = false, features = [
+  "lang-rust",
+  "lang-typescript",
+  "lang-javascript",
+  "lang-python",
+  "lang-go",
+  "lang-java",
+  "lang-c",
+  "lang-cpp",
+  "lang-ruby",
+  "lang-csharp",
+] }
 
 [[bin]]
 name = "fuzz_sanitizer"
@@ -33,6 +44,11 @@ doc = false
 [[bin]]
 name = "fuzz_signature"
 path = "fuzz_targets/fuzz_signature.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_signature_multilang"
+path = "fuzz_targets/fuzz_signature_multilang.rs"
 doc = false
 
 [[bin]]
