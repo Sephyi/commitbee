@@ -46,7 +46,7 @@ impl HistoryContext {
                 .iter()
                 .map(|(t, c)| {
                     let pct = if total > 0 {
-                        (*c as f32 / total as f32 * 100.0) as u32
+                        (*c as f32 / total as f32 * 100.0).round() as u32
                     } else {
                         0
                     };
@@ -425,6 +425,33 @@ mod tests {
 
         // 3 lowercase (conventional) + 0 non-conventional lowercase = 3/5 = 60%
         assert!(!ctx.uses_lowercase); // Below 80% threshold
+    }
+
+    #[test]
+    fn to_prompt_section_rounds_percentages() {
+        // 2/3 = 66.666...% — truncation yields 66, rounding yields 67.
+        // 1/3 = 33.333...% — both rounding and truncation yield 33.
+        let ctx = HistoryContext {
+            type_distribution: vec![("feat".to_string(), 2), ("fix".to_string(), 1)],
+            scope_patterns: vec![],
+            avg_subject_length: 40,
+            uses_lowercase: true,
+            conventional_ratio: 1.0,
+            sample_subjects: vec![],
+        };
+
+        let section = ctx.to_prompt_section(10);
+
+        assert!(
+            section.contains("feat (67%)"),
+            "expected rounded percentage 67% for 2/3, got: {}",
+            section
+        );
+        assert!(
+            section.contains("fix (33%)"),
+            "expected 33% for 1/3, got: {}",
+            section
+        );
     }
 
     #[test]
