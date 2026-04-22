@@ -139,6 +139,7 @@ impl AnalyzerService {
 
     /// Extract symbols from file changes using full file content + hunk mapping.
     /// Uses rayon to parse files in parallel across CPU cores.
+    #[tracing::instrument(skip_all, fields(file_count = changes.len()))]
     pub fn extract_symbols(
         &self,
         changes: &[FileChange],
