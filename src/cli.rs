@@ -25,7 +25,13 @@ pub struct Cli {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Allow committing with detected secrets (local only)
+    /// Allow committing even when potential secrets are detected in staged changes.
+    ///
+    /// ⚠ DANGER: This disables the secret-scan block, meaning any API keys,
+    /// credentials, or tokens present in the staged diff will be sent to the
+    /// configured LLM provider as part of the prompt. Only use this flag when
+    /// you have manually audited the diff and are certain no real credentials
+    /// are present (e.g., test fixtures with obviously fake tokens).
     #[arg(long)]
     pub allow_secrets: bool,
 
