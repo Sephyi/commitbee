@@ -23,6 +23,11 @@
 //! deferred to a follow-up — it requires the full pipeline setup and belongs
 //! in its own test file.
 
+// Integration tests are synchronous and legitimately use `std::process::Command`
+// to shell out to `git` / the `commitbee` binary; the `disallowed_methods` rule
+// in clippy.toml targets async-context misuse, which does not apply here.
+#![allow(clippy::disallowed_methods)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
