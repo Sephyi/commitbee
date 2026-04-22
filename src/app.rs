@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use console::style;
 use dialoguer::{Confirm, Editor, Input, Select};
 use globset::{Glob, GlobSetBuilder};
+use secrecy::ExposeSecret;
 use tokio::signal;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -612,11 +613,34 @@ impl App {
                 }
             }
             other => {
-                eprint!("  {} API key: ", other);
-                if self.config.api_key.is_some() {
-                    eprintln!("{}", style("configured").green());
-                } else {
-                    eprintln!("{}", style("MISSING").red().bold());
+                eprint!("  {}: ", other);
+                match self.config.api_key.as_ref() {
+                    None => {
+                        eprintln!("{} (no API key configured)", style("MISSING").red().bold());
+                    }
+                    Some(key) => {
+                        let redacted = redact_api_key(key.expose_secret());
+                        // Build the provider to reach verify(). Construction itself
+                        // can fail (e.g. HTTP client build); keep that non-fatal so
+                        // the rest of `doctor` still runs.
+                        match llm::create_provider(&self.config) {
+                            Err(e) => {
+                                eprintln!("{}: {}", style("ERROR").red().bold(), e);
+                            }
+                            Ok(provider) => match provider.verify().await {
+                                Ok(()) => {
+                                    eprintln!(
+                                        "{} (key '{}')",
+                                        style("reachable").green().bold(),
+                                        redacted
+                                    );
+                                }
+                                Err(e) => {
+                                    eprintln!("{}: {}", style("ERROR").red().bold(), e);
+                                }
+                            },
+                        }
+                    }
                 }
             }
         }
@@ -1532,6 +1556,23 @@ fi
     }
 }
 
+/// Redact an API key for display, preserving only the last 4 characters.
+///
+/// Used by `doctor` to confirm which key is in effect without leaking it into
+/// logs or terminal scrollback. Keys shorter than 8 characters are fully
+/// masked since partial disclosure would be a large fraction of the secret.
+fn redact_api_key(key: &str) -> String {
+    const SUFFIX_LEN: usize = 4;
+    const MIN_LEN_FOR_SUFFIX: usize = 8;
+
+    let char_count = key.chars().count();
+    if char_count < MIN_LEN_FOR_SUFFIX {
+        return "****".to_string();
+    }
+    let tail: String = key.chars().skip(char_count - SUFFIX_LEN).collect();
+    format!("****{tail}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1556,5 +1597,26 @@ mod tests {
         assert!(result.contains("Previous message"));
         assert!(result.contains("Make it shorter"));
         assert!(result.contains("Respond with ONLY the refined JSON object."));
+    }
+
+    #[test]
+    fn redact_api_key_masks_full_key_when_short() {
+        assert_eq!(redact_api_key(""), "****");
+        assert_eq!(redact_api_key("abc"), "****");
+        assert_eq!(redact_api_key("abcdefg"), "****");
+    }
+
+    #[test]
+    fn redact_api_key_exposes_only_last_four() {
+        assert_eq!(redact_api_key("sk-proj-abcdef1234"), "****1234");
+        assert_eq!(redact_api_key("abcdefgh"), "****efgh");
+    }
+
+    #[test]
+    fn redact_api_key_handles_multibyte_chars() {
+        // Ensure we don't slice through a UTF-8 codepoint boundary.
+        let key = "keyé🔑ABCD";
+        let redacted = redact_api_key(key);
+        assert_eq!(redacted, "****ABCD");
     }
 }
