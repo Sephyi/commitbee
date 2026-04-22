@@ -314,8 +314,9 @@ pub fn scan_full_diff_with_patterns(
         }
 
         // Only check added lines
-        if line.starts_with('+') && !line.starts_with("+++") {
-            let content = &line[1..];
+        if !line.starts_with("+++")
+            && let Some(content) = line.strip_prefix('+')
+        {
             for pat in patterns {
                 if pat.regex.is_match(content) {
                     found.push(SecretMatch {
