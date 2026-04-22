@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
 use commitbee::services::history::{HistoryContext, HistoryService};
+use std::path::Path;
+use std::process::Command;
 
 // ─── Subject Analysis (Pure Functions) ───────────────────────────────────────
 
@@ -315,29 +317,30 @@ fn prompt_section_percentage_calculation() {
 
 // ─── Git Integration (requires tempdir with git repo) ────────────────────────
 
+/// Builds a `git` invocation that is hermetic against ambient git
+/// configuration. Disables system/global config, redirects `HOME` to
+/// the test's own tempdir, and pre-supplies author/committer identity
+/// so commits succeed even when the host has no `user.email` set or
+/// has `commit.gpgsign=true` globally.
+fn hermetic_git(dir: &Path) -> Command {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("HOME", dir)
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.com")
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.com");
+    cmd
+}
+
 #[tokio::test]
 async fn analyze_repo_with_enough_commits() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
-    // Init repo
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(path)
-        .output()
-        .unwrap();
-
-    std::process::Command::new("git")
-        .args(["config", "user.email", "test@test.com"])
-        .current_dir(path)
-        .output()
-        .unwrap();
-
-    std::process::Command::new("git")
-        .args(["config", "user.name", "Test"])
-        .current_dir(path)
-        .output()
-        .unwrap();
+    hermetic_git(path).args(["init"]).output().unwrap();
 
     // Create 6 commits (above MIN_COMMITS_FOR_ANALYSIS = 5)
     let commit_subjects = [
@@ -353,15 +356,10 @@ async fn analyze_repo_with_enough_commits() {
         let file = path.join(format!("file_{}.txt", i));
         std::fs::write(&file, format!("content {}", i)).unwrap();
 
-        std::process::Command::new("git")
-            .args(["add", "."])
-            .current_dir(path)
-            .output()
-            .unwrap();
+        hermetic_git(path).args(["add", "."]).output().unwrap();
 
-        std::process::Command::new("git")
+        hermetic_git(path)
             .args(["commit", "-m", subject])
-            .current_dir(path)
             .output()
             .unwrap();
     }
@@ -381,39 +379,17 @@ async fn analyze_repo_with_too_few_commits() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
-    // Init repo
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(path)
-        .output()
-        .unwrap();
-
-    std::process::Command::new("git")
-        .args(["config", "user.email", "test@test.com"])
-        .current_dir(path)
-        .output()
-        .unwrap();
-
-    std::process::Command::new("git")
-        .args(["config", "user.name", "Test"])
-        .current_dir(path)
-        .output()
-        .unwrap();
+    hermetic_git(path).args(["init"]).output().unwrap();
 
     // Create only 3 commits (below MIN_COMMITS_FOR_ANALYSIS = 5)
     for i in 0..3 {
         let file = path.join(format!("file_{}.txt", i));
         std::fs::write(&file, format!("content {}", i)).unwrap();
 
-        std::process::Command::new("git")
-            .args(["add", "."])
-            .current_dir(path)
-            .output()
-            .unwrap();
+        hermetic_git(path).args(["add", "."]).output().unwrap();
 
-        std::process::Command::new("git")
+        hermetic_git(path)
             .args(["commit", "-m", &format!("feat: feature {}", i)])
-            .current_dir(path)
             .output()
             .unwrap();
     }
@@ -427,12 +403,7 @@ async fn analyze_empty_repo() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
-    // Init repo but make no commits
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(path)
-        .output()
-        .unwrap();
+    hermetic_git(path).args(["init"]).output().unwrap();
 
     let result = HistoryService::analyze(path, 50).await;
     assert!(result.is_none(), "should return None for empty repo");
@@ -453,38 +424,17 @@ async fn analyze_respects_sample_size() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
-    std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(path)
-        .output()
-        .unwrap();
-
-    std::process::Command::new("git")
-        .args(["config", "user.email", "test@test.com"])
-        .current_dir(path)
-        .output()
-        .unwrap();
-
-    std::process::Command::new("git")
-        .args(["config", "user.name", "Test"])
-        .current_dir(path)
-        .output()
-        .unwrap();
+    hermetic_git(path).args(["init"]).output().unwrap();
 
     // Create 10 commits
     for i in 0..10 {
         let file = path.join(format!("file_{}.txt", i));
         std::fs::write(&file, format!("content {}", i)).unwrap();
 
-        std::process::Command::new("git")
-            .args(["add", "."])
-            .current_dir(path)
-            .output()
-            .unwrap();
+        hermetic_git(path).args(["add", "."]).output().unwrap();
 
-        std::process::Command::new("git")
+        hermetic_git(path)
             .args(["commit", "-m", &format!("feat: feature {}", i)])
-            .current_dir(path)
             .output()
             .unwrap();
     }
