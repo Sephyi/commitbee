@@ -151,6 +151,7 @@ impl AstDiffer {
         // Find body-like node that contains field or variant definitions
         let body = (0..node.child_count())
             .filter_map(|i| {
+                // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                 #[allow(clippy::cast_possible_truncation)]
                 node.child(i as u32)
             })
@@ -169,6 +170,7 @@ impl AstDiffer {
 
         if let Some(b) = body {
             for i in 0..b.child_count() {
+                // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                 #[allow(clippy::cast_possible_truncation)]
                 if let Some(child) = b.child(i as u32) {
                     // Skip symbols/punc
@@ -273,6 +275,7 @@ impl AstDiffer {
         // Look for type_parameters child (Rust, TS, Java)
         (0..node.child_count())
             .filter_map(|i| {
+                // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                 #[allow(clippy::cast_possible_truncation)]
                 node.child(i as u32)
             })
@@ -298,6 +301,7 @@ impl AstDiffer {
         let param_node = node.child_by_field_name("parameters").or_else(|| {
             (0..node.child_count())
                 .filter_map(|i| {
+                    // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                     #[allow(clippy::cast_possible_truncation)]
                     node.child(i as u32)
                 })
@@ -311,6 +315,7 @@ impl AstDiffer {
 
         if let Some(pnode) = param_node {
             for i in 0..pnode.child_count() {
+                // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                 #[allow(clippy::cast_possible_truncation)]
                 if let Some(child) = pnode.child(i as u32) {
                     // Skip delimiters like ( ) ,
@@ -398,6 +403,7 @@ impl AstDiffer {
         // Check for visibility_modifier child (Rust)
         (0..node.child_count())
             .filter_map(|i| {
+                // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                 #[allow(clippy::cast_possible_truncation)]
                 node.child(i as u32)
             })
@@ -414,6 +420,7 @@ impl AstDiffer {
     fn is_async(node: tree_sitter::Node) -> bool {
         (0..node.child_count())
             .filter_map(|i| {
+                // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                 #[allow(clippy::cast_possible_truncation)]
                 node.child(i as u32)
             })
@@ -427,6 +434,7 @@ impl AstDiffer {
     fn has_keyword(node: tree_sitter::Node, keyword: &str) -> bool {
         (0..node.child_count())
             .filter_map(|i| {
+                // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                 #[allow(clippy::cast_possible_truncation)]
                 node.child(i as u32)
             })
@@ -438,6 +446,7 @@ impl AstDiffer {
                 if c.kind().ends_with("_modifiers") || c.kind() == "modifiers" {
                     return (0..c.child_count())
                         .filter_map(|j| {
+                            // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                             #[allow(clippy::cast_possible_truncation)]
                             c.child(j as u32)
                         })
@@ -451,6 +460,7 @@ impl AstDiffer {
     fn extract_derives(node: tree_sitter::Node, source: &str) -> Vec<String> {
         let mut derives = Vec::new();
         for i in 0..node.child_count() {
+            // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
             #[allow(clippy::cast_possible_truncation)]
             let Some(child) = node.child(i as u32) else {
                 continue;
@@ -493,6 +503,7 @@ impl AstDiffer {
         let body = node.child_by_field_name("body").or_else(|| {
             (0..node.child_count())
                 .filter_map(|i| {
+                    // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                     #[allow(clippy::cast_possible_truncation)]
                     node.child(i as u32)
                 })
@@ -527,6 +538,7 @@ mod tests {
         let root = tree.root_node();
         (0..root.child_count())
             .filter_map(|i| {
+                // SAFETY: tree-sitter nodes cannot have > u32::MAX children; loop index is bounded by child_count().
                 #[allow(clippy::cast_possible_truncation)]
                 root.child(i as u32)
             })
