@@ -11,34 +11,14 @@ use commitbee::domain::{
     ChangeStatus, CodeSymbol, CommitType, FileCategory, IntentKind, SymbolKind,
 };
 use commitbee::services::context::ContextBuilder;
-use helpers::{make_file_change, make_renamed_file, make_staged_changes};
+use helpers::{
+    make_file_change, make_renamed_file, make_staged_changes, make_symbol, make_symbol_at,
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn default_config() -> Config {
     Config::default()
-}
-
-fn make_symbol(
-    name: &str,
-    kind: SymbolKind,
-    file: &str,
-    is_public: bool,
-    is_added: bool,
-) -> CodeSymbol {
-    CodeSymbol {
-        kind,
-        name: name.to_string(),
-        file: PathBuf::from(file),
-        line: 1,
-        end_line: 10,
-        is_public,
-        is_added,
-        is_whitespace_only: None,
-        span_change_kind: None,
-        signature: None,
-        parent_scope: None,
-    }
 }
 
 // ─── CommitType inference ─────────────────────────────────────────────────────
@@ -2058,4 +2038,31 @@ fn intents_capped_at_three() {
         "intents should be capped at 3, got {}",
         ctx.intents.len()
     );
+}
+
+// ─── make_symbol helper smoke tests ──────────────────────────────────────────
+
+#[test]
+fn make_symbol_defaults_to_lines_1_through_10() {
+    let sym = make_symbol("foo", SymbolKind::Function, "src/lib.rs", true, true);
+    assert_eq!(sym.line, 1);
+    assert_eq!(sym.end_line, 10);
+}
+
+#[test]
+fn make_symbol_at_pins_arbitrary_line_range() {
+    let sym = make_symbol_at(
+        "bar",
+        SymbolKind::Function,
+        "src/lib.rs",
+        false,
+        true,
+        42,
+        57,
+    );
+    assert_eq!(sym.line, 42);
+    assert_eq!(sym.end_line, 57);
+    assert_eq!(sym.name, "bar");
+    assert!(!sym.is_public);
+    assert!(sym.is_added);
 }
