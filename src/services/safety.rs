@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
-use regex::Regex;
+use regex::{Regex, RegexSet};
 
 use crate::domain::StagedChanges;
 
@@ -23,11 +23,62 @@ pub struct SecretPattern {
     pub description: Cow<'static, str>,
 }
 
+/// A bundle of secret-detection patterns together with a [`RegexSet`] over
+/// the same patterns for a fast first-pass filter.
+///
+/// Per-line scanning calls [`RegexSet::matches`] first; only on hits does it
+/// fall back to individual [`Regex::is_match`] on the matching pattern. This
+/// turns the common no-match case from `O(N × 24 × L)` into
+/// `O(N × L)` (one aggregated automaton pass) plus an `O(1)` membership check.
+pub struct PatternSet {
+    patterns: Vec<SecretPattern>,
+    set: RegexSet,
+}
+
+impl PatternSet {
+    /// Number of patterns in the set.
+    #[allow(dead_code)] // exercised by integration tests; library consumers may also want it
+    pub fn len(&self) -> usize {
+        self.patterns.len()
+    }
+
+    /// True when there are no patterns — every scan is a no-op.
+    #[allow(dead_code)] // paired with len() for clippy::len_without_is_empty
+    pub fn is_empty(&self) -> bool {
+        self.patterns.is_empty()
+    }
+
+    /// Iterate the patterns in stable order (matches [`RegexSet`] index order).
+    #[allow(dead_code)] // exercised by integration tests; library consumers may also want it
+    pub fn iter(&self) -> std::slice::Iter<'_, SecretPattern> {
+        self.patterns.iter()
+    }
+
+    /// Build a [`PatternSet`] from a `Vec<SecretPattern>`. The [`RegexSet`]
+    /// is compiled from the patterns' source strings; indices align 1:1 with
+    /// `patterns`, so `set.matches(line)` yields valid indices into
+    /// `patterns`.
+    ///
+    /// Since every individual [`Regex`] in `patterns` is already known to
+    /// compile, the combined [`RegexSet`] compile is expected to succeed; if
+    /// it somehow does not (size limits, etc.), we fall back to an empty
+    /// [`RegexSet`] and the scanner still works correctly — it just loses
+    /// the first-pass speedup and runs the per-pattern check on every line.
+    fn from_patterns(patterns: Vec<SecretPattern>) -> Self {
+        // `Regex::as_str` returns the exact source the regex was built from,
+        // so feeding the same strings into `RegexSet` yields identical
+        // semantics to the per-pattern `Regex::is_match` fallback.
+        let sources: Vec<&str> = patterns.iter().map(|p| p.regex.as_str()).collect();
+        let set = RegexSet::new(&sources).unwrap_or_else(|_| RegexSet::empty());
+        Self { patterns, set }
+    }
+}
+
 /// Build the full set of secret patterns, applying custom additions and disabled names.
 ///
 /// Custom patterns are compiled from user-provided regex strings. Invalid regexes
 /// are silently skipped (logged at warn level in the caller).
-pub fn build_patterns(custom: &[String], disabled: &[String]) -> Vec<SecretPattern> {
+pub fn build_patterns(custom: &[String], disabled: &[String]) -> PatternSet {
     let mut patterns = builtin_patterns();
 
     // Remove disabled patterns by name (case-insensitive match)
@@ -47,7 +98,7 @@ pub fn build_patterns(custom: &[String], disabled: &[String]) -> Vec<SecretPatte
         }
     }
 
-    patterns
+    PatternSet::from_patterns(patterns)
 }
 
 fn builtin_patterns() -> Vec<SecretPattern> {
@@ -197,7 +248,18 @@ fn builtin_patterns() -> Vec<SecretPattern> {
 }
 
 /// Default patterns (no custom, no disabled) for use by the legacy API.
-static DEFAULT_PATTERNS: LazyLock<Vec<SecretPattern>> = LazyLock::new(builtin_patterns);
+static DEFAULT_PATTERNS: LazyLock<PatternSet> =
+    LazyLock::new(|| PatternSet::from_patterns(builtin_patterns()));
+
+/// First element of the set that matches `line`, if any. Uses
+/// [`RegexSet::matches`] as a single-automaton first-pass filter — the
+/// common case (no match) returns without touching any individual
+/// [`Regex`]. `SetMatches::iter()` yields indices in ascending order, so
+/// taking `.next()` preserves the previous "first pattern wins" semantics.
+fn first_match<'a>(line: &str, patterns: &'a PatternSet) -> Option<&'a SecretPattern> {
+    let idx = patterns.set.matches(line).iter().next()?;
+    Some(&patterns.patterns[idx])
+}
 
 /// Scan per-file truncated diffs for secrets using default patterns.
 ///
@@ -212,7 +274,7 @@ pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
 /// Scan per-file truncated diffs for secrets using the given pattern set.
 pub fn scan_for_secrets_with_patterns(
     changes: &StagedChanges,
-    patterns: &[SecretPattern],
+    patterns: &PatternSet,
 ) -> Vec<SecretMatch> {
     let mut found = Vec::new();
 
@@ -230,15 +292,13 @@ pub fn scan_for_secrets_with_patterns(
                 continue;
             }
 
-            for pat in patterns {
-                if pat.regex.is_match(line) {
-                    found.push(SecretMatch {
-                        pattern_name: pat.name.to_string(),
-                        file: file.path.display().to_string(),
-                        line: Some(line_num),
-                    });
-                    break; // One match per line is enough
-                }
+            if let Some(pat) = first_match(line, patterns) {
+                found.push(SecretMatch {
+                    pattern_name: pat.name.to_string(),
+                    file: file.path.display().to_string(),
+                    line: Some(line_num),
+                });
+                // One match per line is enough; fall through to next line.
             }
         }
     }
@@ -261,10 +321,7 @@ static HUNK_HEADER: LazyLock<Regex> =
 /// file diffs are truncated to `max_file_lines`. Parses the raw `git diff`
 /// output directly, tracking file paths from diff headers and calculating
 /// accurate source line numbers from hunk headers (`@@ -L,l +R,r @@`).
-pub fn scan_full_diff_with_patterns(
-    full_diff: &str,
-    patterns: &[SecretPattern],
-) -> Vec<SecretMatch> {
+pub fn scan_full_diff_with_patterns(full_diff: &str, patterns: &PatternSet) -> Vec<SecretMatch> {
     let mut found = Vec::new();
     let mut current_file = String::new();
     let mut current_line: Option<usize> = None;
@@ -316,15 +373,12 @@ pub fn scan_full_diff_with_patterns(
         // Only check added lines
         if line.starts_with('+') && !line.starts_with("+++") {
             let content = &line[1..];
-            for pat in patterns {
-                if pat.regex.is_match(content) {
-                    found.push(SecretMatch {
-                        pattern_name: pat.name.to_string(),
-                        file: current_file.clone(),
-                        line: Some(*line_num),
-                    });
-                    break;
-                }
+            if let Some(pat) = first_match(content, patterns) {
+                found.push(SecretMatch {
+                    pattern_name: pat.name.to_string(),
+                    file: current_file.clone(),
+                    line: Some(*line_num),
+                });
             }
             *line_num += 1;
         } else if line.starts_with(' ') {
