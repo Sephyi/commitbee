@@ -36,6 +36,10 @@ const SKIP_CONTENT_FILES: &[&str] = &[
 pub struct ContextBuilder;
 
 impl ContextBuilder {
+    #[tracing::instrument(
+        skip_all,
+        fields(symbols = symbols.len(), diffs = diffs.len(), files = changes.files.len())
+    )]
     pub fn build(
         changes: &StagedChanges,
         symbols: &[CodeSymbol],

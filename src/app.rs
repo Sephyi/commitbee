@@ -98,6 +98,10 @@ impl App {
         self.generate_commit().await
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(provider = %self.config.provider, model = %self.config.model)
+    )]
     async fn generate_commit(&mut self) -> Result<()> {
         if self.cancel_token.is_cancelled() {
             return Err(Error::Cancelled);
