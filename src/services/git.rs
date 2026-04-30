@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::process::Command;
+use tracing::warn;
 
 use crate::domain::{ChangeStatus, DiffStats, FileCategory, FileChange, StagedChanges};
 use crate::error::{Error, Result};
@@ -247,12 +248,19 @@ impl GitService {
         let mut head_map = HashMap::new();
 
         while let Some(result) = set.join_next().await {
-            if let Ok((path, staged, head)) = result {
-                if let Some(content) = staged {
-                    staged_map.insert(path.clone(), content);
+            match result {
+                Ok((path, staged, head)) => {
+                    if let Some(content) = staged {
+                        staged_map.insert(path.clone(), content);
+                    }
+                    if let Some(content) = head {
+                        head_map.insert(path, content);
+                    }
                 }
-                if let Some(content) = head {
-                    head_map.insert(path, content);
+                Err(join_err) => {
+                    // Task panicked or was cancelled — log and omit from results
+                    // (callers handle missing entries as "content unavailable").
+                    warn!(error = %join_err, "git-show task failed to join");
                 }
             }
         }
