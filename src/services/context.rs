@@ -873,19 +873,28 @@ impl ContextBuilder {
     /// When false, the model is guided away from using "fix" type.
     fn detect_bug_evidence(changes: &StagedChanges) -> bool {
         changes.files.iter().any(|f| {
-            f.diff
-                .lines()
-                .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
-                .any(|l| {
-                    let lower = l[1..].to_lowercase();
-                    lower.contains("// fix")
-                        || lower.contains("# fix")
-                        || lower.contains("/* fix")
-                        || lower.contains("// bug")
-                        || lower.contains("# bug")
-                        || lower.contains("fixme")
-                        || lower.contains("hotfix")
-                })
+            // Synthetic test diffs may omit `@@`; treat them as fully in-hunk.
+            let mut in_hunk = !f.diff.contains("@@");
+            f.diff.lines().any(|line| {
+                if line.starts_with("@@") {
+                    in_hunk = true;
+                    return false;
+                }
+                if !in_hunk {
+                    return false;
+                }
+                let Some(content) = line.strip_prefix('+') else {
+                    return false;
+                };
+                let lower = content.to_lowercase();
+                lower.contains("// fix")
+                    || lower.contains("# fix")
+                    || lower.contains("/* fix")
+                    || lower.contains("// bug")
+                    || lower.contains("# bug")
+                    || lower.contains("fixme")
+                    || lower.contains("hotfix")
+            })
         })
     }
 
@@ -958,10 +967,17 @@ impl ContextBuilder {
                 }
 
                 let call_pattern = format!("{}(", sym_name);
+                let mut in_hunk = !file.diff.contains("@@");
                 let has_call = file.diff.lines().any(|line| {
-                    line.starts_with('+')
-                        && !line.starts_with("+++")
-                        && line.contains(&call_pattern)
+                    if line.starts_with("@@") {
+                        in_hunk = true;
+                        return false;
+                    }
+                    in_hunk
+                        && line.starts_with('+')
+                        && line
+                            .strip_prefix('+')
+                            .is_some_and(|c| c.contains(&call_pattern))
                 });
 
                 if has_call {
@@ -993,9 +1009,17 @@ impl ContextBuilder {
         let mut imports = Vec::new();
 
         for file in &changes.files {
+            // Track `in_hunk` so an added/removed line whose content begins with
+            // `++` or `--` (rendered as `+++`/`---`) is not mistaken for a file
+            // header. Synthetic test diffs without `@@` are treated as
+            // fully in-hunk.
+            let mut in_hunk = !file.diff.contains("@@");
             for line in file.diff.lines() {
-                // Skip diff headers
-                if line.starts_with("+++") || line.starts_with("---") {
+                if line.starts_with("@@") {
+                    in_hunk = true;
+                    continue;
+                }
+                if !in_hunk {
                     continue;
                 }
                 // Detect added/removed import lines
@@ -1069,8 +1093,16 @@ impl ContextBuilder {
         for file in &changes.files {
             let filename = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
+            // Track `in_hunk` so a real added line whose content begins with
+            // `++` is not mistaken for the `+++ b/path` file header. Synthetic
+            // test diffs without `@@` are treated as fully in-hunk.
+            let mut in_hunk = !file.diff.contains("@@");
             for line in file.diff.lines() {
-                if line.starts_with("+++") {
+                if line.starts_with("@@") {
+                    in_hunk = true;
+                    continue;
+                }
+                if !in_hunk {
                     continue;
                 }
                 let Some(content) = line.strip_prefix('+') else {
@@ -1124,10 +1156,21 @@ impl ContextBuilder {
                 filename,
                 "Cargo.toml" | "package.json" | "pyproject.toml" | "go.mod"
             ) {
+                let mut in_hunk_dep = !file.diff.contains("@@");
                 let has_version_change = file.diff.lines().any(|l| {
-                    l.starts_with('+')
-                        && !l.starts_with("+++")
-                        && (l.contains("version") || l.contains("\"^") || l.contains("\"~"))
+                    if l.starts_with("@@") {
+                        in_hunk_dep = true;
+                        return false;
+                    }
+                    if !in_hunk_dep {
+                        return false;
+                    }
+                    let Some(content) = l.strip_prefix('+') else {
+                        return false;
+                    };
+                    content.contains("version")
+                        || content.contains("\"^")
+                        || content.contains("\"~")
                 });
                 if has_version_change {
                     dep_update = true;
@@ -1211,8 +1254,16 @@ impl ContextBuilder {
         for file in &changes.files {
             let name = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
+            // Track `in_hunk` so an added/removed line whose content begins with
+            // `++` or `--` is not skipped as a file-header. Synthetic test diffs
+            // without `@@` are treated as fully in-hunk.
+            let mut in_hunk = !file.diff.contains("@@");
             for line in file.diff.lines() {
-                if line.starts_with("+++") || line.starts_with("---") {
+                if line.starts_with("@@") {
+                    in_hunk = true;
+                    continue;
+                }
+                if !in_hunk {
                     continue;
                 }
                 let (is_added, content) = if let Some(rest) = line.strip_prefix('+') {

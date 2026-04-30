@@ -50,6 +50,14 @@ directories = "6.0"
 figment = { version = "0.10", features = ["toml", "env"] }
 
 # HTTP client
+# Note on TLS feature: reqwest 0.13 exposes `rustls` (the pre-cooked rustls
+# stack: aws-lc-rs crypto + rustls-platform-verifier for system root certs).
+# A bundled-roots variant (`rustls-tls-webpki-roots`) existed in older
+# reqwest releases but is not a 0.13.x feature; switching to a pure
+# webpki-roots/ring stack would require `rustls-no-provider` plus manual
+# rustls configuration in code, which is out of scope for the audit fix.
+# The `rustls` feature is the appropriate pin for "no native TLS" while
+# accepting platform-native cert verification.
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "charset", "http2", "json", "stream"] }
 
 # URL parsing (loopback enforcement for ollama_host per SR-001)

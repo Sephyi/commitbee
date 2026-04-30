@@ -27,7 +27,7 @@ pub struct Cli {
 
     /// Allow proceeding after potential secrets are detected in staged changes.
     ///
-    /// ⚠ DANGER: Secrets are still scanned for. This flag does not bypass
+    /// DANGER: Secrets are still scanned for. This flag does not bypass
     /// detection; it only allows an interactive confirmation to continue after
     /// secrets are found. In non-interactive modes (for example --yes,
     /// --porcelain, or piped stdin), commitbee still fails closed instead of

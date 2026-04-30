@@ -166,19 +166,33 @@ impl CommitSplitter {
     /// specific content. Files with similar fingerprints likely received the same
     /// mechanical transformation.
     fn diff_fingerprint(file: &FileChange) -> DiffFingerprint {
-        let lines: Vec<&str> = file.diff.lines().collect();
-        // Count structural line categories
+        // Count structural line categories. Track `in_hunk` after `@@` so we don't
+        // mistake an added/removed line whose content begins with `++` or `--`
+        // (rendered as `+++` / `---`) for a file-header line. Synthetic diffs in
+        // tests sometimes omit the `@@` header entirely; in that case treat the
+        // whole input as content from the start.
         let mut added = 0usize;
         let mut removed = 0usize;
         let mut hunk_headers = 0usize;
+        let mut added_lines: Vec<&str> = Vec::new();
+        let mut removed_lines: Vec<&str> = Vec::new();
+        let mut in_hunk = !file.diff.contains("@@");
 
-        for line in &lines {
+        for line in file.diff.lines() {
             if line.starts_with("@@") {
                 hunk_headers += 1;
-            } else if line.starts_with('+') && !line.starts_with("+++") {
+                in_hunk = true;
+                continue;
+            }
+            if !in_hunk {
+                continue;
+            }
+            if let Some(rest) = line.strip_prefix('+') {
                 added += 1;
-            } else if line.starts_with('-') && !line.starts_with("---") {
+                added_lines.push(rest);
+            } else if let Some(rest) = line.strip_prefix('-') {
                 removed += 1;
+                removed_lines.push(rest);
             }
         }
 
@@ -195,16 +209,6 @@ impl CommitSplitter {
         // Detect if changes are purely whitespace/indentation restructuring:
         // lines that differ only in leading whitespace after stripping +/-
         let mut indent_only_changes = 0usize;
-        let added_lines: Vec<&str> = lines
-            .iter()
-            .filter(|l| !l.starts_with("+++"))
-            .filter_map(|l| l.strip_prefix('+'))
-            .collect();
-        let removed_lines: Vec<&str> = lines
-            .iter()
-            .filter(|l| !l.starts_with("---"))
-            .filter_map(|l| l.strip_prefix('-'))
-            .collect();
 
         for added_line in &added_lines {
             let trimmed = added_line.trim();

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::process::Command;
-use tracing::warn;
+use tracing::{Instrument, warn};
 
 use crate::domain::{ChangeStatus, DiffStats, FileCategory, FileChange, StagedChanges};
 use crate::error::{Error, Result};
@@ -225,14 +225,14 @@ impl GitService {
 
     /// Concurrency ceiling for the `git show` subprocesses spawned by
     /// [`Self::fetch_file_contents`]. Each staged file spawns two processes
-    /// (staged + HEAD); capping at `cores * 2` (clamped to 16..=32) keeps
-    /// parallelism high on beefy machines without causing fork/FD pressure on
-    /// large stages.
+    /// (staged + HEAD). Scales as `cores * 2`, capped at 32 to keep parallelism
+    /// high on beefy machines without causing fork/FD pressure on large stages,
+    /// and floored at 2 so a single-core environment still makes progress.
     fn git_show_concurrency_limit() -> usize {
         let cores = std::thread::available_parallelism()
             .map(std::num::NonZeroUsize::get)
             .unwrap_or(4);
-        (cores * 2).clamp(16, 32)
+        (cores * 2).clamp(2, 32)
     }
 
     /// Fetch staged and HEAD content for multiple files concurrently, bounded
@@ -252,18 +252,25 @@ impl GitService {
             let work_dir = Arc::clone(&work_dir);
             let semaphore = Arc::clone(&semaphore);
             let path = path.clone();
-            set.spawn(async move {
-                // Semaphore is never closed, so acquire cannot fail.
-                let _permit = semaphore
-                    .acquire_owned()
-                    .await
-                    .expect("git-show semaphore closed unexpectedly");
-                let staged =
-                    Self::fetch_git_show(&work_dir, &format!(":0:{}", path.display())).await;
-                let head =
-                    Self::fetch_git_show(&work_dir, &format!("HEAD:{}", path.display())).await;
-                (path, staged, head)
-            });
+            // Attach the path to the task's span so it propagates into the
+            // `warn!` log emitted by the JoinSet error arm below — without
+            // this, the path is unrecoverable from a `JoinError`.
+            let span = tracing::warn_span!("git_show", path = %path.display());
+            set.spawn(
+                async move {
+                    // Semaphore is never closed, so acquire cannot fail.
+                    let _permit = semaphore
+                        .acquire_owned()
+                        .await
+                        .expect("git-show semaphore closed unexpectedly");
+                    let staged =
+                        Self::fetch_git_show(&work_dir, &format!(":0:{}", path.display())).await;
+                    let head =
+                        Self::fetch_git_show(&work_dir, &format!("HEAD:{}", path.display())).await;
+                    (path, staged, head)
+                }
+                .instrument(span),
+            );
         }
 
         let mut staged_map = HashMap::new();
