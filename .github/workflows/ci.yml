@@ -36,9 +36,13 @@ jobs:
       - run: cargo fmt --check
 
   clippy:
-    name: Clippy
+    name: Clippy (${{ matrix.os }})
     needs: fmt
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -50,9 +54,13 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
 
   test:
-    name: Test
+    name: Test (${{ matrix.os }})
     needs: fmt
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
