@@ -8,7 +8,6 @@ use std::path::PathBuf;
 use console::style;
 use dialoguer::{Confirm, Editor, Input, Select};
 use globset::{Glob, GlobSetBuilder};
-use secrecy::ExposeSecret;
 use tokio::signal;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -84,12 +83,16 @@ impl App {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        // Setup Ctrl+C handler with CancellationToken
+        // Setup Ctrl+C handler with CancellationToken.
+        // On registration failure, log the error and still call cancel.cancel()
+        // so any running CancellationToken-aware task (e.g., LLM streams) gets
+        // an explicit shutdown signal. This matches the legacy `.ok()` behavior
+        // (which fell through to cancel on Err) while now surfacing the error
+        // via tracing instead of silently discarding it (audit F-025).
         let cancel = self.cancel_token.clone();
         tokio::spawn(async move {
             if let Err(e) = signal::ctrl_c().await {
                 warn!(error = %e, "failed to install Ctrl+C handler");
-                return;
             }
             cancel.cancel();
         });
@@ -625,22 +628,19 @@ impl App {
                     None => {
                         eprintln!("{} (no API key configured)", style("MISSING").red().bold());
                     }
-                    Some(key) => {
-                        let redacted = redact_api_key(key.expose_secret());
+                    Some(_key) => {
                         // Build the provider to reach verify(). Construction itself
                         // can fail (e.g. HTTP client build); keep that non-fatal so
-                        // the rest of `doctor` still runs.
+                        // the rest of `doctor` still runs. Do not echo any portion
+                        // of the API key (even a partial suffix is correlatable
+                        // across logs/screenshots).
                         match llm::create_provider(&self.config) {
                             Err(e) => {
                                 eprintln!("{}: {}", style("ERROR").red().bold(), e);
                             }
                             Ok(provider) => match provider.verify().await {
                                 Ok(()) => {
-                                    eprintln!(
-                                        "{} (key '{}')",
-                                        style("reachable").green().bold(),
-                                        redacted
-                                    );
+                                    eprintln!("{}", style("reachable").green().bold());
                                 }
                                 Err(e) => {
                                     eprintln!("{}: {}", style("ERROR").red().bold(), e);
@@ -1570,23 +1570,6 @@ fi
     }
 }
 
-/// Redact an API key for display, preserving only the last 4 characters.
-///
-/// Used by `doctor` to confirm which key is in effect without leaking it into
-/// logs or terminal scrollback. Keys shorter than 8 characters are fully
-/// masked since partial disclosure would be a large fraction of the secret.
-fn redact_api_key(key: &str) -> String {
-    const SUFFIX_LEN: usize = 4;
-    const MIN_LEN_FOR_SUFFIX: usize = 8;
-
-    let char_count = key.chars().count();
-    if char_count < MIN_LEN_FOR_SUFFIX {
-        return "****".to_string();
-    }
-    let tail: String = key.chars().skip(char_count - SUFFIX_LEN).collect();
-    format!("****{tail}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1611,26 +1594,5 @@ mod tests {
         assert!(result.contains("Previous message"));
         assert!(result.contains("Make it shorter"));
         assert!(result.contains("Respond with ONLY the refined JSON object."));
-    }
-
-    #[test]
-    fn redact_api_key_masks_full_key_when_short() {
-        assert_eq!(redact_api_key(""), "****");
-        assert_eq!(redact_api_key("abc"), "****");
-        assert_eq!(redact_api_key("abcdefg"), "****");
-    }
-
-    #[test]
-    fn redact_api_key_exposes_only_last_four() {
-        assert_eq!(redact_api_key("sk-proj-abcdef1234"), "****1234");
-        assert_eq!(redact_api_key("abcdefgh"), "****efgh");
-    }
-
-    #[test]
-    fn redact_api_key_handles_multibyte_chars() {
-        // Ensure we don't slice through a UTF-8 codepoint boundary.
-        let key = "keyé🔑ABCD";
-        let redacted = redact_api_key(key);
-        assert_eq!(redacted, "****ABCD");
     }
 }

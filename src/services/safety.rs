@@ -39,11 +39,13 @@ pub struct SecretPattern {
 pub fn build_patterns(custom: &[String], disabled: &[String]) -> Vec<SecretPattern> {
     let builtin = builtin_patterns();
 
-    // Remove disabled patterns by name (case-insensitive match)
+    // Remove disabled patterns by name (case-insensitive match). Use a HashSet
+    // so the membership check is O(1) per pattern instead of O(N) `Vec::contains`.
     let mut patterns: Vec<SecretPattern> = if disabled.is_empty() {
         builtin.to_vec()
     } else {
-        let disabled_lower: Vec<String> = disabled.iter().map(|s| s.to_lowercase()).collect();
+        let disabled_lower: std::collections::HashSet<String> =
+            disabled.iter().map(|s| s.to_lowercase()).collect();
         builtin
             .iter()
             .filter(|p| !disabled_lower.contains(&p.name.to_lowercase()))
@@ -334,10 +336,12 @@ pub fn scan_full_diff_with_patterns(
             continue;
         }
 
-        // Only check added lines
-        if !line.starts_with("+++")
-            && let Some(content) = line.strip_prefix('+')
-        {
+        // Only check added lines. `current_line` is only `Some` after parsing
+        // an `@@ ... @@` hunk header, so file-header lines (`+++ b/path`) are
+        // already filtered out above — no need for an extra `!starts_with("+++")`
+        // guard, which would also drop legitimate added lines whose content
+        // begins with `++`.
+        if let Some(content) = line.strip_prefix('+') {
             for pat in patterns {
                 if pat.regex.is_match(content) {
                     found.push(SecretMatch {

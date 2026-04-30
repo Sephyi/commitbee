@@ -327,11 +327,25 @@ fn prompt_section_percentage_calculation() {
 /// the test's own tempdir, and pre-supplies author/committer identity
 /// so commits succeed even when the host has no `user.email` set or
 /// has `commit.gpgsign=true` globally.
+///
+/// Uses an empty file inside the tempdir as `GIT_CONFIG_GLOBAL` rather
+/// than `/dev/null` so the helper works on Windows as well as Unix.
+///
+/// Synchronous `std::process::Command` is used here because the helper
+/// only runs inside test fixtures that build a tempdir-backed git repo
+/// before `HistoryService::analyze` is invoked — never inside an async
+/// hot path. The narrow `#[allow]` keeps the project-wide clippy rule
+/// in force for production code (see clippy.toml).
+#[allow(clippy::disallowed_methods)]
 fn hermetic_git(dir: &Path) -> Command {
+    let empty_global = dir.join(".git_config_global_empty");
+    // `write` truncates if the file already exists, so calling
+    // `hermetic_git` repeatedly with the same dir is idempotent.
+    let _ = std::fs::write(&empty_global, "");
     let mut cmd = Command::new("git");
     cmd.current_dir(dir)
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_GLOBAL", &empty_global)
         .env("HOME", dir)
         .env("GIT_AUTHOR_NAME", "test")
         .env("GIT_AUTHOR_EMAIL", "test@example.com")

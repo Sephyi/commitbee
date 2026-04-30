@@ -767,6 +767,26 @@ fn validate_ollama_host_is_loopback(raw: &str) -> Result<()> {
         )));
     }
 
+    // Reject paths, queries, and fragments. The Ollama provider treats this
+    // value as a base and appends `/api/...` via string concat; any non-empty
+    // path/query/fragment would either break the resulting URL or silently
+    // forward unintended segments to the upstream request.
+    if !matches!(url.path(), "" | "/") {
+        return Err(Error::Config(format!(
+            "ollama_host must not include a path component; got '{raw}'"
+        )));
+    }
+    if url.query().is_some() {
+        return Err(Error::Config(format!(
+            "ollama_host must not include a query string; got '{raw}'"
+        )));
+    }
+    if url.fragment().is_some() {
+        return Err(Error::Config(format!(
+            "ollama_host must not include a fragment; got '{raw}'"
+        )));
+    }
+
     Ok(())
 }
 
@@ -837,5 +857,23 @@ mod tests {
     fn loopback_rejects_malformed_url() {
         let err = validate_ollama_host_is_loopback("http://").unwrap_err();
         assert!(matches!(err, Error::Config(_)));
+    }
+
+    #[test]
+    fn loopback_rejects_path_component() {
+        let err = validate_ollama_host_is_loopback("http://localhost:11434/foo").unwrap_err();
+        assert!(err.to_string().contains("path"));
+    }
+
+    #[test]
+    fn loopback_rejects_query_string() {
+        let err = validate_ollama_host_is_loopback("http://localhost:11434?x=1").unwrap_err();
+        assert!(err.to_string().contains("query"));
+    }
+
+    #[test]
+    fn loopback_rejects_fragment() {
+        let err = validate_ollama_host_is_loopback("http://localhost:11434#frag").unwrap_err();
+        assert!(err.to_string().contains("fragment"));
     }
 }
