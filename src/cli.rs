@@ -27,7 +27,7 @@ pub struct Cli {
 
     /// Allow committing even when potential secrets are detected in staged changes.
     ///
-    /// ⚠ DANGER: This disables the secret-scan block, meaning any API keys,
+    /// DANGER: This disables the secret-scan block, meaning any API keys,
     /// credentials, or tokens present in the staged diff will be sent to the
     /// configured LLM provider as part of the prompt. Only use this flag when
     /// you have manually audited the diff and are certain no real credentials
