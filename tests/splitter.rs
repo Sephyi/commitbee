@@ -6,35 +6,12 @@ mod helpers;
 
 use std::path::PathBuf;
 
-use commitbee::domain::{ChangeStatus, CodeSymbol, SymbolKind};
+use commitbee::domain::{ChangeStatus, SymbolKind};
 use commitbee::services::splitter::{CommitSplitter, SplitSuggestion};
 use helpers::{
     make_file_change, make_renamed_file, make_renamed_file_with_diff, make_staged_changes,
+    make_symbol,
 };
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-fn make_symbol(
-    name: &str,
-    kind: SymbolKind,
-    file: &str,
-    is_public: bool,
-    is_added: bool,
-) -> CodeSymbol {
-    CodeSymbol {
-        kind,
-        name: name.to_string(),
-        file: PathBuf::from(file),
-        line: 1,
-        end_line: 10,
-        is_public,
-        is_added,
-        is_whitespace_only: None,
-        span_change_kind: None,
-        signature: None,
-        parent_scope: None,
-    }
-}
 
 // ─── Split detection tests ───────────────────────────────────────────────────
 
