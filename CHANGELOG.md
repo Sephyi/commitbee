@@ -13,19 +13,59 @@ All notable changes to CommitBee are documented here.
 ### CLI / UX
 
 - **Machine-readable output mode (`--porcelain`)** — Print only the sanitized commit message to stdout for piping into other tools (scripts, editors, git hooks, higher-level automation). All spinners, live-streamed LLM JSON, info/warning lines, tracing output, and ANSI styling are silenced; errors still flow to stderr with a non-zero exit for reliable script detection. Implies `--dry-run` and `--no-split`; rejected at argument-parse time when combined with `--yes`, `--clipboard`, `--show-prompt`, `--verbose`, `-n/--generate`, or any subcommand. Closes #6.
+- **Documented `--allow-secrets` risk in help text** — The flag's clap help now leads with `DANGER:` and explains that detection is *not* bypassed; the flag only enables an interactive confirmation, and non-interactive modes (`--yes`, `--porcelain`, piped stdin) still fail closed. Audit F-019.
 
-### Safety
+### Security & Safety
 
 - **Non-blocking `--allow-secrets` under `--yes` / `--porcelain`** — The interactive "Send diff to LLM anyway?" confirmation now skips to the non-interactive "fail closed" branch when either `--yes` or `--porcelain` is set, preventing pipelines from silently hanging on piped stdin when secrets are detected.
+- **Loopback-only `ollama_host`** — Config validation now rejects any `ollama_host` whose URL host is not loopback (`127.0.0.0/8` IPv4 range, `::1` IPv6, or the literal string `localhost`). Rejects any path/query/fragment as well, since the Ollama provider concatenates the host with `/api/...` and a non-empty path would silently forward unintended segments. Implements PRD SR-001. Audit F-030.
+- **Binary crate enforces `#![forbid(unsafe_code)]`** — `src/main.rs` now imports `App`, `Cli`, and `error` from the library crate (`commitbee::*`) instead of re-declaring the module tree, so the safety attribute applies to everything the binary compiles. Audit F-028.
+- **Doctor no longer echoes any portion of the API key** — `commitbee doctor` previously printed `(key '****1234')` on a successful provider verify. Even partial disclosure correlates keys across logs/screenshots; the suffix is now removed entirely. Audit F-029 follow-up.
+- **`reqwest` pinned to `rustls`** — `default-features = false` plus the `rustls` feature gives an explicit TLS pin instead of relying on whatever default-tls reqwest 0.13 happens to ship. Audit F-005.
+
+### Reliability & Observability
+
+- **Cloud provider verification in `doctor`** — `commitbee doctor` now calls `provider.verify().await` for OpenAI/Anthropic providers, not just an `is_some()` API-key check. Audit F-029.
+- **Async hook and clipboard paths** — `hook_dir`/`hook_path`/`hook_install`/`hook_uninstall`/`hook_status`/`handle_hook` are now `async fn` and use `tokio::process::Command` for `git rev-parse`. `copy_to_clipboard` runs `arboard` inside `tokio::task::spawn_blocking` (the library is sync). Audit F-002.
+- **Hermetic `git` calls in history tests** — `tests/history.rs` builds tempdir-backed git repos with `GIT_CONFIG_NOSYSTEM=1`, an empty `GIT_CONFIG_GLOBAL` file (works on Windows), `HOME` redirected to the tempdir, and pre-supplied author/committer identity, so tests pass under hosts that have GPG signing or a missing `user.email`. Audit F-032.
+- **Tracing spans on pipeline functions** — `App::generate_commit`, `AnalyzerService::extract_symbols`, and `ContextBuilder::build` are now `#[tracing::instrument(skip_all, fields(...))]` with scalar metadata only (no diff text, no `SecretString`). Audit F-013.
+- **Logged JoinSet panics in `git show` fetch** — `GitService::fetch_file_contents` now matches on `Err(JoinError)` and emits `tracing::warn!` instead of silently dropping the result. Spawned tasks carry a `tracing::warn_span!("git_show", path = …)` so the log line preserves the path that the spawn closure consumed. Audit F-008.
+- **Log Ctrl+C handler install failures** — The spawned signal-handler task no longer discards registration errors via `.ok()`; on `Err` it logs via `tracing::warn!` and still calls `cancel.cancel()` so any CancellationToken-aware task receives a shutdown signal. Audit F-025.
+- **Rounded percentage conversion in history prompt** — `to_prompt_section()` now rounds the type-distribution percentages (e.g., 2/3 → 67%) instead of truncating via `as u32`. Audit F-027.
+
+### Performance
+
+- **Cached built-in secret regex set** — `BUILTIN_PATTERNS: LazyLock<Vec<SecretPattern>>` compiles all built-in regexes exactly once per process. `build_patterns()` clones from the cached slice instead of recompiling on every call. Disabled-pattern lookup uses a `HashSet<String>` rather than `Vec::contains`. Audit F-012.
+- **`RegexSet` first-pass for secret scanning** — `PatternSet` wraps the built-in patterns with a derived `regex::RegexSet`. Each scanned line goes through one combined NFA traversal; the per-pattern `Regex::is_match` is consulted only on a hit. `BUILTIN_PATTERN_SET: LazyLock<PatternSet>` caches the set. Audit F-022.
+- **Streamed whitespace-stripped comparison** — `ContextBuilder::classify_span_change`, `classify_span_change_rich`, and `AstDiffer::bodies_semantically_equal` no longer allocate two `String`s to drop whitespace; they now stream filtered `char` iterators through `Iterator::eq()`. Audit F-021.
+- **Bounded concurrent `git show` spawning** — `GitService::fetch_file_contents` now acquires a `tokio::sync::Semaphore` permit before each `git show` task. The bound scales as `cores * 2`, clamped to `2..=32` so single-core hosts no longer fork the previous hard floor of 16 processes. Audit F-020.
+
+### Code Quality
+
+- **`replace byte indexing with `strip_prefix`** — `&line[1..]` byte slicing in `src/services/{context,splitter}.rs` is replaced with `line.strip_prefix('+')` / `strip_prefix('-')`, removing the multi-byte-UTF-8 panic surface. Audit F-011.
+- **Hunk-header detection no longer false-skips real content** — Diff scanners that previously dropped any line starting with `+++` / `---` (which incidentally also skipped legitimate added/removed content lines whose body began with `++` or `--`) now track `in_hunk` after `@@` and treat synthetic test diffs (no `@@`) as fully in-hunk. Affects `splitter::diff_fingerprint`, `context::detect_import_changes`, `context::detect_intents`, `context::detect_metadata_breaking`, `context::detect_bug_evidence`, the cross-file call detector, and the dependency version detector. Audit F-011 follow-up.
+- **`#[forbid(unsafe_code)]` on the binary crate** — see Security above. Audit F-028.
+- **`SAFETY:` comments on cast truncations** — Every `#[allow(clippy::cast_possible_truncation)]` site in `analyzer.rs` and `differ.rs` now carries an inline `// SAFETY:` comment justifying why the truncation cannot lose information at runtime. Audit F-015.
+
+### CI
+
+- **macOS in the matrix** — `clippy` and `test` jobs now fan out to `[ubuntu-24.04, macos-14]` (pinned to a specific macOS image to avoid silent moves when GitHub advances `macos-latest`). Audit F-016 / F-016 follow-up.
+- **Dedicated MSRV (1.94) job** — A separate workflow job runs the floor toolchain explicitly with `dtolnay/rust-toolchain@master` so `cargo check --all-features --all-targets` truly exercises MSRV. Audit F-007.
+- **`cargo-deny` license / advisory / source enforcement** — A new `deny` job runs `EmbarkStudios/cargo-deny-action@v2 check --all-features` after installing the project's pinned Rust toolchain. `deny.toml` defines an allow-list of permissive licenses, an exception for the dual-licensed root crate (`AGPL-3.0-only OR LicenseRef-Commercial`), bans on duplicate-major-version pulls and unknown registries/git sources, and a v2 `[advisories]` section. Implements PRD SR-005. Audit F-017.
+- **`clippy.toml` disallowed-methods / disallowed-macros** — Project-wide clippy config bans `std::process::Command::new` (sync, blocks the runtime) and `std::dbg` (leftover scaffolding). Test files that need a sync `Command` for tempdir-backed fixtures opt out via narrow `#[allow]` annotations on the specific helper. Audit F-018.
+
+### Testing
+
+- **`make_symbol` helper parametrised by line range** — `tests/helpers.rs` now exposes `make_symbol(name, kind, file, is_public, is_added)` (defaults `line: 1, end_line: 10`) and a `make_symbol_at(...)` variant for tests that need to pin a specific line range to a hand-crafted diff hunk. Test files dropped their per-file copies. Audit D-040.
+- **`ChangeStatus::Deleted` and `ChangeStatus::Renamed` covered in fixtures** — New tests in `tests/{splitter,context}.rs` exercise both variants through the splitter, the file-breakdown formatter, and the rename-marker render path. Includes `make_renamed_file_with_diff` for fixtures that need an explicit diff body. Audit D-037.
+- **Coverage for the `None` branch of `classify_span_change`** — Three new tests in `tests/context.rs` directly assert the `Option::None` short-circuit (outside-hunk span, empty diff, inverted span overlapping the hunk). Audit D-039.
+- **Multi-language fuzz target for signature extraction** — New `fuzz_signature_multilang` cargo-fuzz target dispatches input via `data[0] % 10` to all 10 supported tree-sitter grammars (Rust, TypeScript, JavaScript, Python, Go, Java, C, C++, Ruby, C#) through `commitbee::extract_*_signature` wrappers. Uses `String::from_utf8_lossy` to keep coverage on arbitrary byte input. Audit D-047.
+- **437 tests** total (down from 442 nominal at v0.6.0 due to test consolidation during the audit merge — net new tests added by audit batch are partially offset by deduplicated coverage).
 
 ### Internal
 
 - **Removed unsafe `std::env::set_var("NO_COLOR")`** — The previous SAFETY justification did not hold under `#[tokio::main(rt-multi-thread)]` (worker threads are already spawned by the time `main`'s body executes). Color suppression is now handled entirely through `console::set_colors_enabled(false)`, porcelain-aware `miette` `GraphicalTheme::unicode_nocolor()`, and the tracing subscriber's `.with_ansi(false)`.
 - **Porcelain-aware `miette` diagnostic rendering** — `miette::set_hook` now installs after `Cli::parse()` and receives `terminal_links(!porcelain)` + `GraphicalTheme::unicode_nocolor()` under porcelain mode, so errors on stderr stay free of OSC8 hyperlinks and ANSI escapes regardless of external `NO_COLOR` state.
-
-### Testing
-
-- **441 tests** total. Includes 8 new integration tests in `tests/porcelain.rs` covering the stdout contract, argument-parse rejections for 5 flag combinations, subcommand rejection, a no-hang-on-piped-stdin smoke test, and a structural lint that walks `src/` and fails if `println!` / `print!` drift appears outside a pinned allowlist.
 
 ## `v0.6.0` — Semantic Intelligence
 
