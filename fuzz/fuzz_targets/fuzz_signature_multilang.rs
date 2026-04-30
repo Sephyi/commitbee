@@ -26,39 +26,37 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
     let selector = data[0] % 10;
-    let Ok(source) = std::str::from_utf8(&data[1..]) else {
-        return;
-    };
+    let source = String::from_utf8_lossy(&data[1..]);
     match selector {
         0 => {
-            let _ = commitbee::extract_rust_signature(source);
+            let _ = commitbee::extract_rust_signature(source.as_ref());
         }
         1 => {
-            let _ = commitbee::extract_typescript_signature(source);
+            let _ = commitbee::extract_typescript_signature(source.as_ref());
         }
         2 => {
-            let _ = commitbee::extract_javascript_signature(source);
+            let _ = commitbee::extract_javascript_signature(source.as_ref());
         }
         3 => {
-            let _ = commitbee::extract_python_signature(source);
+            let _ = commitbee::extract_python_signature(source.as_ref());
         }
         4 => {
-            let _ = commitbee::extract_go_signature(source);
+            let _ = commitbee::extract_go_signature(source.as_ref());
         }
         5 => {
-            let _ = commitbee::extract_java_signature(source);
+            let _ = commitbee::extract_java_signature(source.as_ref());
         }
         6 => {
-            let _ = commitbee::extract_c_signature(source);
+            let _ = commitbee::extract_c_signature(source.as_ref());
         }
         7 => {
-            let _ = commitbee::extract_cpp_signature(source);
+            let _ = commitbee::extract_cpp_signature(source.as_ref());
         }
         8 => {
-            let _ = commitbee::extract_ruby_signature(source);
+            let _ = commitbee::extract_ruby_signature(source.as_ref());
         }
         9 => {
-            let _ = commitbee::extract_csharp_signature(source);
+            let _ = commitbee::extract_csharp_signature(source.as_ref());
         }
         _ => unreachable!("selector is `% 10`"),
     }

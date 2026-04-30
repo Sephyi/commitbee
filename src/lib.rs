@@ -60,6 +60,18 @@ pub fn parse_diff_hunks(diff: &str) -> Vec<services::analyzer::DiffHunk> {
 ///
 /// Parses the source, finds the first top-level definition, and extracts its
 /// signature. Must never panic on any input.
+#[cfg(any(
+    feature = "lang-rust",
+    feature = "lang-typescript",
+    feature = "lang-javascript",
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-c",
+    feature = "lang-cpp",
+    feature = "lang-ruby",
+    feature = "lang-csharp",
+))]
 fn extract_signature_for_language(source: &str, language: tree_sitter::Language) -> Option<String> {
     use tree_sitter::Parser;
     let mut parser = Parser::new();
