@@ -571,9 +571,9 @@ fn deleted_file_is_represented_in_splitter_output() {
         make_file_change(
             "src/services/llm/legacy.rs",
             ChangeStatus::Deleted,
-            "@@ -1,10 +0,0 @@\n-pub fn retired() {}\n-pub fn also_retired() {}\n",
+            "@@ -1,2 +0,0 @@\n-pub fn retired() {}\n-pub fn also_retired() {}\n",
             0,
-            10,
+            2,
         ),
     ]);
 
@@ -593,10 +593,11 @@ fn deleted_file_is_represented_in_splitter_output() {
             );
         }
         SplitSuggestion::SingleCommit => {
-            // Single-commit means all files fall into the one implicit group
-            // — the deleted file is still present in the input, so no further
-            // assertion is needed beyond verifying the input shape.
-            assert!(changes.files.iter().any(|f| f.path == deleted_path));
+            panic!(
+                "expected SuggestSplit so the deleted-file guard is meaningful; \
+                 a SingleCommit result means a regression that drops Deleted files \
+                 would go undetected"
+            );
         }
     }
 }
@@ -610,8 +611,8 @@ fn deleted_file_is_placed_into_a_splitter_group() {
         make_file_change(
             "src/services/llm/anthropic.rs",
             ChangeStatus::Modified,
-            "@@ -0,0 +1,20 @@\n+pub fn brand_new_api() {}\n",
-            20,
+            "@@ -0,0 +1,1 @@\n+pub fn brand_new_api() {}\n",
+            1,
             0,
         ),
         make_file_change(
@@ -719,8 +720,8 @@ fn renamed_file_is_placed_into_a_splitter_group_with_old_path_preserved() {
         make_file_change(
             "src/services/llm/anthropic.rs",
             ChangeStatus::Modified,
-            "@@ -0,0 +1,20 @@\n+pub fn brand_new_api() {}\n",
-            20,
+            "@@ -0,0 +1,1 @@\n+pub fn brand_new_api() {}\n",
+            1,
             0,
         ),
     ]);
