@@ -1443,7 +1443,7 @@ fn whitespace_detection_returns_none_when_span_has_no_changes() {
 // Direct assertions on the `None` branch of `classify_span_change` via the
 // public `classify_diff_span` wrapper re-exported from `lib.rs`. The function
 // returns `None` exactly when no added/removed lines fall inside the requested
-// (`old_start..=old_end`) / (`new_start..=new_end`) spans — see the
+// (`new_start..=new_end`) / (`old_start..=old_end`) spans — see the
 // `added_in_span.is_empty() && removed_in_span.is_empty()` guard in
 // `src/services/context.rs`. These tests pin that contract so a future
 // refactor cannot silently convert the "no changes in span" case into a
