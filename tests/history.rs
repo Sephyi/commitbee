@@ -2,6 +2,11 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Commercial
 
+// Keep `clippy::disallowed_methods` enabled for this file. If a synchronous
+// helper needs `std::process::Command` to build git fixtures in a tempdir,
+// allow it narrowly at that specific helper or call site with a short
+// justification rather than silencing the lint for async tests as well.
+
 use commitbee::services::history::{HistoryContext, HistoryService};
 
 // ─── Subject Analysis (Pure Functions) ───────────────────────────────────────
