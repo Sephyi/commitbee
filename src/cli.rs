@@ -25,13 +25,17 @@ pub struct Cli {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Allow committing even when potential secrets are detected in staged changes.
+    /// Allow proceeding after potential secrets are detected in staged changes.
     ///
-    /// DANGER: This disables the secret-scan block, meaning any API keys,
-    /// credentials, or tokens present in the staged diff will be sent to the
-    /// configured LLM provider as part of the prompt. Only use this flag when
-    /// you have manually audited the diff and are certain no real credentials
-    /// are present (e.g., test fixtures with obviously fake tokens).
+    /// ⚠ DANGER: Secrets are still scanned for. This flag does not bypass
+    /// detection; it only allows an interactive confirmation to continue after
+    /// secrets are found. In non-interactive modes (for example --yes,
+    /// --porcelain, or piped stdin), commitbee still fails closed instead of
+    /// proceeding. If you do confirm, any API keys, credentials, or tokens
+    /// present in the staged diff will be sent to the configured LLM provider
+    /// as part of the prompt. Only use this flag when you have manually
+    /// audited the diff and are certain no real credentials are present
+    /// (e.g., test fixtures with obviously fake tokens).
     #[arg(long)]
     pub allow_secrets: bool,
 
