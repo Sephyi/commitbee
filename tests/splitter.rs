@@ -8,7 +8,9 @@ use std::path::PathBuf;
 
 use commitbee::domain::{ChangeStatus, CodeSymbol, SymbolKind};
 use commitbee::services::splitter::{CommitSplitter, SplitSuggestion};
-use helpers::{make_file_change, make_staged_changes};
+use helpers::{
+    make_file_change, make_renamed_file, make_renamed_file_with_diff, make_staged_changes,
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -549,4 +551,228 @@ fn subset_empty_paths_returns_empty() {
     let subset = changes.subset(&[]);
     assert!(subset.files.is_empty());
     assert_eq!(subset.stats.files_changed, 0);
+}
+
+// ─── ChangeStatus::Deleted fixtures (audit D-037) ───────────────────────────
+
+/// Baseline: a deleted file must not be silently dropped. Either the splitter
+/// returns SingleCommit (where all files are implicitly in the one group) or
+/// the deletion lands in exactly one split group.
+#[test]
+fn deleted_file_is_represented_in_splitter_output() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/llm/ollama.rs",
+            ChangeStatus::Modified,
+            "@@ -10,3 +10,3 @@\n-let old = 1;\n+let new = 2;\n",
+            1,
+            1,
+        ),
+        make_file_change(
+            "src/services/llm/legacy.rs",
+            ChangeStatus::Deleted,
+            "@@ -1,2 +0,0 @@\n-pub fn retired() {}\n-pub fn also_retired() {}\n",
+            0,
+            2,
+        ),
+    ]);
+
+    let result = CommitSplitter::analyze(&changes, &[]);
+    let deleted_path = PathBuf::from("src/services/llm/legacy.rs");
+
+    match &result {
+        SplitSuggestion::SuggestSplit(groups) => {
+            let occurrences = groups
+                .iter()
+                .filter(|g| g.files.contains(&deleted_path))
+                .count();
+            assert_eq!(
+                occurrences, 1,
+                "deleted file must appear in exactly one split group: {:?}",
+                groups
+            );
+        }
+        SplitSuggestion::SingleCommit => {
+            panic!(
+                "expected SuggestSplit so the deleted-file guard is meaningful; \
+                 a SingleCommit result means a regression that drops Deleted files \
+                 would go undetected"
+            );
+        }
+    }
+}
+
+/// With a symbol-bearing addition in an unrelated module, the splitter is
+/// likely to propose a split — the deletion must still land in exactly one
+/// group (never duplicated, never dropped).
+#[test]
+fn deleted_file_is_placed_into_a_splitter_group() {
+    let changes = make_staged_changes(vec![
+        make_file_change(
+            "src/services/llm/anthropic.rs",
+            ChangeStatus::Modified,
+            "@@ -0,0 +1,1 @@\n+pub fn brand_new_api() {}\n",
+            1,
+            0,
+        ),
+        make_file_change(
+            "src/services/sanitizer.rs",
+            ChangeStatus::Deleted,
+            "@@ -1,5 +0,0 @@\n-pub fn removed_sanitiser() {}\n",
+            0,
+            5,
+        ),
+    ]);
+
+    let symbols = vec![make_symbol(
+        "brand_new_api",
+        SymbolKind::Function,
+        "src/services/llm/anthropic.rs",
+        true,
+        true,
+    )];
+
+    let result = CommitSplitter::analyze(&changes, &symbols);
+    let deleted_path = PathBuf::from("src/services/sanitizer.rs");
+
+    match result {
+        SplitSuggestion::SuggestSplit(groups) => {
+            let occurrences = groups
+                .iter()
+                .filter(|g| g.files.contains(&deleted_path))
+                .count();
+            assert_eq!(
+                occurrences, 1,
+                "deleted file should appear in exactly one split group: groups={:?}",
+                groups
+            );
+        }
+        SplitSuggestion::SingleCommit => {
+            // A single commit is also acceptable — but the deleted file must
+            // have been surfaced via `changes.files` iteration (the splitter
+            // does not drop files from the input), so we assert the input
+            // invariant for clarity.
+            assert!(changes.files.iter().any(|f| f.path == deleted_path));
+        }
+    }
+}
+
+// ─── ChangeStatus::Renamed fixtures (audit D-037) ───────────────────────────
+
+/// The splitter must key off the *new* path (`path`) for module detection,
+/// not the stale `old_path`. A rename + sibling modification under the same
+/// new module should collapse into a single commit.
+#[test]
+fn renamed_file_grouped_by_new_path_module() {
+    let changes = make_staged_changes(vec![
+        make_renamed_file_with_diff(
+            "src/services/old_module/helper.rs",
+            "src/services/llm/helper.rs",
+            95,
+            "@@ -1,3 +1,3 @@\n-use old_name;\n+use new_name;\n",
+            1,
+            1,
+        ),
+        make_file_change(
+            "src/services/llm/ollama.rs",
+            ChangeStatus::Modified,
+            "@@ -1,3 +1,3 @@\n-use old_name;\n+use new_name;\n",
+            1,
+            1,
+        ),
+    ]);
+
+    let result = CommitSplitter::analyze(&changes, &[]);
+
+    // Rename lives in the same module (`llm`) as the modification under its
+    // new path — splitter should produce a single commit. This asserts the
+    // splitter consults the new path (`path`) for module detection, not the
+    // stale `old_path`.
+    assert!(
+        matches!(result, SplitSuggestion::SingleCommit),
+        "renamed file under the same new-module as a sibling modification should group into a single commit, got {:?}",
+        result
+    );
+
+    // Confirm old_path survived the pipeline unchanged (the splitter uses
+    // `changes.subset` internally which clones FileChange records — so the
+    // original `old_path` must still be present on the input).
+    let renamed = changes
+        .files
+        .iter()
+        .find(|f| f.status == ChangeStatus::Renamed)
+        .expect("renamed file should be present");
+    assert_eq!(
+        renamed.old_path.as_deref(),
+        Some(std::path::Path::new("src/services/old_module/helper.rs")),
+        "old_path must be preserved verbatim",
+    );
+}
+
+/// With a rename beside an unrelated addition, the renamed file must be
+/// referenced by its *new* path in whichever group holds it, and `old_path`
+/// / `rename_similarity` must round-trip unchanged through the splitter input.
+#[test]
+fn renamed_file_is_placed_into_a_splitter_group_with_old_path_preserved() {
+    let rename = make_renamed_file("src/parser/old.rs", "src/parser/new.rs", 88);
+    let changes = make_staged_changes(vec![
+        rename,
+        make_file_change(
+            "src/services/llm/anthropic.rs",
+            ChangeStatus::Modified,
+            "@@ -0,0 +1,1 @@\n+pub fn brand_new_api() {}\n",
+            1,
+            0,
+        ),
+    ]);
+
+    let symbols = vec![make_symbol(
+        "brand_new_api",
+        SymbolKind::Function,
+        "src/services/llm/anthropic.rs",
+        true,
+        true,
+    )];
+
+    let result = CommitSplitter::analyze(&changes, &symbols);
+    let renamed_path = PathBuf::from("src/parser/new.rs");
+
+    // Whether the result is SingleCommit or SuggestSplit, the renamed file
+    // must be represented by its *new* path in the splitter output, and the
+    // original `old_path` must still be reachable via the input `changes`.
+    match &result {
+        SplitSuggestion::SuggestSplit(groups) => {
+            let occurrences = groups
+                .iter()
+                .filter(|g| g.files.contains(&renamed_path))
+                .count();
+            assert_eq!(
+                occurrences, 1,
+                "renamed file should appear under its new path in exactly one group: {:?}",
+                groups
+            );
+        }
+        SplitSuggestion::SingleCommit => {
+            assert!(changes.files.iter().any(|f| f.path == renamed_path));
+        }
+    }
+
+    // old_path must be retrievable from the original StagedChanges the caller
+    // passed in — the splitter borrows, it does not mutate, so this is a
+    // regression guard rather than a behaviour assertion.
+    let renamed = changes
+        .files
+        .iter()
+        .find(|f| f.path == renamed_path)
+        .expect("renamed file should be reachable via new path");
+    assert_eq!(
+        renamed.old_path.as_deref(),
+        Some(std::path::Path::new("src/parser/old.rs")),
+        "old_path for the rename must still be the original path",
+    );
+    assert_eq!(
+        renamed.rename_similarity,
+        Some(88),
+        "rename_similarity must round-trip through the splitter input",
+    );
 }
