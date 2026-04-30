@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
-use regex::Regex;
+use regex::{Regex, RegexSet};
 
 use crate::domain::StagedChanges;
 
@@ -27,6 +27,55 @@ pub struct SecretPattern {
     pub regex: Regex,
     pub description: Cow<'static, str>,
 }
+
+/// Bundle of secret patterns plus a derived `RegexSet` for batched first-pass
+/// matching.
+///
+/// `RegexSet` compiles all patterns into a single combined NFA, so checking
+/// a line against the whole set is dramatically cheaper than running each
+/// `Regex::is_match` independently. On a hit the indices returned by
+/// `RegexSet::matches` map back into `patterns` for the descriptive name.
+pub struct PatternSet {
+    pub patterns: Vec<SecretPattern>,
+    pub set: RegexSet,
+}
+
+impl PatternSet {
+    /// Build a `PatternSet` from an owned `Vec<SecretPattern>`.
+    ///
+    /// The `RegexSet` is built once at construction time. If any individual
+    /// pattern would fail to compile in the combined set (it should not — the
+    /// patterns already passed `Regex::new`) we fall back to an empty
+    /// `RegexSet`, in which case `first_match` simply returns `None` for
+    /// every input. The per-pattern `Regex::is_match` fallback below then
+    /// preserves correctness.
+    pub fn new(patterns: Vec<SecretPattern>) -> Self {
+        let sources: Vec<&str> = patterns.iter().map(|p| p.regex.as_str()).collect();
+        let set = RegexSet::new(&sources).unwrap_or_else(|_| RegexSet::empty());
+        Self { patterns, set }
+    }
+
+    /// First-pass match. Returns the index of the *lowest-index* pattern that
+    /// matches `line`, or `None` if no pattern matches. Uses the combined
+    /// `RegexSet` (one NFA traversal) instead of N independent `Regex::is_match`
+    /// calls.
+    fn first_match(&self, line: &str) -> Option<usize> {
+        // `matches()` returns a SetMatches; iterating it yields hit indices in
+        // ascending order, so `next()` is the smallest index.
+        self.set.matches(line).into_iter().next()
+    }
+}
+
+/// Convenience: build a `PatternSet` from a borrowed slice. Used by callers
+/// that hold an owned `Vec<SecretPattern>` and want first-pass acceleration.
+fn pattern_set_from_slice(patterns: &[SecretPattern]) -> PatternSet {
+    PatternSet::new(patterns.to_vec())
+}
+
+/// Cached `PatternSet` over the built-in patterns. The pattern vector and the
+/// `RegexSet` are both compiled exactly once per process.
+static BUILTIN_PATTERN_SET: LazyLock<PatternSet> =
+    LazyLock::new(|| PatternSet::new(BUILTIN_PATTERNS.clone()));
 
 /// Build the full set of secret patterns, applying custom additions and disabled names.
 ///
@@ -229,14 +278,28 @@ static BUILTIN_PATTERNS: LazyLock<Vec<SecretPattern>> = LazyLock::new(|| {
 /// for library consumers who only have `StagedChanges`.
 #[allow(dead_code)]
 pub fn scan_for_secrets(changes: &StagedChanges) -> Vec<SecretMatch> {
-    scan_for_secrets_with_patterns(changes, builtin_patterns())
+    scan_with_pattern_set(changes, &BUILTIN_PATTERN_SET)
 }
 
-/// Scan per-file truncated diffs for secrets using the given pattern set.
+/// Scan per-file truncated diffs for secrets using the given pattern slice.
+///
+/// One-shot callers pay the cost of building a `RegexSet` here; repeated
+/// callers should construct a `PatternSet` once and call
+/// [`scan_with_pattern_set`] directly.
 pub fn scan_for_secrets_with_patterns(
     changes: &StagedChanges,
     patterns: &[SecretPattern],
 ) -> Vec<SecretMatch> {
+    let set = pattern_set_from_slice(patterns);
+    scan_with_pattern_set(changes, &set)
+}
+
+/// Scan per-file truncated diffs for secrets using a pre-built `PatternSet`.
+///
+/// Each added line is first matched against the combined `RegexSet`; only on
+/// a hit do we look up the individual pattern's name. This avoids running
+/// every `Regex::is_match` independently per line.
+fn scan_with_pattern_set(changes: &StagedChanges, pset: &PatternSet) -> Vec<SecretMatch> {
     let mut found = Vec::new();
 
     for file in &changes.files {
@@ -253,15 +316,13 @@ pub fn scan_for_secrets_with_patterns(
                 continue;
             }
 
-            for pat in patterns {
-                if pat.regex.is_match(line) {
-                    found.push(SecretMatch {
-                        pattern_name: pat.name.to_string(),
-                        file: file.path.display().to_string(),
-                        line: Some(line_num),
-                    });
-                    break; // One match per line is enough
-                }
+            if let Some(idx) = pset.first_match(line) {
+                let pat = &pset.patterns[idx];
+                found.push(SecretMatch {
+                    pattern_name: pat.name.to_string(),
+                    file: file.path.display().to_string(),
+                    line: Some(line_num),
+                });
             }
         }
     }
@@ -272,7 +333,7 @@ pub fn scan_for_secrets_with_patterns(
 /// Scan the full unified diff for secrets using default patterns.
 #[allow(dead_code)]
 pub fn scan_full_diff_for_secrets(full_diff: &str) -> Vec<SecretMatch> {
-    scan_full_diff_with_patterns(full_diff, builtin_patterns())
+    scan_full_diff_with_pattern_set(full_diff, &BUILTIN_PATTERN_SET)
 }
 
 static HUNK_HEADER: LazyLock<Regex> =
@@ -288,6 +349,13 @@ pub fn scan_full_diff_with_patterns(
     full_diff: &str,
     patterns: &[SecretPattern],
 ) -> Vec<SecretMatch> {
+    let pset = pattern_set_from_slice(patterns);
+    scan_full_diff_with_pattern_set(full_diff, &pset)
+}
+
+/// Same as `scan_full_diff_with_patterns` but takes a pre-built `PatternSet`,
+/// avoiding the per-call `RegexSet` construction.
+fn scan_full_diff_with_pattern_set(full_diff: &str, pset: &PatternSet) -> Vec<SecretMatch> {
     let mut found = Vec::new();
     let mut current_file = String::new();
     let mut current_line: Option<usize> = None;
@@ -342,15 +410,13 @@ pub fn scan_full_diff_with_patterns(
         // guard, which would also drop legitimate added lines whose content
         // begins with `++`.
         if let Some(content) = line.strip_prefix('+') {
-            for pat in patterns {
-                if pat.regex.is_match(content) {
-                    found.push(SecretMatch {
-                        pattern_name: pat.name.to_string(),
-                        file: current_file.clone(),
-                        line: Some(*line_num),
-                    });
-                    break;
-                }
+            if let Some(idx) = pset.first_match(content) {
+                let pat = &pset.patterns[idx];
+                found.push(SecretMatch {
+                    pattern_name: pat.name.to_string(),
+                    file: current_file.clone(),
+                    line: Some(*line_num),
+                });
             }
             *line_num += 1;
         } else if line.starts_with(' ') {
