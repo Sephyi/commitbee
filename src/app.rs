@@ -990,14 +990,17 @@ impl App {
         // Verify we're in a git repo first
         let _git = GitService::discover()?;
 
-        // `hook_dir` is called from a synchronous `handle_hook` path (CLI
-        // bootstrap, no tokio runtime live yet). F-002 will migrate the hook /
-        // clipboard paths off sync `Command`; until then, allow the lint here
-        // so the new clippy.toml rule doesn't block unrelated PRs.
-        #[allow(clippy::disallowed_methods)]
-        let output = std::process::Command::new("git")
-            .args(["rev-parse", "--git-dir"])
-            .output()?;
+        let output = if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(|| {
+                std::process::Command::new("git")
+                    .args(["rev-parse", "--git-dir"])
+                    .output()
+            })?
+        } else {
+            std::process::Command::new("git")
+                .args(["rev-parse", "--git-dir"])
+                .output()?
+        };
 
         if !output.status.success() {
             return Err(Error::Git("Cannot find .git directory".into()));
